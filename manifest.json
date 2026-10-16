@@ -1,0 +1,32 @@
+{
+  "name": "control",
+  "version": "0.1.0",
+  "description": "Control System Toolbox for NumKit",
+  "author": "NumKit",
+  "license": "0BSD",
+  "library": "numkit_control",
+  "exports": [
+    "tf", "zpk", "ss", "tfdata", "zpkdata", "ssdata", "filt", "frd", "frdata",
+    "ss2ss", "minreal", "tf2ss", "ss2tf", "tf2zp", "zp2tf",
+    "isct", "isdt", "issiso", "isproper", "isstable", "order", "pole", "zero", "damp", "pzmap", "isstatic", "tzero",
+    "series", "parallel", "feedback",
+    "step", "impulse", "impulse_lti", "initial", "lsim", "evalfr", "freqresp", "bode", "nyquist", "rlocus",
+    "dcgain", "margin", "stepinfo", "hinfnorm", "allmargin",
+    "c2d", "d2c",
+    "ctrb", "obsv", "gram", "covar", "acker", "place",
+    "lyap", "dlyap",
+    "care", "dare", "lqr", "dlqr"
+  ],
+  "functions": [
+    "tf", "zpk", "ss", "tfdata", "zpkdata", "ssdata", "filt", "frd", "frdata",
+    "ss2ss", "minreal", "tf2ss", "ss2tf", "tf2zp", "zp2tf",
+    "isct", "isdt", "issiso", "isproper", "isstable", "order", "pole", "zero", "damp", "pzmap", "isstatic", "tzero",
+    "series", "parallel", "feedback",
+    "step", "impulse", "impulse_lti", "initial", "lsim", "evalfr", "freqresp", "bode", "nyquist", "rlocus",
+    "dcgain", "margin", "stepinfo", "hinfnorm", "allmargin",
+    "c2d", "d2c",
+    "ctrb", "obsv", "gram", "covar", "acker", "place",
+    "lyap", "dlyap",
+    "care", "dare", "lqr", "dlqr"
+  ]
+}
