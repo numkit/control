@@ -80,12 +80,12 @@ SS toSSiso(const Value &sys, const char *fn, std::pmr::memory_resource *mr) {
         } else {
             throw Error(std::string(fn) + ": input 1 (sys) has unknown LTI "
                         "kind '" + k + "'",
-                        0, 0, fn, "", std::string("nk:") + fn + ":kind");
+                        0, 0, fn, "", std::string("numkit:") + fn + ":kind");
         }
     } else {
         throw Error(std::string(fn) + ": input 1 (sys) must be an LTI struct "
                     "(tf/zpk/ss)",
-                    0, 0, fn, "", std::string("nk:") + fn + ":kind");
+                    0, 0, fn, "", std::string("numkit:") + fn + ":kind");
     }
 
     SS s;
@@ -356,19 +356,19 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                         + "double or single time vector (got a "
                         + internal::shapeOf(tIn) + " " + mtypeName(tt)
                         + " array).",
-                        0, 0, "lsim", "", "nk:lsim:t");
+                        0, 0, "lsim", "", "numkit:lsim:t");
     }
     internal::requireNumericInput(x0In, "lsim", "x0", 4);
     internal::requireRealKernelInput(x0In, "lsim", "x0", 4);
 
     if (tIn.numel() < 2)
         throw Error("lsim: t must have at least 2 samples",
-                    0, 0, "lsim", "", "nk:lsim:t");
+                    0, 0, "lsim", "", "numkit:lsim:t");
     Vec t(tIn.numel());
     for (size_t i = 0; i < tIn.numel(); ++i) t[i] = tIn.elemAsDouble(i);
     if (uIn.numel() != t.size())
         throw Error("lsim: u and t must be the same length",
-                    0, 0, "lsim", "", "nk:lsim:size");
+                    0, 0, "lsim", "", "numkit:lsim:size");
     Vec u(t.size());
     for (size_t i = 0; i < t.size(); ++i) u[i] = uIn.elemAsDouble(i);
     Vec x0(s.n, 0.0);
@@ -377,7 +377,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
             throw Error("lsim: input 4 (x0) must have one entry per state "
                         "(got " + std::to_string(x0In.numel())
                         + " entries for " + std::to_string(s.n) + " states).",
-                        0, 0, "lsim", "", "nk:lsim:x0");
+                        0, 0, "lsim", "", "numkit:lsim:x0");
         for (size_t i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
     }
     Vec xTraj;
@@ -398,7 +398,7 @@ initial_response(const Value &sys, const Value &x0In, const Value &tArg,
         for (size_t i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
     else if (x0In.numel() != 0)
         throw Error("initial: x0 length must equal the number of states",
-                    0, 0, "initial", "", "nk:initial:x0");
+                    0, 0, "initial", "", "numkit:initial:x0");
     Vec xTraj;
     Vec y = simulate(s, t, u, x0, xOut ? &xTraj : nullptr);
     if (xOut) *xOut = matFromTraj(xTraj, t.size(), s.n, mr);

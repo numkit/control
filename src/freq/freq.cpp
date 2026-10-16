@@ -66,7 +66,7 @@ NumDen toNumDen(const Value &sys, std::pmr::memory_resource *mr) {
         return {coeffsReal(num), coeffsReal(den)};
     }
     throw Error("control freq: expected an LTI struct (tf/zpk/ss)",
-                0, 0, "freq", "", "nk:control:kind");
+                0, 0, "freq", "", "numkit:control:kind");
 }
 
 // Horner evaluation of a polynomial whose coefficients are stored in
@@ -247,7 +247,7 @@ rlocus(const Value &sys, const Value &kArg, std::pmr::memory_resource *mr)
     auto den = strip(nd.den);
     if (den.empty())
         throw Error("rlocus: denominator must be non-empty",
-                    0, 0, "rlocus", "", "nk:rlocus:den");
+                    0, 0, "rlocus", "", "numkit:rlocus:den");
     const size_t n = den.size() - 1;   // closed-loop order
 
     // Build gain vector.

@@ -51,7 +51,7 @@ ABC pullABC(const Value &sys, const char *fn, std::pmr::memory_resource *mr) {
     } else {
         throw Error(std::string(fn) + ": input 1 (sys) must be an LTI "
                     "struct (tf/zpk/ss)",
-                    0, 0, fn, "", std::string("nk:") + fn + ":kind");
+                    0, 0, fn, "", std::string("numkit:") + fn + ":kind");
     }
     return out;
 }
@@ -94,11 +94,11 @@ Value ctrb_AB(const Value &Av, const Value &Bv, std::pmr::memory_resource *mr)
     const size_t n = Av.dims().rows();
     if (Av.dims().cols() != n)
         throw Error("ctrb: A must be square",
-                    0, 0, "ctrb", "", "nk:ctrb:A");
+                    0, 0, "ctrb", "", "numkit:ctrb:A");
     const size_t m = Bv.dims().cols();
     if (Bv.dims().rows() != n)
         throw Error("ctrb: B must have the same row count as A",
-                    0, 0, "ctrb", "", "nk:ctrb:B");
+                    0, 0, "ctrb", "", "numkit:ctrb:B");
 
     auto A = readMat(Av, n, n);
     auto B = readMat(Bv, n, m);
@@ -138,11 +138,11 @@ Value obsv_AC(const Value &Av, const Value &Cv, std::pmr::memory_resource *mr)
     const size_t n = Av.dims().rows();
     if (Av.dims().cols() != n)
         throw Error("obsv: A must be square",
-                    0, 0, "obsv", "", "nk:obsv:A");
+                    0, 0, "obsv", "", "numkit:obsv:A");
     const size_t p = Cv.dims().rows();
     if (Cv.dims().cols() != n)
         throw Error("obsv: C must have the same column count as A",
-                    0, 0, "obsv", "", "nk:obsv:C");
+                    0, 0, "obsv", "", "numkit:obsv:C");
 
     auto A = readMat(Av, n, n);
     auto C = readMat(Cv, p, n);
@@ -199,7 +199,7 @@ Value gram(const Value &sys, const Value &type, std::pmr::memory_resource *mr)
                     + "or string (got a "
                     + internal::shapeOf(type) + " "
                     + mtypeName(type.type()) + " array).",
-                    0, 0, "gram", "", "nk:gram:type");
+                    0, 0, "gram", "", "numkit:gram:type");
     const std::string ts = type.toString();
     const char t = ts.empty()
                  ? 'c'
@@ -207,7 +207,7 @@ Value gram(const Value &sys, const Value &type, std::pmr::memory_resource *mr)
     if (t != 'c' && t != 'o')
         throw Error("gram: input 2 (type) must be 'c' (controllability) or "
                     "'o' (observability), as char or string (got '" + ts + "').",
-                    0, 0, "gram", "", "nk:gram:type");
+                    0, 0, "gram", "", "numkit:gram:type");
 
     // gram solves a Lyapunov equation; the controllability / observability
     // gramian differs only in which (A, Q) pair is fed to lyap / dlyap:

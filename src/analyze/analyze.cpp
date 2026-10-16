@@ -156,7 +156,7 @@ openLoopNumDen(const Value &sys, std::pmr::memory_resource *mr) {
         }
     }
     throw Error("allmargin: expected an LTI struct (tf/zpk/ss)",
-                0, 0, "allmargin", "", "nk:allmargin:kind");
+                0, 0, "allmargin", "", "numkit:allmargin:kind");
 }
 
 Value rowFrom(const std::vector<double> &v, std::pmr::memory_resource *mr) {

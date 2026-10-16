@@ -33,7 +33,7 @@ void feedback_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c) {
         argcheck::expectedInteger(sv, 3, "sign", "feedback");
         if (sv != 1.0 && sv != -1.0)
             throw Error("feedback: sign must be 1 or -1",
-                        0, 0, "feedback", "", "nk:feedback:signNotChoice");
+                        0, 0, "feedback", "", "numkit:feedback:signNotChoice");
         sign = static_cast<int>(sv);
     }
     o[0] = feedback(a[0], a[1], sign, c.engine->resource());

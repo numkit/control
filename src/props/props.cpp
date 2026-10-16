@@ -93,7 +93,7 @@ Value polesOf(const Value &sys, std::pmr::memory_resource *mr) {
         return numkit::builtin::roots(rowFromCoeffs(cp, mr), mr);
     }
     throw Error("expected an LTI struct (tf/zpk/ss)",
-                0, 0, "lti", "", "nk:lti:kind");
+                0, 0, "lti", "", "numkit:lti:kind");
 }
 
 Value zerosOf(const Value &sys, std::pmr::memory_resource *mr) {
@@ -116,13 +116,13 @@ Value zerosOf(const Value &sys, std::pmr::memory_resource *mr) {
             throw Error("zero(sys): MIMO state-space transmission zeros "
                         "require a generalised eigenvalue (QZ) solver; "
                         "not yet implemented in this build.",
-                        0, 0, "zero", "", "nk:zero:miso");
+                        0, 0, "zero", "", "numkit:zero:miso");
         }
         auto [num, den] = ss2tf(A, B, C, D, /*iu=*/1, mr);
         return numkit::builtin::roots(num, mr);
     }
     throw Error("expected an LTI struct (tf/zpk/ss)",
-                0, 0, "lti", "", "nk:lti:kind");
+                0, 0, "lti", "", "numkit:lti:kind");
 }
 
 } // anonymous
@@ -256,7 +256,7 @@ Value tzero(const Value &sys, std::pmr::memory_resource *mr)
     if (siso.toScalar() == 0.0)
         throw Error("tzero: only SISO systems supported in this build "
                     "(MIMO transmission zeros need a generalized eigenproblem)",
-                    0, 0, "tzero", "", "nk:tzero:miso");
+                    0, 0, "tzero", "", "numkit:tzero:miso");
     return zerosOf(sys, mr);
 }
 

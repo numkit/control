@@ -64,11 +64,11 @@ void lyap_argcheck(const Value &A, const Value &Q, const char *name)
     internal::requireRealKernelInput(Q, name, "Q", 2);
     if (A.dims().rows() != A.dims().cols())
         throw Error(std::string(name) + ": A must be square",
-                    0, 0, name, "", std::string("nk:") + name + ":A");
+                    0, 0, name, "", std::string("numkit:") + name + ":A");
     if (Q.dims().rows() != A.dims().rows() ||
         Q.dims().cols() != A.dims().cols())
         throw Error(std::string(name) + ": Q must match A in shape",
-                    0, 0, name, "", std::string("nk:") + name + ":Q");
+                    0, 0, name, "", std::string("numkit:") + name + ":Q");
 }
 
 // Solve a Kronecker-form linear system M·x = b, where M is n²×n²
@@ -84,7 +84,7 @@ Vec solveKron(Mat &M, Vec &rhs, size_t n2, const char *fn)
                     "singular (check that A is stable / the equation "
                     "is solvable)",
                     0, 0, fn, "",
-                    std::string("nk:") + fn + ":singular");
+                    std::string("numkit:") + fn + ":singular");
     return rhsMat;
 }
 

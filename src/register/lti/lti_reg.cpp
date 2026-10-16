@@ -132,7 +132,7 @@ void minreal_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
                         + "numeric scalar tolerance (got a "
                         + argcheck::detail::dimsStr(tv) + " "
                         + mtypeName(t) + " array).",
-                        0, 0, "minreal", "", "nk:minreal:tol");
+                        0, 0, "minreal", "", "numkit:minreal:tol");
         tol = tv.isComplex() ? tv.complexData()[0].real()
                              : tv.elemAsDouble(0);
     }

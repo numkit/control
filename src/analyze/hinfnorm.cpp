@@ -67,7 +67,7 @@ StateSpace pullABCD(const Value &sys, std::pmr::memory_resource *mr) {
         out = tf2ss(num, den, mr);
     } else {
         throw Error("hinfnorm: expected an LTI struct (tf/zpk/ss)",
-                    0, 0, "hinfnorm", "", "nk:hinfnorm:kind");
+                    0, 0, "hinfnorm", "", "numkit:hinfnorm:kind");
     }
     return out;
 }
@@ -251,13 +251,13 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
                         + "model struct (tf/zpk/ss) or a static-gain scalar "
                         + "(got a " + internal::shapeOf(sys) + " "
                         + mtypeName(t) + " array).",
-                        0, 0, "hinfnorm", "", "nk:hinfnorm:inputType");
+                        0, 0, "hinfnorm", "", "numkit:hinfnorm:inputType");
     }
 
     if (sampleTime(sys) != 0.0)
         throw Error("hinfnorm: discrete-time systems are not yet supported "
                     "(continuous-time only)",
-                    0, 0, "hinfnorm", "", "nk:hinfnorm:discrete");
+                    0, 0, "hinfnorm", "", "numkit:hinfnorm:discrete");
 
     StateSpace ss = pullABCD(sys, mr);
     const size_t n = ss.A.dims().rows();
@@ -265,7 +265,7 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
     const size_t p = ss.C.dims().rows();
     if (ss.A.dims().cols() != n)
         throw Error("hinfnorm: A must be square",
-                    0, 0, "hinfnorm", "", "nk:hinfnorm:A");
+                    0, 0, "hinfnorm", "", "numkit:hinfnorm:A");
 
     const double inf = std::numeric_limits<double>::infinity();
     Value g = Value::scalar(0.0, mr);

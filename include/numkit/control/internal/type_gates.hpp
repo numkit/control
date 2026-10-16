@@ -63,7 +63,7 @@ inline void requireCoercibleMatrix(const Value &v, std::string_view fn,
                     + "or char matrix (got a " + shapeOf(v) + " "
                     + mtypeName(t) + " array).",
                 0, 0, std::string(fn), "",
-                "nk:" + std::string(fn) + ":inputType");
+                "numkit:" + std::string(fn) + ":inputType");
 }
 
 /// @brief Numeric-only gate (no char): for entries whose reference
@@ -83,7 +83,7 @@ inline void requireNumericInput(const Value &v, std::string_view fn,
                     + "vector (got a " + shapeOf(v) + " " + mtypeName(t)
                     + " array).",
                 0, 0, std::string(fn), "",
-                "nk:" + std::string(fn) + ":inputType");
+                "numkit:" + std::string(fn) + ":inputType");
 }
 
 /// @brief Integer-matrix rejection for the ctrb/obsv/acker/ss2ss
@@ -101,7 +101,7 @@ inline void requireNonIntegerMatrix(const Value &v, std::string_view fn,
                     + "unsupported; convert with double() (got a "
                     + shapeOf(v) + " " + mtypeName(v.type()) + " array).",
                 0, 0, std::string(fn), "",
-                "nk:" + std::string(fn) + ":integerUnsupported");
+                "numkit:" + std::string(fn) + ":integerUnsupported");
 }
 
 /// @brief Real-kernel stub for entries whose reference computes
@@ -121,7 +121,7 @@ inline void requireRealKernelInput(const Value &v, std::string_view fn,
                     + "returning a wrong real one (got a " + shapeOf(v)
                     + " complex array).",
                 0, 0, std::string(fn), "",
-                "nk:" + std::string(fn) + ":complexUnsupported");
+                "numkit:" + std::string(fn) + ":complexUnsupported");
 }
 
 /// @brief Single-result stub: acker with any single input returns a
@@ -139,7 +139,7 @@ inline void requireDoubleOnlyInput(const Value &v, std::string_view fn,
                     + "engine; convert with double() (got a " + shapeOf(v)
                     + " single array).",
                 0, 0, std::string(fn), "",
-                "nk:" + std::string(fn) + ":singleUnsupported");
+                "numkit:" + std::string(fn) + ":singleUnsupported");
 }
 
 /// @brief LTI-model gate for sys-args (predicates, gramians,
@@ -166,7 +166,7 @@ inline void requireLtiModel(const Value &sys, std::string_view fn,
                           : ("a " + std::string(mtypeName(sys.type())));
     msg += " array).";
     throw Error(std::move(msg), 0, 0, std::string(fn), "",
-                "nk:" + std::string(fn) + ":inputType");
+                "numkit:" + std::string(fn) + ":inputType");
 }
 
 /// @brief Coerce a coercible operand (single / logical / char /

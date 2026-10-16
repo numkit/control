@@ -71,12 +71,12 @@ Value tfCoeffArg(const Value &v, const char *fn, const char *argName,
         u = std::move(inner);
     }
     const ValueType t = u.type();
-    const std::string tag = std::string("nk:") + fn + ":" + argName;
+    const std::string tag = std::string("numkit:") + fn + ":" + argName;
     if (u.isCell())
         throw Error(std::string(fn) + ": input (" + argName + ") uses the "
                     "cell (MIMO) coefficient form — only SISO models are "
                     "supported in this build.",
-                    0, 0, fn, "", "nk:" + std::string(fn) + ":mimoUnsupported");
+                    0, 0, fn, "", "numkit:" + std::string(fn) + ":mimoUnsupported");
     if (u.numel() == 0)
         throw Error(std::string(fn) + ": input (" + argName + ") must not "
                     "be empty (got a " + shapeOf(u) + " "
@@ -92,7 +92,7 @@ Value tfCoeffArg(const Value &v, const char *fn, const char *argName,
     throw Error(std::string(fn) + ": input (" + argName + ") must be a "
                 + "numeric or complex coefficient vector (got a "
                 + shapeOf(u) + " " + mtypeName(t) + " array).",
-                0, 0, fn, "", "nk:" + std::string(fn) + ":inputType");
+                0, 0, fn, "", "numkit:" + std::string(fn) + ":inputType");
 }
 
 } // anonymous
@@ -134,7 +134,7 @@ Value ssMatArg(const Value &m, const char *fn, const char *argName,
     throw Error(std::string(fn) + ": input (" + argName + ") must be a "
                 + "numeric or complex matrix (got a " + shapeOf(m) + " "
                 + mtypeName(t) + " array).",
-                0, 0, fn, "", std::string("nk:") + fn + ":inputType");
+                0, 0, fn, "", std::string("numkit:") + fn + ":inputType");
 }
 
 // Expand a scalar block to r×c; pass everything else through. Scalars
@@ -176,7 +176,7 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
         throw Error(std::string("ss: input (") + arg + ") has shape "
                     + shapeOf(v) + ", which is inconsistent with the other "
                     + "A/B/C/D blocks.",
-                    0, 0, "ss", "", std::string("nk:ss:") + arg);
+                    0, 0, "ss", "", std::string("numkit:ss:") + arg);
     };
     if (Av.numel() > 1 && Av.dims().rows() != Av.dims().cols())
         blockErr("A", Av);
@@ -234,7 +234,7 @@ Value frd(const Value &response, const Value &frequency, double Ts, std::pmr::me
 {
     if (response.numel() != frequency.numel())
         throw Error("frd: response and frequency must have the same length",
-                    0, 0, "frd", "", "nk:frd:size");
+                    0, 0, "frd", "", "numkit:frd:size");
     Value s = tagStruct("frd", Ts, mr);
     const size_t N = frequency.numel();
     // resp may be complex; copy as column vector.
@@ -419,7 +419,7 @@ tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
                                     sys.field("C"), sys.field("D"), 1, mr);
     } else {
         throw Error("tfdata: input must be tf / zpk / ss",
-                    0, 0, "tfdata", "", "nk:tfdata:kind");
+                    0, 0, "tfdata", "", "numkit:tfdata:kind");
     }
     const size_t L = std::max(num.numel(), den.numel());
     Value np = padToLen(num, L, mr);
@@ -451,7 +451,7 @@ zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
         k = Value::scalar(r.k.toScalar(), mr);
     } else {
         throw Error("zpkdata: input must be tf / zpk / ss",
-                    0, 0, "zpkdata", "", "nk:zpkdata:kind");
+                    0, 0, "zpkdata", "", "numkit:zpkdata:kind");
     }
     if (asVector) return {std::move(z), std::move(p), std::move(k)};
     return {wrapCell(z, mr), wrapCell(p, mr), std::move(k)};
@@ -478,7 +478,7 @@ ssdata(const Value &sys, std::pmr::memory_resource *mr)
         C = std::move(ss.C); D = std::move(ss.D);
     } else {
         throw Error("ssdata: input must be tf / zpk / ss",
-                    0, 0, "ssdata", "", "nk:ssdata:kind");
+                    0, 0, "ssdata", "", "numkit:ssdata:kind");
     }
     return {std::move(A), std::move(B), std::move(C), std::move(D)};
 }
@@ -488,7 +488,7 @@ frdata(const Value &sys, std::pmr::memory_resource *mr)
 {
     if (kindOf(sys) != "frd")
         throw Error("frdata: input must be an frd model",
-                    0, 0, "frdata", "", "nk:frdata:kind");
+                    0, 0, "frdata", "", "numkit:frdata:kind");
     // Shallow copy through the user resource; resp / freq are already
     // stored as column vectors by frd().
     Value resp = sys.field("resp");
@@ -515,7 +515,7 @@ Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
 {
     if (kindOf(sys) != "ss")
         throw Error("ss2ss: input must be an ss model",
-                    0, 0, "ss2ss", "", "nk:ss2ss:kind");
+                    0, 0, "ss2ss", "", "numkit:ss2ss:kind");
     // T contract probed R2025b: double/single/logical/char coerce
     // (logical-identity and char T both accepted); integer matrices
     // fail at the reference's matmul layer; complex T yields a complex
@@ -531,14 +531,14 @@ Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
     const size_t n = Av.dims().rows();
     if (Av.dims().cols() != n || Tc.dims().rows() != n || Tc.dims().cols() != n)
         throw Error("ss2ss: T must be n×n with n = order(sys)",
-                    0, 0, "ss2ss", "", "nk:ss2ss:size");
+                    0, 0, "ss2ss", "", "numkit:ss2ss:size");
     const size_t m = Bv.dims().cols();
     const size_t p = Cv.dims().rows();
 
     std::vector<double> Tinv;
     if (!inverse_n(Tc, Tinv, n))
         throw Error("ss2ss: T is singular",
-                    0, 0, "ss2ss", "", "nk:ss2ss:singular");
+                    0, 0, "ss2ss", "", "numkit:ss2ss:singular");
 
     std::vector<double> Tm = readMat(Tc);
     std::vector<double> Am = readMat(Av);

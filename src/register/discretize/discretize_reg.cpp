@@ -20,7 +20,7 @@ namespace detail {
 static std::string argString(const Value &v) {
     if (!v.isChar() && !v.isString())
         throw Error("control discretize: expected a string method",
-                    0, 0, "discretize", "", "nk:discretize:type");
+                    0, 0, "discretize", "", "numkit:discretize:type");
     return v.toString();
 }
 
