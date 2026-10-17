@@ -193,9 +193,8 @@ TEST_F(ControlKnownBug, D2cDefaultZoh)
 // MATLAB R2025b (build/probe9..11_control_ref.m).
 // ──────────────────────────────────────────────────────────────────────
 
-// complex-kernels.md — lyap with complex A computes a complex solution
-// in the reference; nk stubs with nk:lyap:complexUnsupported.
-TEST_F(ControlKnownBug, DISABLED_LyapComplexKernel)
+// bugs/closed/control/complex-kernels.md — lyap with complex A computes a complex solution.
+TEST_F(ControlKnownBug, LyapComplexKernel)
 {
     eval("X = lyap(complex([-1 0; 0 -2], 1), eye(2));");
     EXPECT_NEAR(evalScalar("real(X(1,1))"), 0.4444444444, 1e-9);
@@ -203,8 +202,8 @@ TEST_F(ControlKnownBug, DISABLED_LyapComplexKernel)
     EXPECT_NEAR(evalScalar("real(X(2,2))"), 0.2777777778, 1e-9);
 }
 
-// complex-kernels.md — dlyap with complex A (reference value probed).
-TEST_F(ControlKnownBug, DISABLED_DlyapComplexKernel)
+// bugs/closed/control/complex-kernels.md — dlyap with complex A (reference value probed).
+TEST_F(ControlKnownBug, DlyapComplexKernel)
 {
     eval("X = dlyap(complex([-1 0; 0 -2], 1), eye(2));");
     EXPECT_NEAR(evalScalar("real(X(1,1))"), -0.7777777778, 1e-9);
@@ -212,9 +211,9 @@ TEST_F(ControlKnownBug, DISABLED_DlyapComplexKernel)
     EXPECT_NEAR(evalScalar("real(X(2,2))"), -0.4444444444, 1e-9);
 }
 
-// complex-kernels.md — ctrb/obsv with complex A produce complex
+// bugs/closed/control/complex-kernels.md — ctrb/obsv with complex A produce complex
 // matrices in the reference.
-TEST_F(ControlKnownBug, DISABLED_CtrbObsvComplexKernel)
+TEST_F(ControlKnownBug, CtrbObsvComplexKernel)
 {
     eval("Co = ctrb(complex([2 1; 1 3], 1), [1; 0]);");
     EXPECT_NEAR(evalScalar("real(Co(1,2))"), 2.0, 1e-9);
@@ -223,9 +222,9 @@ TEST_F(ControlKnownBug, DISABLED_CtrbObsvComplexKernel)
     EXPECT_NEAR(evalScalar("imag(Ob(2,1))"), 1.0, 1e-9);
 }
 
-// complex-kernels.md — acker with complex A returns a complex K
+// bugs/closed/control/complex-kernels.md — acker with complex A returns a complex K
 // (reference probed: [8+2i 15-4i] + a pole-location warning).
-TEST_F(ControlKnownBug, DISABLED_AckerComplexKernel)
+TEST_F(ControlKnownBug, AckerComplexKernel)
 {
     eval("K = acker(complex([2 1; 1 3], 1), [1; 0], [-1 -2]);");
     EXPECT_NEAR(evalScalar("real(K(1))"), 8.0, 1e-9);
@@ -233,17 +232,17 @@ TEST_F(ControlKnownBug, DISABLED_AckerComplexKernel)
     EXPECT_NEAR(evalScalar("imag(K(2))"), -4.0, 1e-9);
 }
 
-// complex-kernels.md — ss2ss with a complex T builds a complex model
+// bugs/closed/control/complex-kernels.md — ss2ss with a complex T builds a complex model
 // in the reference.
-TEST_F(ControlKnownBug, DISABLED_Ss2ssComplexKernel)
+TEST_F(ControlKnownBug, Ss2ssComplexKernel)
 {
     eval("s = ss2ss(ss([0 1; -1 -2], [1; 0], [1 0], 0), complex(eye(2), 1));");
     EXPECT_EQ(eval("s.kind").toString(), "ss");
 }
 
-// complex-kernels.md — lsim with complex u / complex x0 computes a
+// bugs/closed/control/complex-kernels.md — lsim with complex u / complex x0 computes a
 // complex response in the reference.
-TEST_F(ControlKnownBug, DISABLED_LsimComplexKernel)
+TEST_F(ControlKnownBug, LsimComplexKernel)
 {
     eval("sysd = ss([0 1; -1 -2], [1; 0], [1 0], 0);");
     eval("y = lsim(sysd, complex(ones(1, 11), 1), 0:0.1:1);");
@@ -262,10 +261,9 @@ TEST_F(ControlKnownBug, TfMimoCellForm)
     EXPECT_EQ(evalScalar("issiso(fsys)"), 0.0);
 }
 
-// single-float-inputs.md — acker with single inputs returns a
-// single-class result in the reference; nk's kernel is double-only
-// and stubs with nk:acker:singleUnsupported.
-TEST_F(ControlKnownBug, DISABLED_AckerSingleResult)
+// bugs/closed/control/single-float-inputs.md — acker with single inputs returns a
+// single-class result in the reference.
+TEST_F(ControlKnownBug, AckerSingleResult)
 {
     eval("K = acker(single([2 1; 1 3]), [1; 0], [-1 -2]);");
     EXPECT_EQ(eval("class(K)").toString(), "single");

@@ -323,16 +323,14 @@ Value frd(const Value &response, const Value &frequency, double Ts, std::pmr::me
 
 namespace {
 
-// LU decomposition with partial pivoting on n×n column-major matrix.
-// On return, A holds L (below diagonal, unit diagonal) and U (upper
-// triangle, including diagonal). perm[i] = row that ends up in slot i.
-bool lu_decomp(double *A, int *perm, size_t n) {
+template <typename T>
+bool lu_decomp(T *A, int *perm, size_t n) {
     for (size_t i = 0; i < n; ++i) perm[i] = static_cast<int>(i);
     for (size_t k = 0; k < n; ++k) {
         size_t piv = k;
-        double best = std::fabs(A[k + k * n]);
+        double best = std::abs(A[k + k * n]);
         for (size_t i = k + 1; i < n; ++i) {
-            const double v = std::fabs(A[i + k * n]);
+            const double v = std::abs(A[i + k * n]);
             if (v > best) { best = v; piv = i; }
         }
         if (best == 0.0) return false;
@@ -340,9 +338,9 @@ bool lu_decomp(double *A, int *perm, size_t n) {
             for (size_t j = 0; j < n; ++j) std::swap(A[k + j * n], A[piv + j * n]);
             std::swap(perm[k], perm[piv]);
         }
-        const double pivVal = A[k + k * n];
+        const T pivVal = A[k + k * n];
         for (size_t i = k + 1; i < n; ++i) {
-            const double m = A[i + k * n] / pivVal;
+            const T m = A[i + k * n] / pivVal;
             A[i + k * n] = m;
             for (size_t j = k + 1; j < n; ++j)
                 A[i + j * n] -= m * A[k + j * n];
@@ -351,27 +349,23 @@ bool lu_decomp(double *A, int *perm, size_t n) {
     return true;
 }
 
-// Solve A·x = b given LU factorisation (n×n column-major A holds LU).
-void lu_solve(const double *LU, const int *perm,
-              double *x, const double *b, size_t n) {
-    std::vector<double> z(n);
+template <typename T>
+void lu_solve(const T *LU, const int *perm,
+              T *x, const T *b, size_t n) {
+    std::vector<T> z(n);
     for (size_t i = 0; i < n; ++i) z[i] = b[perm[i]];
-    // L·y = P·b (unit-diag L)
     for (size_t i = 0; i < n; ++i) {
-        double s = z[i];
+        T s = z[i];
         for (size_t j = 0; j < i; ++j) s -= LU[i + j * n] * z[j];
         z[i] = s;
     }
-    // U·x = y
     for (size_t i = n; i-- > 0;) {
-        double s = z[i];
+        T s = z[i];
         for (size_t j = i + 1; j < n; ++j) s -= LU[i + j * n] * x[j];
         x[i] = s / LU[i + i * n];
     }
 }
 
-// Compute n×n inverse via LU + column-by-column solve. Returns false if
-// the matrix is singular.
 bool inverse_n(const Value &T, std::vector<double> &out, size_t n) {
     if (T.dims().rows() != n || T.dims().cols() != n) return false;
     std::vector<double> LU(n * n);
@@ -389,15 +383,38 @@ bool inverse_n(const Value &T, std::vector<double> &out, size_t n) {
     return true;
 }
 
-void matmul_n(const std::vector<double> &A, size_t aR, size_t aC,
-              const std::vector<double> &B, size_t bR, size_t bC,
-              std::vector<double> &C)
+bool inverse_n_cplx(const Value &T, std::vector<std::complex<double>> &out, size_t n) {
+    if (T.dims().rows() != n || T.dims().cols() != n) return false;
+    std::vector<std::complex<double>> LU(n * n);
+    if (T.isComplex()) {
+        const std::complex<double> *cd = T.complexData();
+        for (size_t i = 0; i < n * n; ++i) LU[i] = cd[i];
+    } else {
+        for (size_t i = 0; i < n * n; ++i) LU[i] = std::complex<double>(T.elemAsDouble(i), 0.0);
+    }
+    std::vector<int> perm(n);
+    if (!lu_decomp(LU.data(), perm.data(), n)) return false;
+    out.assign(n * n, std::complex<double>(0.0, 0.0));
+    std::vector<std::complex<double>> ej(n), x(n);
+    for (size_t k = 0; k < n; ++k) {
+        std::fill(ej.begin(), ej.end(), std::complex<double>(0.0, 0.0));
+        ej[k] = std::complex<double>(1.0, 0.0);
+        lu_solve(LU.data(), perm.data(), x.data(), ej.data(), n);
+        for (size_t i = 0; i < n; ++i) out[i + k * n] = x[i];
+    }
+    return true;
+}
+
+template <typename T>
+void matmul_n(const std::vector<T> &A, size_t aR, size_t aC,
+              const std::vector<T> &B, size_t bR, size_t bC,
+              std::vector<T> &C)
 {
     (void)bR;
-    C.assign(aR * bC, 0.0);
+    C.assign(aR * bC, T(0));
     for (size_t j = 0; j < bC; ++j)
         for (size_t k = 0; k < aC; ++k) {
-            const double bjk = B[k + j * bR];
+            const T bjk = B[k + j * bR];
             for (size_t i = 0; i < aR; ++i)
                 C[i + j * aR] += A[i + k * aR] * bjk;
         }
@@ -408,6 +425,19 @@ std::vector<double> readMat(const Value &v) {
     const size_t c = v.dims().cols();
     std::vector<double> out(r * c);
     for (size_t i = 0; i < r * c; ++i) out[i] = v.elemAsDouble(i);
+    return out;
+}
+
+std::vector<std::complex<double>> readCMat(const Value &v) {
+    const size_t r = v.dims().rows();
+    const size_t c = v.dims().cols();
+    std::vector<std::complex<double>> out(r * c);
+    if (v.isComplex()) {
+        const std::complex<double> *cd = v.complexData();
+        for (size_t i = 0; i < r * c; ++i) out[i] = cd[i];
+    } else {
+        for (size_t i = 0; i < r * c; ++i) out[i] = std::complex<double>(v.elemAsDouble(i), 0.0);
+    }
     return out;
 }
 
@@ -579,10 +609,9 @@ Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
     // T contract probed R2025b: double/single/logical/char coerce
     // (logical-identity and char T both accepted); integer matrices
     // fail at the reference's matmul layer; complex T yields a complex
-    // model (kernel here is double-only).
+    // model.
     internal::requireCoercibleMatrix(T, "ss2ss", "T", 2);
     internal::requireNonIntegerMatrix(T, "ss2ss", "T", 2);
-    internal::requireRealKernelInput(T, "ss2ss", "T", 2);
     Value Tc = internal::coerceToDoubleMatrix(T, mr);
     const Value &Av = sys.field("A");
     const Value &Bv = sys.field("B");
@@ -594,6 +623,34 @@ Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
                     0, 0, "ss2ss", "", "numkit:ss2ss:size");
     const size_t m = Bv.dims().cols();
     const size_t p = Cv.dims().rows();
+
+    if (Tc.isComplex() || Av.isComplex() || Bv.isComplex() || Cv.isComplex()) {
+        std::vector<std::complex<double>> Tinv;
+        if (!inverse_n_cplx(Tc, Tinv, n))
+            throw Error("ss2ss: T is singular",
+                        0, 0, "ss2ss", "", "numkit:ss2ss:singular");
+        auto Tm = readCMat(Tc);
+        auto Am = readCMat(Av);
+        auto Bm = readCMat(Bv);
+        auto Cm = readCMat(Cv);
+        std::vector<std::complex<double>> M, Anew, Bnew, Cnew;
+        matmul_n(Am, n, n, Tinv, n, n, M);
+        matmul_n(Tm, n, n, M, n, n, Anew);
+        matmul_n(Tm, n, n, Bm, n, m, Bnew);
+        matmul_n(Cm, p, n, Tinv, n, n, Cnew);
+        auto putCMat = [&](const std::vector<std::complex<double>> &v, size_t rr, size_t cc) {
+            Value out = Value::matrix(rr, cc, ValueType::COMPLEX, mr);
+            std::complex<double> *od = out.complexDataMut();
+            for (size_t i = 0; i < rr * cc; ++i) od[i] = v[i];
+            return out;
+        };
+        Value out = tagStruct("ss", sys.field("Ts").toScalar(), mr);
+        out.field("A") = putCMat(Anew, n, n);
+        out.field("B") = putCMat(Bnew, n, m);
+        out.field("C") = putCMat(Cnew, p, n);
+        out.field("D") = Dv;
+        return out;
+    }
 
     std::vector<double> Tinv;
     if (!inverse_n(Tc, Tinv, n))

@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <complex>
 #include <cstddef>
 #include <vector>
 
@@ -24,6 +25,8 @@ namespace numkit::control::internal {
 
 using Mat = std::vector<double>;
 using Vec = std::vector<double>;
+using CMat = std::vector<std::complex<double>>;
+using CVec = std::vector<std::complex<double>>;
 
 /// @brief In-place partial-pivot LU decomposition + back-substitution.
 ///
@@ -39,6 +42,7 @@ using Vec = std::vector<double>;
 ///              case. `true` on success.
 /// @see expm, charPoly
 bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs);
+bool solveInPlace(CMat &A, CMat &B, std::size_t n, std::size_t nrhs);
 
 /// @brief Matrix exponential via the canonical [6/6] Padé approximant
 /// with scaling and squaring.
@@ -74,6 +78,7 @@ Vec charPoly(const Mat &A, std::size_t n);
 /// @param n  Matrix dimension.
 /// @return   Column-major n×n product.
 Mat matmulSq(const Mat &A, const Mat &B, std::size_t n);
+CMat matmulSq(const CMat &A, const CMat &B, std::size_t n);
 
 
 /// @}

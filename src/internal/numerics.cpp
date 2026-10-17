@@ -9,7 +9,8 @@
 
 namespace numkit::control::internal {
 
-bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs)
+template <typename T>
+bool solveInPlaceTpl(std::vector<T> &A, std::vector<T> &B, std::size_t n, std::size_t nrhs)
 {
     for (std::size_t k = 0; k < n; ++k) {
         std::size_t pk = k;
@@ -25,9 +26,9 @@ bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs)
             for (std::size_t j = 0; j < nrhs; ++j)
                 std::swap(B[j * n + k], B[j * n + pk]);
         }
-        const double diag = A[k * n + k];
+        const T diag = A[k * n + k];
         for (std::size_t i = k + 1; i < n; ++i) {
-            const double f = A[k * n + i] / diag;
+            const T f = A[k * n + i] / diag;
             A[k * n + i] = f;
             for (std::size_t j = k + 1; j < n; ++j)
                 A[j * n + i] -= f * A[j * n + k];
@@ -37,7 +38,7 @@ bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs)
     }
     for (std::size_t j = 0; j < nrhs; ++j) {
         for (std::size_t i = n; i-- > 0;) {
-            double s = B[j * n + i];
+            T s = B[j * n + i];
             for (std::size_t k = i + 1; k < n; ++k)
                 s -= A[k * n + i] * B[j * n + k];
             B[j * n + i] = s / A[i * n + i];
@@ -46,17 +47,38 @@ bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs)
     return true;
 }
 
-Mat matmulSq(const Mat &A, const Mat &B, std::size_t n)
+template <typename T>
+std::vector<T> matmulSqTpl(const std::vector<T> &A, const std::vector<T> &B, std::size_t n)
 {
-    Mat C(n * n, 0.0);
+    std::vector<T> C(n * n, T(0));
     for (std::size_t j = 0; j < n; ++j)
         for (std::size_t i = 0; i < n; ++i) {
-            double s = 0.0;
+            T s(0);
             for (std::size_t k = 0; k < n; ++k)
                 s += A[k * n + i] * B[j * n + k];
             C[j * n + i] = s;
         }
     return C;
+}
+
+bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs)
+{
+    return solveInPlaceTpl(A, B, n, nrhs);
+}
+
+bool solveInPlace(CMat &A, CMat &B, std::size_t n, std::size_t nrhs)
+{
+    return solveInPlaceTpl(A, B, n, nrhs);
+}
+
+Mat matmulSq(const Mat &A, const Mat &B, std::size_t n)
+{
+    return matmulSqTpl(A, B, n);
+}
+
+CMat matmulSq(const CMat &A, const CMat &B, std::size_t n)
+{
+    return matmulSqTpl(A, B, n);
 }
 
 namespace {

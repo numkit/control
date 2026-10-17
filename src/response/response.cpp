@@ -341,14 +341,12 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     // lsim argcheck (argcheck separation). Classes probed R2025b:
     // u coerces every NUMERIC class (int8 u accepted) but char/cell
     // are rejected (Control:analysis:rfinputs02/18), and complex u
-    // yields a complex response (real-only kernel — honest stub
-    // instead of the old silent imaginary-part drop); t must be a real
+    // yields a complex response; t must be a real
     // double/single vector (int8/complex t rejected — rfinputs14); x0
-    // coerces numerics, complex x0 gives a complex response (stub),
-    // and a non-empty x0 with the wrong length is a hard error (the
-    // old code silently ignored it — reference: timeresp1).
+    // coerces numerics, complex x0 gives a complex response,
+    // and a non-empty x0 with the wrong length is a hard error
+    // (reference: timeresp1).
     internal::requireNumericInput(uIn, "lsim", "u", 2);
-    internal::requireRealKernelInput(uIn, "lsim", "u", 2);
     {
         const ValueType tt = tIn.type();
         if (tt != ValueType::DOUBLE && tt != ValueType::SINGLE)
@@ -359,7 +357,6 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                         0, 0, "lsim", "", "numkit:lsim:t");
     }
     internal::requireNumericInput(x0In, "lsim", "x0", 4);
-    internal::requireRealKernelInput(x0In, "lsim", "x0", 4);
 
     if (tIn.numel() < 2)
         throw Error("lsim: t must have at least 2 samples",
@@ -369,15 +366,49 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     if (uIn.numel() != t.size())
         throw Error("lsim: u and t must be the same length",
                     0, 0, "lsim", "", "numkit:lsim:size");
+    if (x0In.numel() != 0 && x0In.numel() != s.n)
+        throw Error("lsim: input 4 (x0) must have one entry per state "
+                    "(got " + std::to_string(x0In.numel())
+                    + " entries for " + std::to_string(s.n) + " states).",
+                    0, 0, "lsim", "", "numkit:lsim:x0");
+
+    if (uIn.isComplex() || x0In.isComplex()) {
+        const size_t N = t.size();
+        Vec uRe(N, 0.0), uIm(N, 0.0);
+        if (uIn.isComplex()) {
+            const std::complex<double> *cd = uIn.complexData();
+            for (size_t i = 0; i < N; ++i) { uRe[i] = cd[i].real(); uIm[i] = cd[i].imag(); }
+        } else {
+            for (size_t i = 0; i < N; ++i) uRe[i] = uIn.elemAsDouble(i);
+        }
+        Vec x0Re(s.n, 0.0), x0Im(s.n, 0.0);
+        if (x0In.numel() != 0) {
+            if (x0In.isComplex()) {
+                const std::complex<double> *cd = x0In.complexData();
+                for (size_t i = 0; i < s.n; ++i) { x0Re[i] = cd[i].real(); x0Im[i] = cd[i].imag(); }
+            } else {
+                for (size_t i = 0; i < s.n; ++i) x0Re[i] = x0In.elemAsDouble(i);
+            }
+        }
+        Vec xTrajRe, xTrajIm;
+        Vec yRe = simulate(s, t, uRe, x0Re, xOut ? &xTrajRe : nullptr);
+        Vec yIm = simulate(s, t, uIm, x0Im, xOut ? &xTrajIm : nullptr);
+        if (xOut) {
+            Value xm = Value::matrix(N, s.n, ValueType::COMPLEX, mr);
+            std::complex<double> *xd = xm.complexDataMut();
+            for (size_t i = 0; i < N * s.n; ++i) xd[i] = std::complex<double>(xTrajRe[i], xTrajIm[i]);
+            *xOut = std::move(xm);
+        }
+        Value yOut = Value::matrix(N, 1, ValueType::COMPLEX, mr);
+        std::complex<double> *yd = yOut.complexDataMut();
+        for (size_t i = 0; i < N; ++i) yd[i] = std::complex<double>(yRe[i], yIm[i]);
+        return yOut;
+    }
+
     Vec u(t.size());
     for (size_t i = 0; i < t.size(); ++i) u[i] = uIn.elemAsDouble(i);
     Vec x0(s.n, 0.0);
     if (x0In.numel() != 0) {
-        if (x0In.numel() != s.n)
-            throw Error("lsim: input 4 (x0) must have one entry per state "
-                        "(got " + std::to_string(x0In.numel())
-                        + " entries for " + std::to_string(s.n) + " states).",
-                        0, 0, "lsim", "", "numkit:lsim:x0");
         for (size_t i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
     }
     Vec xTraj;

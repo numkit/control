@@ -36,11 +36,24 @@ namespace {
 
 using Mat = internal::Mat;
 using Vec = internal::Vec;
+using CMat = internal::CMat;
+using CVec = internal::CVec;
 using internal::solveInPlace;
 
 Mat readMat(const Value &v, size_t r, size_t c) {
     Mat M(r * c, 0.0);
     for (size_t i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
+    return M;
+}
+
+CMat readCMat(const Value &v, size_t r, size_t c) {
+    CMat M(r * c, std::complex<double>(0.0, 0.0));
+    if (v.isComplex()) {
+        const std::complex<double> *cd = v.complexData();
+        for (size_t i = 0; i < r * c; ++i) M[i] = cd[i];
+    } else {
+        for (size_t i = 0; i < r * c; ++i) M[i] = std::complex<double>(v.elemAsDouble(i), 0.0);
+    }
     return M;
 }
 
@@ -50,18 +63,21 @@ Value matFromVec(size_t r, size_t c, const Mat &v, std::pmr::memory_resource *mr
     return m;
 }
 
+Value cmatFromVec(size_t r, size_t c, const CMat &v, std::pmr::memory_resource *mr) {
+    Value m = Value::matrix(r, c, ValueType::COMPLEX, mr);
+    if (!v.empty()) std::copy(v.begin(), v.end(), m.complexDataMut());
+    return m;
+}
+
 // lyap/dlyap argcheck (argcheck separation). Type classes probed
 // R2025b: A and Q coerce every numeric class AND char (lyap(int8 A),
 // lyap('12' A) both compute in the reference); cell/string are the
-// inputType rejection; complex A or Q yields a complex solution in the
-// reference (kernel here is double-only — honest stub instead of the
-// old silent imaginary-part drop). Square/shape checks follow type.
+// inputType rejection; complex A or Q yields a complex solution.
+// Square/shape checks follow type.
 void lyap_argcheck(const Value &A, const Value &Q, const char *name)
 {
     internal::requireCoercibleMatrix(A, name, "A", 1);
     internal::requireCoercibleMatrix(Q, name, "Q", 2);
-    internal::requireRealKernelInput(A, name, "A", 1);
-    internal::requireRealKernelInput(Q, name, "Q", 2);
     if (A.dims().rows() != A.dims().cols())
         throw Error(std::string(name) + ": A must be square",
                     0, 0, name, "", std::string("numkit:") + name + ":A");
@@ -76,9 +92,10 @@ void lyap_argcheck(const Value &A, const Value &Q, const char *name)
 //
 // Used by both lyap and dlyap; the only difference is how M is
 // constructed. `fn` names the entry in the singular-system voice.
-Vec solveKron(Mat &M, Vec &rhs, size_t n2, const char *fn)
+template <typename MatT>
+MatT solveKron(MatT &M, MatT &rhs, size_t n2, const char *fn)
 {
-    Mat rhsMat = rhs;  // single-rhs solveInPlace expects column-major
+    MatT rhsMat = rhs;  // single-rhs solveInPlace expects column-major
     if (!solveInPlace(M, rhsMat, n2, 1))
         throw Error(std::string(fn) + ": the Lyapunov equation is "
                     "singular (check that A is stable / the equation "
@@ -94,7 +111,38 @@ Value lyap(const Value &Av, const Value &Qv, std::pmr::memory_resource *mr)
 {
     lyap_argcheck(Av, Qv, "lyap");
     const size_t n = Av.dims().rows();
-    if (n == 0) return Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    const bool isCplx = Av.isComplex() || Qv.isComplex();
+    if (n == 0) return Value::matrix(0, 0, isCplx ? ValueType::COMPLEX : ValueType::DOUBLE, mr);
+
+    const size_t n2 = n * n;
+    if (isCplx) {
+        auto A = readCMat(Av, n, n);
+        auto Q = readCMat(Qv, n, n);
+        // Continuous Hermitian Lyapunov: A·X + X·A^H + Q = 0
+        // vectorises to (I ⊗ A + conj(A) ⊗ I) · vec(X) = −vec(Q).
+        CMat M(n2 * n2, std::complex<double>(0.0, 0.0));
+        auto setEntry = [&](size_t row, size_t col, std::complex<double> v) {
+            M[col * n2 + row] += v;
+        };
+        for (size_t p = 0; p < n; ++p)
+            for (size_t i = 0; i < n; ++i)
+                for (size_t j = 0; j < n; ++j)
+                    setEntry(i + n * p, j + n * p, A[j * n + i]);
+        for (size_t p = 0; p < n; ++p)
+            for (size_t q = 0; q < n; ++q)
+                for (size_t i = 0; i < n; ++i)
+                    setEntry(i + n * p, i + n * q, std::conj(A[q * n + p]));
+        CVec rhs(n2);
+        for (size_t j = 0; j < n; ++j)
+            for (size_t i = 0; i < n; ++i)
+                rhs[i + n * j] = -Q[j * n + i];
+        auto x = solveKron(M, rhs, n2, "lyap");
+        CMat X(n2);
+        for (size_t j = 0; j < n; ++j)
+            for (size_t i = 0; i < n; ++i)
+                X[j * n + i] = x[i + n * j];
+        return cmatFromVec(n, n, X, mr);
+    }
 
     auto A = readMat(Av, n, n);
     auto Q = readMat(Qv, n, n);
@@ -103,7 +151,6 @@ Value lyap(const Value &Av, const Value &Qv, std::pmr::memory_resource *mr)
     // Kronecker convention used throughout: (P⊗R)[i+np, j+nq]
     // = P[p,q] · R[i,j]. The vec(X) layout is column-major so
     // vec(X)[i + n·j] = X[i,j].
-    const size_t n2 = n * n;
     Mat M(n2 * n2, 0.0);
 
     auto setEntry = [&](size_t row, size_t col, double v) {
@@ -148,12 +195,40 @@ Value dlyap(const Value &Av, const Value &Qv, std::pmr::memory_resource *mr)
 {
     lyap_argcheck(Av, Qv, "dlyap");
     const size_t n = Av.dims().rows();
-    if (n == 0) return Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    const bool isCplx = Av.isComplex() || Qv.isComplex();
+    if (n == 0) return Value::matrix(0, 0, isCplx ? ValueType::COMPLEX : ValueType::DOUBLE, mr);
+
+    const size_t n2 = n * n;
+    if (isCplx) {
+        auto A = readCMat(Av, n, n);
+        auto Q = readCMat(Qv, n, n);
+        // Discrete Hermitian Lyapunov: A·X·A^H − X + Q = 0
+        // vectorises to (conj(A) ⊗ A − I) · vec(X) = −vec(Q).
+        CMat M(n2 * n2, std::complex<double>(0.0, 0.0));
+        for (size_t p = 0; p < n; ++p)
+            for (size_t q = 0; q < n; ++q)
+                for (size_t i = 0; i < n; ++i)
+                    for (size_t j = 0; j < n; ++j) {
+                        const size_t row = i + n * p;
+                        const size_t col = j + n * q;
+                        M[col * n2 + row] += std::conj(A[q * n + p]) * A[j * n + i];
+                    }
+        for (size_t k = 0; k < n2; ++k) M[k * n2 + k] -= 1.0;
+        CVec rhs(n2);
+        for (size_t j = 0; j < n; ++j)
+            for (size_t i = 0; i < n; ++i)
+                rhs[i + n * j] = -Q[j * n + i];
+        auto x = solveKron(M, rhs, n2, "dlyap");
+        CMat X(n2);
+        for (size_t j = 0; j < n; ++j)
+            for (size_t i = 0; i < n; ++i)
+                X[j * n + i] = x[i + n * j];
+        return cmatFromVec(n, n, X, mr);
+    }
 
     auto A = readMat(Av, n, n);
     auto Q = readMat(Qv, n, n);
 
-    const size_t n2 = n * n;
     Mat M(n2 * n2, 0.0);
 
     // (A⊗A): row = i + n·p, col = j + n·q, contribution A[p,q] · A[i,j].

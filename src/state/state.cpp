@@ -63,27 +63,41 @@ std::vector<double> readMat(const Value &v, size_t r, size_t c) {
     return M;
 }
 
+std::vector<std::complex<double>> readCMat(const Value &v, size_t r, size_t c) {
+    std::vector<std::complex<double>> M(r * c, std::complex<double>(0.0, 0.0));
+    if (v.isComplex()) {
+        const std::complex<double> *cd = v.complexData();
+        for (size_t i = 0; i < r * c; ++i) M[i] = cd[i];
+    } else {
+        for (size_t i = 0; i < r * c; ++i) M[i] = std::complex<double>(v.elemAsDouble(i), 0.0);
+    }
+    return M;
+}
+
 Value matFromVec(size_t r, size_t c, const std::vector<double> &v, std::pmr::memory_resource *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
+Value cmatFromVec(size_t r, size_t c, const std::vector<std::complex<double>> &v, std::pmr::memory_resource *mr) {
+    Value m = Value::matrix(r, c, ValueType::COMPLEX, mr);
+    if (!v.empty()) std::copy(v.begin(), v.end(), m.complexDataMut());
+    return m;
+}
+
 // ctrb/obsv argcheck (argcheck separation). Classes probed R2025b:
 // double/single/logical/char coerce; integer matrices fail inside the
 // reference's matmul (integerNotSupported) — mirrored with its own
-// identifier; complex operands produce a complex result in the
-// reference (kernel here is double-only — honest stub instead of the
-// old silent imaginary-part drop); cell/string are inputType.
+// identifier; complex operands produce a complex result; cell/string
+// are inputType.
 void ctrb_obsv_argcheck(const Value &A, const Value &X, const char *fn,
                         const char *xName, int xNum)
 {
     internal::requireCoercibleMatrix(A, fn, "A", 1);
     internal::requireNonIntegerMatrix(A, fn, "A", 1);
-    internal::requireRealKernelInput(A, fn, "A", 1);
     internal::requireCoercibleMatrix(X, fn, xName, xNum);
     internal::requireNonIntegerMatrix(X, fn, xName, xNum);
-    internal::requireRealKernelInput(X, fn, xName, xNum);
 }
 
 } // anonymous
@@ -99,6 +113,32 @@ Value ctrb_AB(const Value &Av, const Value &Bv, std::pmr::memory_resource *mr)
     if (Bv.dims().rows() != n)
         throw Error("ctrb: B must have the same row count as A",
                     0, 0, "ctrb", "", "numkit:ctrb:B");
+
+    if (Av.isComplex() || Bv.isComplex()) {
+        auto A = readCMat(Av, n, n);
+        auto B = readCMat(Bv, n, m);
+        std::vector<std::complex<double>> Co(n * (n * m), std::complex<double>(0.0, 0.0));
+        for (size_t j = 0; j < m; ++j)
+            for (size_t i = 0; i < n; ++i)
+                Co[j * n + i] = B[j * n + i];
+        auto prev = B;
+        for (size_t k = 1; k < n; ++k) {
+            std::vector<std::complex<double>> next(n * m, std::complex<double>(0.0, 0.0));
+            for (size_t j = 0; j < m; ++j)
+                for (size_t i = 0; i < n; ++i) {
+                    std::complex<double> s(0.0, 0.0);
+                    for (size_t l = 0; l < n; ++l)
+                        s += A[l * n + i] * prev[j * n + l];
+                    next[j * n + i] = s;
+                }
+            const size_t colOffset = k * m;
+            for (size_t j = 0; j < m; ++j)
+                for (size_t i = 0; i < n; ++i)
+                    Co[(colOffset + j) * n + i] = next[j * n + i];
+            prev = std::move(next);
+        }
+        return cmatFromVec(n, n * m, Co, mr);
+    }
 
     auto A = readMat(Av, n, n);
     auto B = readMat(Bv, n, m);
@@ -143,6 +183,32 @@ Value obsv_AC(const Value &Av, const Value &Cv, std::pmr::memory_resource *mr)
     if (Cv.dims().cols() != n)
         throw Error("obsv: C must have the same column count as A",
                     0, 0, "obsv", "", "numkit:obsv:C");
+
+    if (Av.isComplex() || Cv.isComplex()) {
+        auto A = readCMat(Av, n, n);
+        auto C = readCMat(Cv, p, n);
+        std::vector<std::complex<double>> Ob((n * p) * n, std::complex<double>(0.0, 0.0));
+        for (size_t j = 0; j < n; ++j)
+            for (size_t i = 0; i < p; ++i)
+                Ob[j * (n * p) + i] = C[j * p + i];
+        auto prev = C;
+        for (size_t k = 1; k < n; ++k) {
+            std::vector<std::complex<double>> next(p * n, std::complex<double>(0.0, 0.0));
+            for (size_t j = 0; j < n; ++j)
+                for (size_t i = 0; i < p; ++i) {
+                    std::complex<double> s(0.0, 0.0);
+                    for (size_t l = 0; l < n; ++l)
+                        s += prev[l * p + i] * A[j * n + l];
+                    next[j * p + i] = s;
+                }
+            const size_t rowOffset = k * p;
+            for (size_t j = 0; j < n; ++j)
+                for (size_t i = 0; i < p; ++i)
+                    Ob[j * (n * p) + (rowOffset + i)] = next[j * p + i];
+            prev = std::move(next);
+        }
+        return cmatFromVec(n * p, n, Ob, mr);
+    }
 
     auto A = readMat(Av, n, n);
     auto C = readMat(Cv, p, n);

@@ -65,14 +65,13 @@ TEST_F(ControlTypeContractTest, LyapDlyapRejectionClasses)
     expectId("numkit:lyap:inputType", [&] { eval("lyap(\"x\", eye(2))"); });
     expectId("numkit:lyap:inputType", [&] { eval("lyap(As, {1 2; 3 4})"); });
     expectId("numkit:dlyap:inputType", [&] { eval("dlyap({1 2; 3 4}, eye(2))"); });
-    // complex A/Q compute complex results in the reference — stubbed
-    // honestly instead of the old silent real-part drop.
-    expectId("numkit:lyap:complexUnsupported",
-             [&] { eval("lyap(complex(As, 1), eye(2))"); });
-    expectId("numkit:lyap:complexUnsupported",
-             [&] { eval("lyap(As, complex(eye(2), 1))"); });
-    expectId("numkit:dlyap:complexUnsupported",
-             [&] { eval("dlyap(complex(As, 1), eye(2))"); });
+    // complex A/Q compute complex results in the reference.
+    eval("X1 = lyap(complex(As, 1), eye(2));");
+    EXPECT_NEAR(evalScalar("real(X1(1,1))"), 0.4444444444, 1e-9);
+    eval("X2 = lyap(As, complex(eye(2), 1));");
+    EXPECT_NEAR(evalScalar("imag(X2(1,1))"), 0.5, 1e-9);
+    eval("X3 = dlyap(complex(As, 1), eye(2));");
+    EXPECT_NEAR(evalScalar("real(X3(1,1))"), -0.7777777778, 1e-9);
 }
 
 TEST_F(ControlTypeContractTest, DlyapSingularVoiceAndValue)
@@ -107,10 +106,10 @@ TEST_F(ControlTypeContractTest, CtrbObsvCoercionAndRejection)
     expectId("numkit:obsv:integerUnsupported", [&] { eval("obsv(int8(Ad), C)"); });
     // cell / complex.
     expectId("numkit:ctrb:inputType", [&] { eval("ctrb({1 2; 3 4}, B)"); });
-    expectId("numkit:ctrb:complexUnsupported",
-             [&] { eval("ctrb(complex(Ad, 1), B)"); });
-    expectId("numkit:obsv:complexUnsupported",
-             [&] { eval("obsv(complex(Ad, 1), C)"); });
+    eval("Cocplx = ctrb(complex(Ad, 1), B);");
+    EXPECT_NEAR(evalScalar("imag(Cocplx(1,2))"), 1.0, 1e-12);
+    eval("Obcplx = obsv(complex(Ad, 1), C);");
+    EXPECT_NEAR(evalScalar("imag(Obcplx(2,1))"), 1.0, 1e-12);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -139,15 +138,18 @@ TEST_F(ControlTypeContractTest, AckerContracts)
     // char A coerces (reference computes the same code-value answer).
     eval("Ka = acker(['12';'34'], B, [-1 -2]);");
     EXPECT_NEAR(evalScalar("Ka(1)"), 104.0, 1e-9);
-    // single → single-class result in the reference: stubbed.
-    expectId("numkit:acker:singleUnsupported", [&] { eval("acker(single(Ad), B, [-1 -2])"); });
-    expectId("numkit:acker:singleUnsupported", [&] { eval("acker(Ad, B, single([-1 -2]))"); });
+    // single → single-class result in the reference.
+    eval("Ks1 = acker(single(Ad), B, [-1 -2]);");
+    EXPECT_EQ(eval("class(Ks1)").toString(), "single");
+    eval("Ks2 = acker(Ad, B, single([-1 -2]));");
+    EXPECT_EQ(eval("class(Ks2)").toString(), "single");
     expectId("numkit:acker:integerUnsupported", [&] { eval("acker(int8(Ad), B, [-1 -2])"); });
     expectId("numkit:acker:integerUnsupported", [&] { eval("acker(Ad, B, int8([-1 -2]))"); });
     expectId("numkit:acker:inputType", [&] { eval("acker(Ad, B, 'ab')"); });
     expectId("numkit:acker:inputType", [&] { eval("acker(Ad, B, {1 2})"); });
-    expectId("numkit:acker:complexUnsupported",
-             [&] { eval("acker(complex(Ad, 1), B, [-1 -2])"); });
+    eval("Kcplx = acker(complex(Ad, 1), B, [-1 -2]);");
+    EXPECT_NEAR(evalScalar("real(Kcplx(1))"), 8.0, 1e-9);
+    EXPECT_NEAR(evalScalar("imag(Kcplx(1))"), 2.0, 1e-9);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -163,11 +165,11 @@ TEST_F(ControlTypeContractTest, Ss2ssTContract)
     eval("s3 = ss2ss(sysd, ['12';'34']);");
     EXPECT_EQ(eval("s1.kind").toString(), "ss");
     // integer T fails at the reference's matmul; complex T builds a
-    // complex model there (kernel here is double-only).
+    // complex model.
     expectId("numkit:ss2ss:integerUnsupported",
              [&] { eval("ss2ss(sysd, int8(eye(2)))"); });
-    expectId("numkit:ss2ss:complexUnsupported",
-             [&] { eval("ss2ss(sysd, complex(eye(2), 1))"); });
+    eval("sc = ss2ss(sysd, complex(eye(2), 1));");
+    EXPECT_EQ(eval("sc.kind").toString(), "ss");
     expectId("numkit:ss2ss:inputType",
              [&] { eval("ss2ss(sysd, {1 2; 3 4})"); });
     expectId("numkit:ss2ss:kind", [&] { eval("ss2ss(1, eye(2))"); });
@@ -343,23 +345,23 @@ TEST_F(ControlTypeContractTest, LsimInputContracts)
     eval("ys = lsim(sysd, single(u), single(t));");
     EXPECT_NEAR(evalScalar("ys(end)"), evalScalar("y0(end)"), 1e-6);
     // char u / cell u rejected (reference rfinputs02/18); complex u
-    // computes a complex response there — stubbed honestly.
+    // computes a complex response.
     expectId("numkit:lsim:inputType",
              [&] { eval("lsim(sysd, repmat('1', 1, 11), t)"); });
     expectId("numkit:lsim:inputType", [&] { eval("lsim(sysd, {u}, t)"); });
-    expectId("numkit:lsim:complexUnsupported",
-             [&] { eval("lsim(sysd, complex(u, 1), t)"); });
+    eval("yc1 = lsim(sysd, complex(u, 1), t);");
+    EXPECT_NEAR(evalScalar("imag(yc1(2))"), 0.09984142212, 1e-9);
     // t must be real double/single (int8/complex t rejected — the
     // old code accepted int8 t and produced a garbage trajectory).
     expectId("numkit:lsim:t", [&] { eval("lsim(sysd, u, int8(t))"); });
     expectId("numkit:lsim:t", [&] { eval("lsim(sysd, u, complex(t, 1))"); });
     expectId("numkit:lsim:t", [&] { eval("lsim(sysd, u, {t})"); });
     // x0: wrong length was SILENTLY IGNORED (reference: timeresp1);
-    // complex x0 stubbed; cell rejected; empty x0 valid.
+    // complex x0 computes a complex response; cell rejected; empty x0 valid.
     expectId("numkit:lsim:x0", [&] { eval("lsim(sysd, u, t, [0])"); });
     expectId("numkit:lsim:x0", [&] { eval("lsim(sysd, u, t, [0; 0; 0])"); });
-    expectId("numkit:lsim:complexUnsupported",
-             [&] { eval("lsim(sysd, u, t, complex([0; 0], 1))"); });
+    eval("yc2 = lsim(sysd, u, t, complex([0; 0], 1));");
+    EXPECT_NEAR(evalScalar("imag(yc2(1))"), 1.0, 1e-9);
     expectId("numkit:lsim:inputType", [&] { eval("lsim(sysd, u, t, {[0; 0]})"); });
     eval("ye = lsim(sysd, u, t, []);");
     EXPECT_NEAR(evalScalar("ye(end)"), evalScalar("y0(end)"), 1e-12);

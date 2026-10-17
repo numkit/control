@@ -33,6 +33,8 @@ namespace {
 
 using Mat = internal::Mat;
 using Vec = internal::Vec;
+using CMat = internal::CMat;
+using CVec = internal::CVec;
 using internal::solveInPlace;
 using internal::matmulSq;
 
@@ -42,9 +44,32 @@ Mat readMat(const Value &v, size_t r, size_t c) {
     return M;
 }
 
-Value rowFromVec(const Vec &v, std::pmr::memory_resource *mr) {
+CMat readCMat(const Value &v, size_t r, size_t c) {
+    CMat M(r * c, std::complex<double>(0.0, 0.0));
+    if (v.isComplex()) {
+        const std::complex<double> *cd = v.complexData();
+        for (size_t i = 0; i < r * c; ++i) M[i] = cd[i];
+    } else {
+        for (size_t i = 0; i < r * c; ++i) M[i] = std::complex<double>(v.elemAsDouble(i), 0.0);
+    }
+    return M;
+}
+
+Value rowFromVec(const Vec &v, bool asSingle, std::pmr::memory_resource *mr) {
+    if (asSingle) {
+        Value r = Value::matrix(1, v.size(), ValueType::SINGLE, mr);
+        float *fd = r.singleDataMut();
+        for (size_t i = 0; i < v.size(); ++i) fd[i] = static_cast<float>(v[i]);
+        return r;
+    }
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
+    return r;
+}
+
+Value crowFromVec(const CVec &v, std::pmr::memory_resource *mr) {
+    Value r = Value::matrix(1, v.size(), ValueType::COMPLEX, mr);
+    if (!v.empty()) std::copy(v.begin(), v.end(), r.complexDataMut());
     return r;
 }
 
@@ -53,18 +78,14 @@ Value rowFromVec(const Vec &v, std::pmr::memory_resource *mr) {
 //   φ(A) = c[0]·A^n + c[1]·A^(n-1) + … + c[n]·I
 // Implemented as Horner:
 //   φ(A) = ((( c[0]·I · A + c[1]·I ) · A + c[2]·I ) · A + … ) + c[n]·I
-Mat phiOfA(const Mat &A, size_t n, const Vec &c) {
-    Mat I(n * n, 0.0);
-    for (size_t i = 0; i < n; ++i) I[i * n + i] = 1.0;
-
-    // Initialise H = c[0] · I.
-    Mat H(n * n, 0.0);
-    for (size_t i = 0; i < n; ++i) H[i * n + i] = c[0];
+template <typename T>
+std::vector<T> phiOfA(const std::vector<T> &A, size_t n, const Vec &c) {
+    std::vector<T> H(n * n, T(0));
+    for (size_t i = 0; i < n; ++i) H[i * n + i] = T(c[0]);
 
     for (size_t k = 1; k <= n; ++k) {
         H = matmulSq(H, A, n);
-        // H += c[k] · I
-        for (size_t i = 0; i < n; ++i) H[i * n + i] += c[k];
+        for (size_t i = 0; i < n; ++i) H[i * n + i] += T(c[k]);
     }
     return H;
 }
@@ -76,21 +97,16 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
     // acker argcheck (argcheck separation). Classes probed R2025b:
     // A/B coerce double/single/logical/char; integer matrices fail at
     // the reference's matmul layer; single anywhere yields a
-    // single-class K there (kernel here is double-only); complex A
-    // yields a complex K there (real-only kernel — honest stub).
+    // single-class K; complex A or B yields a complex K.
     // Complex p is ACCEPTED: conjugate pairs give a real K in both
     // engines, and non-conjugate sets degenerate to the same real
     // answer the reference computes ([8 21] probed, with its warning).
     internal::requireCoercibleMatrix(Av, "acker", "A", 1);
     internal::requireNonIntegerMatrix(Av, "acker", "A", 1);
-    internal::requireDoubleOnlyInput(Av, "acker", "A", 1);
-    internal::requireRealKernelInput(Av, "acker", "A", 1);
     internal::requireCoercibleMatrix(Bv, "acker", "B", 2);
     internal::requireNonIntegerMatrix(Bv, "acker", "B", 2);
-    internal::requireDoubleOnlyInput(Bv, "acker", "B", 2);
     internal::requireNumericInput(pv, "acker", "p", 3);
     internal::requireNonIntegerMatrix(pv, "acker", "p", 3);
-    internal::requireDoubleOnlyInput(pv, "acker", "p", 3);
 
     const size_t n = Av.dims().rows();
     if (Av.dims().cols() != n)
@@ -103,13 +119,16 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
         throw Error("acker: pole list must have length n",
                     0, 0, "acker", "", "numkit:acker:p");
 
-    auto A = readMat(Av, n, n);
-    auto B = readMat(Bv, n, 1);
+    const bool wantSingle = (Av.type() == ValueType::SINGLE ||
+                             Bv.type() == ValueType::SINGLE ||
+                             pv.type() == ValueType::SINGLE);
+    const bool wantComplex = (Av.isComplex() || Bv.isComplex());
 
     // Desired characteristic polynomial φ(s) = ∏(s − p_i). Coerce the
     // pole list to a double buffer (logical/int sets arrive here after
     // the gates above); complex conjugate sets keep their complex
-    // coefficients through builtin poly.
+    // coefficients through builtin poly, and real(poly(p)) is used per
+    // the reference's acker.m.
     Value pC = internal::coerceToDoubleMatrix(pv, mr);
     Value coeffs = numkit::builtin::poly(pC, mr);
     Vec c(coeffs.numel());
@@ -117,6 +136,37 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
     if (c.size() != n + 1)
         throw Error("acker: poly(p) returned unexpected length",
                     0, 0, "acker", "", "numkit:acker:poly");
+
+    if (wantComplex) {
+        auto A = readCMat(Av, n, n);
+        CMat phi = phiOfA(A, n, c);
+        Value CoV = ctrb_AB(Av, Bv, mr);
+        CMat Co = readCMat(CoV, n, n);
+
+        CMat CoT(n * n, std::complex<double>(0.0, 0.0));
+        for (size_t j = 0; j < n; ++j)
+            for (size_t i = 0; i < n; ++i)
+                CoT[j * n + i] = Co[i * n + j];
+
+        CMat eN(n, std::complex<double>(0.0, 0.0));
+        eN[n - 1] = std::complex<double>(1.0, 0.0);
+
+        if (!solveInPlace(CoT, eN, n, 1))
+            throw Error("acker: controllability matrix is singular "
+                        "(system is uncontrollable)",
+                        0, 0, "acker", "", "numkit:acker:singular");
+
+        CVec K(n, std::complex<double>(0.0, 0.0));
+        for (size_t k = 0; k < n; ++k) {
+            std::complex<double> s(0.0, 0.0);
+            for (size_t j = 0; j < n; ++j)
+                s += eN[j] * phi[k * n + j];
+            K[k] = s;
+        }
+        return crowFromVec(K, mr);
+    }
+
+    auto A = readMat(Av, n, n);
 
     // φ(A) — n×n.
     Mat phi = phiOfA(A, n, c);
@@ -152,7 +202,7 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
             s += eN[j] * phi[k * n + j];
         K[k] = s;
     }
-    return rowFromVec(K, mr);
+    return rowFromVec(K, wantSingle, mr);
 }
 
 Value place(const Value &A, const Value &B, const Value &p, std::pmr::memory_resource *mr)
