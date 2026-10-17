@@ -58,28 +58,6 @@ if(NOT TARGET numkit_ops)
     endif()
 endif()
 
-# Dependency: numkit/signal
-if(NOT TARGET numkit_signal_core)
-    if(MSVC AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../signal/build/Release/numkit_signal_core.lib")
-        add_library(numkit_signal_core STATIC IMPORTED)
-        set_target_properties(numkit_signal_core PROPERTIES
-            IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../signal/build/Release/numkit_signal_core.lib"
-            INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../signal/include"
-            INTERFACE_LINK_LIBRARIES "numkit_value;numkit_sys;numkit_ops"
-        )
-    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../signal/CMakeLists.txt")
-        message(STATUS "Using local numkit/signal from ${CMAKE_CURRENT_SOURCE_DIR}/../signal")
-        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../signal" _deps/numkit_signal)
-    else()
-        FetchContent_Declare(
-            numkit_signal
-            GIT_REPOSITORY https://github.com/numkit/signal.git
-            GIT_TAG main
-        )
-        FetchContent_MakeAvailable(numkit_signal)
-    endif()
-endif()
-
 file(GLOB_RECURSE CONTROL_COMPUTE_SOURCES
     "src/analyze/*.cpp"
     "src/connect/*.cpp"
@@ -112,7 +90,7 @@ target_include_directories(numkit_control_core
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(numkit_control_core PUBLIC numkit_value numkit_sys numkit_ops numkit_signal_core)
+target_link_libraries(numkit_control_core PUBLIC numkit_value numkit_sys numkit_ops)
 
 if(MSVC)
     target_compile_options(numkit_control_core PRIVATE /W4 /MP /bigobj)
@@ -134,7 +112,7 @@ target_include_directories(numkit_control
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(numkit_control PUBLIC numkit_control_core numkit_value numkit_sys numkit_ops numkit_signal_core)
+target_link_libraries(numkit_control PUBLIC numkit_control_core numkit_value numkit_sys numkit_ops)
 
 if(MSVC)
     target_compile_options(numkit_control PRIVATE /W4 /MP /bigobj)
