@@ -112,10 +112,9 @@ TEST_F(ControlKnownBug, Covar)
     EXPECT_NEAR(evalScalar("covar(ss(-1, 1, 1, 0), 1)"), 0.5, 1e-9);
 }
 
-// bugs/opened/control/tf-arithmetic.md — tf arithmetic operators
-// (*, +, scalar*) error instead of composing (series()/parallel()
-// work). OPEN — the force-run fails until operator kind-dispatch lands.
-TEST_F(ControlKnownBug, DISABLED_TfArithmeticOperators)
+// bugs/closed/control/tf-arithmetic.md — tf arithmetic operators
+// (*, +, scalar*) compose transfer functions.
+TEST_F(ControlKnownBug, TfArithmeticOperators)
 {
     eval("G1 = tf([1], [1 1]); G2 = tf([1], [1 2]);");
     eval("G = G1 * G2;");                            // 1/(s^2+3s+2)
@@ -145,9 +144,9 @@ TEST_F(ControlKnownBug, DISABLED_ControlShortForms)
     EXPECT_NO_THROW(eval("step();"));   // demo-plot form
 }
 
-// bugs/opened/control/type-dependent-walls.md — the reference's model
+// bugs/closed/control/type-dependent-walls.md — the reference's model
 // path rejects extra args the numeric-dummy wall allows.
-TEST_F(ControlKnownBug, DISABLED_CovarModelPathStrict)
+TEST_F(ControlKnownBug, CovarModelPathStrict)
 {
     EXPECT_ANY_THROW(eval("covar(ss(-1, 1, 1, 0), 1, 1);"));
     EXPECT_ANY_THROW(eval("ss2ss(ss([0 1; -1 -2], [1; 0], [1 0], 0), eye(2), 1, 1, 1);"));
@@ -177,9 +176,9 @@ TEST_F(ControlKnownBug, FeedbackSignCppPathUnified)
     }
 }
 
-// bugs/opened/control/d2c-default-and-tustin.md — the reference default
+// bugs/closed/control/d2c-default-and-tustin.md — the reference default
 // is 'zoh'; nk defaults to tustin, which errors on a plain stable pole.
-TEST_F(ControlKnownBug, DISABLED_D2cDefaultZoh)
+TEST_F(ControlKnownBug, D2cDefaultZoh)
 {
     eval("d = d2c(tf([1], [1 1], 0.1));");
     eval("d2 = d2c(tf([1], [1 1], 0.1), 'zoh');");

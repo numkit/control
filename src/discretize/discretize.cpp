@@ -13,6 +13,7 @@
 #include <numkit/control/internal/numerics.hpp>
 
 #include <numkit/builtin/polyfun.hpp>
+#include <numkit/linalg/matrix_functions.hpp>
 #include <numkit/signal/convolution/convolution.hpp>
 
 // Compute-only TU: Value substrate + Error, no engine. The c2d/d2c builtins
@@ -298,10 +299,90 @@ Value d2c(const Value &sys, const std::string &method, std::pmr::memory_resource
     if (s.Ts <= 0.0)
         throw Error("d2c: input system is already continuous (Ts == 0)",
                     0, 0, "d2c", "", "numkit:d2c:already_continuous");
-    if (!method.empty() && method != "tustin" && method != "bilinear")
-        throw Error("d2c: only 'tustin' is supported",
+    const bool isZoh = method.empty() || method == "zoh";
+    const bool isTustin = method == "tustin" || method == "bilinear";
+    if (!isZoh && !isTustin)
+        throw Error("d2c: method must be 'zoh' or 'tustin'",
                     0, 0, "d2c", "", "numkit:d2c:method");
     const double Ts = s.Ts;
+    const std::string origKind = sys.isStruct() && sys.hasField("kind")
+                                 ? sys.field("kind").toString()
+                                 : std::string("ss");
+
+    if (isZoh) {
+        if (s.n == 0)
+            return packResult({}, {}, {}, s.D, 0, 0.0, origKind, mr);
+
+        // Augmented ZOH matrix Phi = [[A_d, B_d]; [0, 1]], (n+1)x(n+1).
+        const size_t m = s.n + 1;
+        Value Phi = Value::matrix(m, m, ValueType::DOUBLE, mr);
+        double *pd = Phi.doubleDataMut();
+        std::fill(pd, pd + m * m, 0.0);
+        for (size_t j = 0; j < s.n; ++j)
+            for (size_t i = 0; i < s.n; ++i)
+                pd[j * m + i] = s.A[j * s.n + i];
+        for (size_t i = 0; i < s.n; ++i)
+            pd[s.n * m + i] = s.B[i];
+        pd[s.n * m + s.n] = 1.0;
+
+        Value L = numkit::linalg::logm(Phi, mr);
+        bool hasImag = false;
+        if (L.isComplex()) {
+            const Complex *lc = L.complexData();
+            for (size_t j = 0; j <= s.n; ++j) {
+                for (size_t i = 0; i < s.n; ++i) {
+                    if (std::abs(lc[j * m + i].imag()) > 1e-9) {
+                        hasImag = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!hasImag) {
+            Mat Ac(s.n * s.n, 0.0);
+            Vec Bc(s.n, 0.0);
+            for (size_t j = 0; j < s.n; ++j) {
+                for (size_t i = 0; i < s.n; ++i) {
+                    const double v = L.isComplex() ? L.complexData()[j * m + i].real()
+                                                   : L.doubleData()[j * m + i];
+                    Ac[j * s.n + i] = v / Ts;
+                }
+            }
+            for (size_t i = 0; i < s.n; ++i) {
+                const double v = L.isComplex() ? L.complexData()[s.n * m + i].real()
+                                               : L.doubleData()[s.n * m + i];
+                Bc[i] = v / Ts;
+            }
+            return packResult(Ac, Bc, s.C, s.D, s.n, 0.0, origKind, mr);
+        }
+
+        // Negative real discrete eigenvalues produce complex logm entries
+        // (imag part = pi/Ts); expand complex state z = x_R + i*x_I into
+        // the 2n-dimensional real system [[A_R, -A_I]; [A_I, A_R]],
+        // B_c = [B_R; B_I], C_c = [C, 0].
+        const size_t n2 = 2 * s.n;
+        Mat Ac(n2 * n2, 0.0);
+        Vec Bc(n2, 0.0);
+        Vec Cc(n2, 0.0);
+        const Complex *lc = L.complexData();
+        for (size_t j = 0; j < s.n; ++j) {
+            for (size_t i = 0; i < s.n; ++i) {
+                const double ar = lc[j * m + i].real() / Ts;
+                const double ai = lc[j * m + i].imag() / Ts;
+                Ac[j * n2 + i]               =  ar;
+                Ac[(j + s.n) * n2 + i]       = -ai;
+                Ac[j * n2 + (i + s.n)]       =  ai;
+                Ac[(j + s.n) * n2 + (i + s.n)] = ar;
+            }
+        }
+        for (size_t i = 0; i < s.n; ++i) {
+            Bc[i]       = lc[s.n * m + i].real() / Ts;
+            Bc[i + s.n] = lc[s.n * m + i].imag() / Ts;
+            Cc[i]       = s.C[i];
+        }
+        return packResult(Ac, Bc, Cc, s.D, n2, 0.0, origKind, mr);
+    }
 
     // Inverse of Tustin: from
     //   A_d = (I − A·Ts/2)^-1 · (I + A·Ts/2),
@@ -330,17 +411,6 @@ Value d2c(const Value &sys, const std::string &method, std::pmr::memory_resource
     Mat Ac(s.n * s.n, 0.0);
     for (size_t i = 0; i < s.n * s.n; ++i) Ac[i] = (2.0 / Ts) * X[i];
 
-    // Reverse the B/C/D scaling. We need (I − A_c·Ts/2) and
-    // (I + A_c·Ts/2). Note (I + A_c·Ts/2) = (A_d + I)/2 (verifiable
-    // from the algebra) — so the easier path is solve for B from
-    //   B_d = √Ts · (I − A_c·Ts/2)^-1 · B
-    //       = √Ts · ((A_d + I)/2)^-1 · B    (since I − A_c·Ts/2 = (A_d+I)/2 ... NO)
-    // Actually re-derive: A_d = (I − A·Ts/2)^-1 · (I + A·Ts/2). Pre-
-    // multiply: (I − A·Ts/2)·A_d = I + A·Ts/2. Adding/subtracting
-    // gives  A_d − I = (A·Ts/2)·(A_d + I)  and  A_d + I = 2·(I − A·Ts/2)^-1.
-    // So  (I − A·Ts/2)^-1 = (A_d + I) / 2.
-    // Therefore  B = (1/√Ts) · ((A_d + I) / 2)^-1 · B_d
-    //              = (2/√Ts) · (A_d + I)^-1 · B_d.
     Mat ApCopy2 = Aplus;
     Vec Bvec(s.n);
     for (size_t i = 0; i < s.n; ++i) Bvec[i] = s.B[i];
@@ -351,9 +421,6 @@ Value d2c(const Value &sys, const std::string &method, std::pmr::memory_resource
     const double inv_sqrtTs = 2.0 / std::sqrt(Ts);
     for (size_t i = 0; i < s.n; ++i) Bc[i] = inv_sqrtTs * Bvec[i];
 
-    // C: from C_d = √Ts · C · (I − A·Ts/2)^-1 = √Ts · C · (A_d + I) / 2.
-    // ⇒ C = (2/√Ts) · C_d · (A_d + I)^-1.
-    // We solve Yᵀ·(A_d + I)ᵀ = (C_d)ᵀ, equivalently (A_d + I)ᵀ·Yᵀ = (C_d)ᵀ.
     Mat ApT(s.n * s.n, 0.0);
     for (size_t j = 0; j < s.n; ++j)
         for (size_t i = 0; i < s.n; ++i)
@@ -366,12 +433,6 @@ Value d2c(const Value &sys, const std::string &method, std::pmr::memory_resource
     Vec Cc(s.n, 0.0);
     for (size_t i = 0; i < s.n; ++i) Cc[i] = inv_sqrtTs * Cvec[i];
 
-    // D = D_d − (Ts/2) · C · (I − A·Ts/2)^-1 · B
-    //   = D_d − (Ts/2) · (1/Ts) · Cc · (A_d + I) · Bc
-    //   ... easier: re-derive numerically: D = D_d − C_c · (A_d + I)/2 · ... no
-    // Direct approach: D_d = D + (Ts/2)·C·(A_d+I)/2·B = D + (Ts/4)·C·(A_d+I)·B.
-    // With C, B already recovered above, we can plug in.
-    // Compute (A_d + I) · Bc.
     Vec ApBc(s.n, 0.0);
     for (size_t i = 0; i < s.n; ++i) {
         double ssum = 0.0;
@@ -383,9 +444,6 @@ Value d2c(const Value &sys, const std::string &method, std::pmr::memory_resource
     for (size_t i = 0; i < s.n; ++i) cAB += Cc[i] * ApBc[i];
     const double Dc = s.D - (Ts / 4.0) * cAB;
 
-    const std::string origKind = sys.isStruct() && sys.hasField("kind")
-                                 ? sys.field("kind").toString()
-                                 : std::string("ss");
     // Continuous → Ts = 0.
     return packResult(Ac, Bc, Cc, Dc, s.n, 0.0, origKind, mr);
 }

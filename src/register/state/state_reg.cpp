@@ -48,6 +48,8 @@ void gram_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
 void covar_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 5, "covar");
+    if (a[0].isStruct())
+        argcheck::checkNargin(a.size(), 2, 2, "covar");
     auto r = covar(a[0], a[1], c.engine->resource());
     if (o.size() >= 1) o[0] = std::move(r.P);
     if (o.size() >= 2) o[1] = std::move(r.Q);

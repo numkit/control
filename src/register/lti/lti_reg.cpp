@@ -108,6 +108,8 @@ void ss2ss_reg(Span<const Value> args, size_t /*nargout*/,
                Span<Value> outs, CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 5, "ss2ss");
+    if (args[0].isStruct())
+        argcheck::checkNargin(args.size(), 2, 2, "ss2ss");
     outs[0] = ss2ss(args[0], args[1], ctx.engine->resource());
 }
 
