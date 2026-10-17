@@ -131,10 +131,10 @@ TEST_F(ControlKnownBug, TfArithmeticOperators)
 
 // ─── argcheck migration findings (2026-09-17), bugs/opened/control/*.md ──
 
-// bugs/opened/control/arity-min-forms.md — reference-legal short forms:
+// bugs/closed/control/arity-min-forms.md — reference-legal short forms:
 // empty/static-gain constructors, default-grid freqresp, Ts-derived lsim,
 // model-form lqr, 0-arg demo plots.
-TEST_F(ControlKnownBug, DISABLED_ControlShortForms)
+TEST_F(ControlKnownBug, ControlShortForms)
 {
     EXPECT_NO_THROW(eval("t = tf();"));
     EXPECT_NO_THROW(eval("g = tf(1);"));

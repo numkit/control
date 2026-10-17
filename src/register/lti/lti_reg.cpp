@@ -30,40 +30,139 @@ static double argTs(Span<const Value> args, size_t pos) {
 void tf_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
             CallContext &ctx)
 {
-    argcheck::checkNargin(args.size(), 2, "tf");  // no max: 0/1-arg empty & static-gain forms deferred (bugs/opened/control/arity-min-forms.md); name-value tail
-    outs[0] = tf(args[0], args[1], argTs(args, 2), ctx.engine->resource());
+    argcheck::checkNargin(args.size(), 0, "tf");
+    auto *mr = ctx.engine->resource();
+    if (args.empty()) {
+        Value s = Value::structure(mr);
+        s.field("kind") = Value::fromString("tf", mr);
+        s.field("Ts") = Value::scalar(0.0, mr);
+        s.field("num") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("den") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        outs[0] = std::move(s);
+        return;
+    }
+    if (args.size() == 1) {
+        if (args[0].isStruct()) {
+            if (args[0].hasField("kind") && args[0].field("kind").toString() == "tf") {
+                outs[0] = args[0];
+                return;
+            }
+            auto [num, den] = tfdata(args[0], true, mr);
+            const double Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            outs[0] = tf(num, den, Ts, mr);
+            return;
+        }
+        outs[0] = tf(args[0], Value::scalar(1.0, mr), 0.0, mr);
+        return;
+    }
+    outs[0] = tf(args[0], args[1], argTs(args, 2), mr);
 }
 
 void zpk_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
              CallContext &ctx)
 {
-    argcheck::checkNargin(args.size(), 3, "zpk");  // no max: 0/1-arg forms deferred (bugs/opened/control/arity-min-forms.md); name-value tail
-    outs[0] = zpk(args[0], args[1], args[2].toScalar(), argTs(args, 3),
-                  ctx.engine->resource());
+    argcheck::checkNargin(args.size(), 0, "zpk");
+    auto *mr = ctx.engine->resource();
+    if (args.empty()) {
+        Value s = Value::structure(mr);
+        s.field("kind") = Value::fromString("zpk", mr);
+        s.field("Ts") = Value::scalar(0.0, mr);
+        s.field("z") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("p") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("k") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        outs[0] = std::move(s);
+        return;
+    }
+    if (args.size() == 1) {
+        if (args[0].isStruct()) {
+            auto [z, p, k] = zpkdata(args[0], true, mr);
+            const double Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            outs[0] = zpk(z, p, k.toScalar(), Ts, mr);
+            return;
+        }
+        outs[0] = zpk(Value::matrix(0, 0, ValueType::DOUBLE, mr),
+                      Value::matrix(0, 0, ValueType::DOUBLE, mr),
+                      args[0].toScalar(), 0.0, mr);
+        return;
+    }
+    argcheck::checkNargin(args.size(), 3, "zpk");
+    outs[0] = zpk(args[0], args[1], args[2].toScalar(), argTs(args, 3), mr);
 }
 
 void ss_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
             CallContext &ctx)
 {
-    argcheck::checkNargin(args.size(), 4, "ss");  // no max: 0/1-arg forms deferred (bugs/opened/control/arity-min-forms.md); name-value tail
-    outs[0] = ss(args[0], args[1], args[2], args[3], argTs(args, 4), ctx.engine->resource());
+    argcheck::checkNargin(args.size(), 0, "ss");
+    auto *mr = ctx.engine->resource();
+    if (args.empty()) {
+        Value s = Value::structure(mr);
+        s.field("kind") = Value::fromString("ss", mr);
+        s.field("Ts") = Value::scalar(0.0, mr);
+        s.field("A") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("B") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("C") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("D") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        outs[0] = std::move(s);
+        return;
+    }
+    if (args.size() == 1) {
+        if (args[0].isStruct()) {
+            auto [A, B, C, D] = ssdata(args[0], mr);
+            const double Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            outs[0] = ss(A, B, C, D, Ts, mr);
+            return;
+        }
+        outs[0] = ss(Value::matrix(0, 0, ValueType::DOUBLE, mr),
+                     Value::matrix(0, 0, ValueType::DOUBLE, mr),
+                     Value::matrix(0, 0, ValueType::DOUBLE, mr),
+                     args[0], 0.0, mr);
+        return;
+    }
+    argcheck::checkNargin(args.size(), 4, "ss");
+    outs[0] = ss(args[0], args[1], args[2], args[3], argTs(args, 4), mr);
 }
 
 void filt_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
               CallContext &ctx)
 {
-    argcheck::checkNargin(args.size(), 2, "filt");  // no max: 0/1-arg forms deferred (bugs/opened/control/arity-min-forms.md); name-value tail
+    argcheck::checkNargin(args.size(), 0, "filt");
+    auto *mr = ctx.engine->resource();
+    if (args.empty()) {
+        Value s = Value::structure(mr);
+        s.field("kind") = Value::fromString("tf", mr);
+        s.field("Ts") = Value::scalar(-1.0, mr);
+        s.field("num") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("den") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("variable") = Value::fromString("z^-1", mr);
+        outs[0] = std::move(s);
+        return;
+    }
+    if (args.size() == 1) {
+        outs[0] = filt(args[0], Value::scalar(1.0, mr), -1.0, mr);
+        return;
+    }
     // MATLAB default Ts for filt is -1 (unspecified discrete).
     const double Ts = (args.size() >= 3 && !args[2].isEmpty())
                       ? args[2].toScalar() : -1.0;
-    outs[0] = filt(args[0], args[1], Ts, ctx.engine->resource());
+    outs[0] = filt(args[0], args[1], Ts, mr);
 }
 
 void frd_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
              CallContext &ctx)
 {
-    argcheck::checkNargin(args.size(), 2, "frd");  // no max: 0-arg empty form deferred (bugs/opened/control/arity-min-forms.md); name-value tail
-    outs[0] = frd(args[0], args[1], argTs(args, 2), ctx.engine->resource());
+    argcheck::checkNargin(args.size(), 0, "frd");
+    auto *mr = ctx.engine->resource();
+    if (args.empty()) {
+        Value s = Value::structure(mr);
+        s.field("kind") = Value::fromString("frd", mr);
+        s.field("Ts") = Value::scalar(0.0, mr);
+        s.field("resp") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        s.field("freq") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        outs[0] = std::move(s);
+        return;
+    }
+    argcheck::checkNargin(args.size(), 2, "frd");
+    outs[0] = frd(args[0], args[1], argTs(args, 2), mr);
 }
 
 static bool wantVector(Span<const Value> args, size_t pos) {

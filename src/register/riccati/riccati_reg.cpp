@@ -10,6 +10,7 @@
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
 #include <numkit/control/riccati/riccati.hpp>
+#include <numkit/control/lti/lti.hpp>
 
 #include <numkit/sys/plugin.hpp>   // CallContext, ctx.engine->resource()
 #include <numkit/value/argcheck.hpp>
@@ -55,8 +56,7 @@ void dare_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
 namespace {
 // lqr / dlqr are thin wrappers on care / dare. MATLAB returns [K, S, P]:
 // optimal gain, Riccati solution, closed-loop poles — i.e. care's
-// {G, X, L} re-ordered. (Cross-term N and the lqr(sys,…) form are
-// deferred; the (A,B,Q[,R]) signature covers the common case.)
+// {G, X, L} re-ordered.
 void emitLqr(const RiccatiResult &r, Span<Value> o) {
     if (o.size() >= 1) o[0] = r.G;   // K — optimal gain
     if (o.size() >= 2) o[1] = r.X;   // S — Riccati solution
@@ -66,22 +66,30 @@ void emitLqr(const RiccatiResult &r, Span<Value> o) {
 
 void lqr_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
 {
-    // R2025b matrix form requires R: lqr(A,B,Q,R[,N]). The model form
-    // lqr(sys,Q,R) is deferred — bugs/opened/control/arity-min-forms.md
-    // (the old nk 3-arg matrix form with R=I was a divergence, removed).
-    argcheck::checkNargin(a.size(), 4, 5, "lqr");
     auto *mr = c.engine->resource();
+    if (!a.empty() && a[0].isStruct()) {
+        argcheck::checkNargin(a.size(), 3, 4, "lqr");
+        auto [A, B, C, D] = ssdata(a[0], mr);
+        emitLqr(care(A, B, a[1], a[2], mr), o);
+        return;
+    }
+    argcheck::checkNargin(a.size(), 4, 5, "lqr");
     emitLqr(care(a[0], a[1], a[2], a[3], mr), o);
 }
 
 void dlqr_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
 {
-    // R2025b matrix form requires R: dlqr(A,B,Q,R[,N]); model form
-    // dlqr(sys,Q,R) deferred — see lqr above.
-    argcheck::checkNargin(a.size(), 4, 5, "dlqr");
     auto *mr = c.engine->resource();
+    if (!a.empty() && a[0].isStruct()) {
+        argcheck::checkNargin(a.size(), 3, 4, "dlqr");
+        auto [A, B, C, D] = ssdata(a[0], mr);
+        emitLqr(dare(A, B, a[1], a[2], mr), o);
+        return;
+    }
+    argcheck::checkNargin(a.size(), 4, 5, "dlqr");
     emitLqr(dare(a[0], a[1], a[2], a[3], mr), o);
 }
 
 } // namespace detail
 } // namespace numkit::control
+
