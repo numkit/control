@@ -254,10 +254,7 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
                         0, 0, "hinfnorm", "", "numkit:hinfnorm:inputType");
     }
 
-    if (sampleTime(sys) != 0.0)
-        throw Error("hinfnorm: discrete-time systems are not yet supported "
-                    "(continuous-time only)",
-                    0, 0, "hinfnorm", "", "numkit:hinfnorm:discrete");
+    const bool discrete = (sampleTime(sys) != 0.0);
 
     StateSpace ss = pullABCD(sys, mr);
     const size_t n = ss.A.dims().rows();
@@ -275,12 +272,47 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
     auto B = (n ? readMat(ss.B, n, m) : Mat{});
     auto C = (n ? readMat(ss.C, p, n) : Mat{});
     auto D = readMat(ss.D, p, m);
-    const double sigD = sigmaMax(D, p, m);
+    double sigD = sigmaMax(D, p, m);
 
     if (n == 0) { g = Value::scalar(sigD, mr); return g; }
 
-    // Unstable / jω-axis poles → Inf.
-    {
+    if (discrete) {
+        // Unstable / unit-circle poles (|λ| >= 1) → Inf.
+        auto ev = eigOf(A, n, mr);
+        double maxAbs = 0.0;
+        for (const auto &e : ev) maxAbs = std::max(maxAbs, std::abs(e));
+        if (maxAbs >= 1.0 - 1e-9) { g = Value::scalar(inf, mr); return g; }
+
+        // Isometric bilinear transform z = (1+s)/(1-s):
+        //   M = I + A
+        //   Ac = (A - I) * M^-1
+        //   Bc = sqrt(2) * M^-1 * B
+        //   Cc = sqrt(2) * C * M^-1
+        //   Dc = D - C * M^-1 * B
+        Mat M = A;
+        Mat AmI = A;
+        for (size_t i = 0; i < n; ++i) {
+            M[i + i * n] += 1.0;
+            AmI[i + i * n] -= 1.0;
+        }
+        Mat Mi;
+        if (!inverse(M, n, Mi)) { g = Value::scalar(inf, mr); return g; }
+        Mat Ac = matmul(AmI, n, n, Mi, n);
+        Mat MiB = matmul(Mi, n, n, B, m);
+        Mat CMi = matmul(C, p, n, Mi, n);
+        Mat CMiB = matmul(C, p, n, MiB, m);
+        const double s2 = std::sqrt(2.0);
+        for (double &v : MiB) v *= s2;
+        for (double &v : CMi) v *= s2;
+        Mat Dc(p * m);
+        for (size_t i = 0; i < p * m; ++i) Dc[i] = D[i] - CMiB[i];
+        A = std::move(Ac);
+        B = std::move(MiB);
+        C = std::move(CMi);
+        D = std::move(Dc);
+        sigD = sigmaMax(D, p, m);
+    } else {
+        // Unstable / jω-axis poles → Inf.
         auto ev = eigOf(A, n, mr);
         double maxRe = -inf;
         for (const auto &e : ev) maxRe = std::max(maxRe, e.real());

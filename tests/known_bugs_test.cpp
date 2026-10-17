@@ -252,13 +252,14 @@ TEST_F(ControlKnownBug, DISABLED_LsimComplexKernel)
     EXPECT_NEAR(evalScalar("imag(y2(1))"), 1.0, 1e-9);
 }
 
-// tf-filt-mimo-cell.md — the cell (MIMO) coefficient form builds a
-// MIMO model in the reference; nk's struct model is SISO-only (1x1
-// cells unwrap; larger cells stub with nk:tf:mimoUnsupported).
-TEST_F(ControlKnownBug, DISABLED_TfMimoCellForm)
+// bugs/closed/control/tf-filt-mimo-cell.md — the cell (MIMO) coefficient form
+// builds a MIMO model.
+TEST_F(ControlKnownBug, TfMimoCellForm)
 {
     eval("sys = tf({1 2; 5 6}, {1 3; 1 4});");
     EXPECT_EQ(evalScalar("issiso(sys)"), 0.0);
+    eval("fsys = filt({1 2; 5 6}, {1 3; 1 4});");
+    EXPECT_EQ(evalScalar("issiso(fsys)"), 0.0);
 }
 
 // single-float-inputs.md — acker with single inputs returns a
@@ -272,11 +273,12 @@ TEST_F(ControlKnownBug, DISABLED_AckerSingleResult)
     EXPECT_NEAR(evalScalar("K(2)"), 21.0, 1e-6);
 }
 
-// hinfnorm-discrete.md — discrete-time models have a finite H-infinity
-// norm in the reference (probed Inf for this marginally-stable one);
-// nk's kernel is continuous-only.
-TEST_F(ControlKnownBug, DISABLED_HinfnormDiscrete)
+// bugs/closed/control/hinfnorm-discrete.md — discrete-time models have an
+// H-infinity norm (Inf for unstable/marginally-stable, finite for |λ| < 1).
+TEST_F(ControlKnownBug, HinfnormDiscrete)
 {
     eval("g = hinfnorm(ss([2 1; 1 3], [1; 0], [1 0], 0, 0.1));");
     EXPECT_TRUE(std::isinf(evalScalar("g")));
+    EXPECT_NEAR(evalScalar("hinfnorm(ss(0.5, 1, 1, 0, 0.1))"), 2.0, 1e-6);
 }
+

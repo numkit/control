@@ -67,8 +67,7 @@ TEST_F(HinfnormTest, TfInput)
     EXPECT_NEAR(evalScalar("hinfnorm(tf(1, [1 2 1]))"), 1.0, 1e-6);
 }
 
-// Discrete-time is a documented gap — clear error, not a wrong number.
-TEST_F(HinfnormTest, DiscreteThrows)
+TEST_F(HinfnormTest, DiscreteSupported)
 {
-    EXPECT_THROW(eval("hinfnorm(ss(0.5, 1, 1, 0, 0.1));"), std::exception);
+    EXPECT_NEAR(evalScalar("hinfnorm(ss(0.5, 1, 1, 0, 0.1))"), 2.0, 1e-6);
 }

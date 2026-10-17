@@ -197,8 +197,10 @@ TEST_F(ControlTypeContractTest, TfCoefficientContract)
     expectId("numkit:tf:inputType", [&] { eval("tf([1 2], \"13\")"); });
     expectId("numkit:tf:num", [&] { eval("tf([], [1 3])"); });
     expectId("numkit:tf:den", [&] { eval("tf([1 2], [])"); });
-    expectId("numkit:tf:mimoUnsupported",
-             [&] { eval("tf({1 2; 5 6}, {1 3; 1 4})"); });
+    eval("mimoTf = tf({1 2; 5 6}, {1 3; 1 4});");
+    EXPECT_EQ(evalScalar("issiso(mimoTf)"), 0.0);
+    expectId("numkit:tf:mimoSize",
+             [&] { eval("tf({1 2; 5 6}, {1 3})"); });
 }
 
 TEST_F(ControlTypeContractTest, FiltBroadNumeratorContract)
@@ -323,8 +325,7 @@ TEST_F(ControlTypeContractTest, HinfnormContracts)
     EXPECT_NEAR(evalScalar("hc(1)"), 2.0, 1e-12);
     expectId("numkit:hinfnorm:inputType", [&] { eval("hinfnorm(struct('a', 1))"); });
     expectId("numkit:hinfnorm:inputType", [&] { eval("hinfnorm({})"); });
-    expectId("numkit:hinfnorm:discrete",
-             [&] { eval("hinfnorm(ss([0 1; -1 -2], [1; 0], [1 0], 0, 0.1))"); });
+    EXPECT_TRUE(std::isinf(evalScalar("hinfnorm(ss([0 1; -1 -2], [1; 0], [1 0], 0, 0.1))")));
 }
 
 // ──────────────────────────────────────────────────────────────────────

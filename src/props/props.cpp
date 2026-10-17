@@ -141,7 +141,13 @@ Value issiso(const Value &sys, std::pmr::memory_resource *mr) {
     // UndefinedFunction dispatch (probed R2025b); frd models are
     // always SISO here and answer true.
     internal::requireLtiModel(sys, "issiso", /*acceptFrD=*/true);
-    if (hasKind(sys, "tf") || hasKind(sys, "zpk") || hasKind(sys, "frd"))
+    if (hasKind(sys, "tf")) {
+        const Value &num = sys.field("num");
+        if (num.isCell() && num.numel() > 1)
+            return boolValue(false, mr);
+        return boolValue(true, mr);
+    }
+    if (hasKind(sys, "zpk") || hasKind(sys, "frd"))
         return boolValue(true, mr);   // single-output by construction here
     if (hasKind(sys, "ss")) {
         const Value &B = sys.field("B");

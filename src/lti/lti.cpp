@@ -95,10 +95,62 @@ Value tfCoeffArg(const Value &v, const char *fn, const char *argName,
                 0, 0, fn, "", "numkit:" + std::string(fn) + ":inputType");
 }
 
+// Build a MIMO cell grid when either num or den is a multi-element cell.
+bool buildMimoCellTf(const Value &num, const Value &den, const char *fn,
+                     bool broadNum, Value &numOut, Value &denOut,
+                     std::pmr::memory_resource *mr)
+{
+    Value uNum = num;
+    while (uNum.isCell() && uNum.numel() == 1) {
+        Value inner = uNum.cellAt(0);
+        uNum = std::move(inner);
+    }
+    Value uDen = den;
+    while (uDen.isCell() && uDen.numel() == 1) {
+        Value inner = uDen.cellAt(0);
+        uDen = std::move(inner);
+    }
+    if (!uNum.isCell() && !uDen.isCell()) return false;
+
+    size_t r = 1, c = 1;
+    if (uNum.isCell() && uDen.isCell()) {
+        if (uNum.dims().rows() != uDen.dims().rows() ||
+            uNum.dims().cols() != uDen.dims().cols())
+            throw Error(std::string(fn) + ": cell arrays num and den must have matching dimensions",
+                        0, 0, fn, "", std::string("numkit:") + fn + ":mimoSize");
+        r = uNum.dims().rows();
+        c = uNum.dims().cols();
+    } else if (uNum.isCell()) {
+        r = uNum.dims().rows();
+        c = uNum.dims().cols();
+    } else {
+        r = uDen.dims().rows();
+        c = uDen.dims().cols();
+    }
+
+    numOut = Value::cell(r, c, mr);
+    denOut = Value::cell(r, c, mr);
+    const size_t total = r * c;
+    for (size_t i = 0; i < total; ++i) {
+        const Value &ni = uNum.isCell() ? uNum.cellAt(i) : uNum;
+        const Value &di = uDen.isCell() ? uDen.cellAt(i) : uDen;
+        numOut.cellAt(i) = rowVec(tfCoeffArg(ni, fn, "num", broadNum, mr), mr);
+        denOut.cellAt(i) = rowVec(tfCoeffArg(di, fn, "den", false, mr), mr);
+    }
+    return true;
+}
+
 } // anonymous
 
 Value tf(const Value &num, const Value &den, double Ts, std::pmr::memory_resource *mr)
 {
+    Value numCell, denCell;
+    if (buildMimoCellTf(num, den, "tf", /*broadNum=*/false, numCell, denCell, mr)) {
+        Value s = tagStruct("tf", Ts, mr);
+        s.field("num") = std::move(numCell);
+        s.field("den") = std::move(denCell);
+        return s;
+    }
     Value numC = tfCoeffArg(num, "tf", "num", /*broadNum=*/false, mr);
     Value denC = tfCoeffArg(den, "tf", "den", /*broadNum=*/false, mr);
     Value s = tagStruct("tf", Ts, mr);
@@ -218,6 +270,14 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
 
 Value filt(const Value &num, const Value &den, double Ts, std::pmr::memory_resource *mr)
 {
+    Value numCell, denCell;
+    if (buildMimoCellTf(num, den, "filt", /*broadNum=*/true, numCell, denCell, mr)) {
+        Value s = tagStruct("tf", Ts, mr);
+        s.field("num") = std::move(numCell);
+        s.field("den") = std::move(denCell);
+        s.field("variable") = Value::fromString("z^-1", mr);
+        return s;
+    }
     // The reference's filt coerces a broader numerator set than tf
     // (logical/char/string all coerce — probed R2025b); its
     // denominator rejects them exactly like tf's.
