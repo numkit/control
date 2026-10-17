@@ -152,6 +152,10 @@ Value parallel(const Value &sys1, const Value &sys2, std::pmr::memory_resource *
 
 Value feedback(const Value &G, const Value &H, int sign, std::pmr::memory_resource *mr)
 {
+    if (sign != 1 && sign != -1) {
+        throw Error("feedback: sign must be 1 or -1", 0, 0, "feedback", "",
+                    "numkit:feedback:signNotChoice");
+    }
     auto g = toNumDen(G, mr);
     auto h = toNumDen(H, mr);
     // T(s) = num_G · den_H / (den_G · den_H − sign · num_G · num_H)

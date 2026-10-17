@@ -157,7 +157,7 @@ TEST_F(ControlKnownBug, DISABLED_CovarModelPathStrict)
 // content check lives in feedback_reg; the compute accepts any int.
 // Move it to a compute-side feedback_argcheck so both call paths answer
 // nk:feedback:signNotChoice.
-TEST_F(ControlKnownBug, DISABLED_FeedbackSignCppPathUnified)
+TEST_F(ControlKnownBug, FeedbackSignCppPathUnified)
 {
     eval("G = tf(1, [1 1]); H = tf(1, 1);");
     // Interpreter path (the reg validates).
