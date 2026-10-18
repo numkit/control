@@ -267,9 +267,13 @@ void ss2tf_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
                CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 4, 5, "ss2tf");
-    int iu = (args.size() >= 5 && !args[4].isEmpty())
-                 ? static_cast<int>(args[4].toScalar())
-                 : 1;
+    int iu = 1;
+    if (args.size() >= 5 && !args[4].isEmpty()) {
+        argcheck::expectedScalar(args[4], 5, "ss2tf", "iu");
+        argcheck::expectedPositive(args[4], 5, "ss2tf", "iu");
+        argcheck::expectedInteger(args[4], 5, "ss2tf", "iu");
+        iu = static_cast<int>(args[4].elemAsDouble(0));
+    }
     auto [num, den] = ss2tf(args[0], args[1], args[2], args[3], iu, ctx.engine->resource());
     outs[0] = std::move(num);
     if (nargout > 1) outs[1] = std::move(den);
