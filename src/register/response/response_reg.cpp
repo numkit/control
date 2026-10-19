@@ -36,8 +36,20 @@ void step_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
 {
     argcheck::checkNargin(a.size(), 0, 6, "step");
     auto *mr = c.engine->resource();
-    Value sys = a.empty() ? defaultDemoSys(mr) : a[0];
-    Value tArg = (a.size() >= 2) ? a[1] : Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    Value sys;
+    Value tArg;
+    if (a.empty()) {
+        sys = defaultDemoSys(mr);
+        tArg = Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    } else if (a.size() >= 2 && !a[0].isStruct() && !a[0].isObject()
+               && (a[0].isNumeric() || a[0].isComplex())
+               && (a[1].isNumeric() || a[1].isComplex())) {
+        sys = tf(a[0], a[1], 0.0, mr);
+        tArg = (a.size() >= 3) ? a[2] : Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    } else {
+        sys = a[0];
+        tArg = (a.size() >= 2) ? a[1] : Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    }
     Value xOut;
     auto [y, t] = step_response(sys, tArg,
                                 outs.size() >= 3 ? &xOut : nullptr,
@@ -52,8 +64,20 @@ void impulse_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
 {
     argcheck::checkNargin(a.size(), 0, 6, "impulse");
     auto *mr = c.engine->resource();
-    Value sys = a.empty() ? defaultDemoSys(mr) : a[0];
-    Value tArg = (a.size() >= 2) ? a[1] : Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    Value sys;
+    Value tArg;
+    if (a.empty()) {
+        sys = defaultDemoSys(mr);
+        tArg = Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    } else if (a.size() >= 2 && !a[0].isStruct() && !a[0].isObject()
+               && (a[0].isNumeric() || a[0].isComplex())
+               && (a[1].isNumeric() || a[1].isComplex())) {
+        sys = tf(a[0], a[1], 0.0, mr);
+        tArg = (a.size() >= 3) ? a[2] : Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    } else {
+        sys = a[0];
+        tArg = (a.size() >= 2) ? a[1] : Value::matrix(1, 0, ValueType::DOUBLE, mr);
+    }
     Value xOut;
     auto [y, t] = impulse_response(sys, tArg,
                                    outs.size() >= 3 ? &xOut : nullptr,
