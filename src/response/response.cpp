@@ -336,8 +336,6 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
            const Value &x0In,
            Value *xOut, std::pmr::memory_resource *mr)
 {
-    SS s = toSSiso(sys, "lsim", mr);
-
     // lsim argcheck (argcheck separation). Classes probed R2025b:
     // u coerces every NUMERIC class (int8 u accepted) but char/cell
     // are rejected (Control:analysis:rfinputs02/18), and complex u
@@ -363,6 +361,133 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                     0, 0, "lsim", "", "numkit:lsim:t");
     Vec t(tIn.numel());
     for (size_t i = 0; i < tIn.numel(); ++i) t[i] = tIn.elemAsDouble(i);
+
+    // MIMO state-space path when B has multiple inputs or C has multiple outputs.
+    if (sys.isStruct() && sys.hasField("kind") && sys.field("kind").toString() == "ss") {
+        const Value &Av = sys.field("A");
+        const Value &Bv = sys.field("B");
+        const Value &Cv = sys.field("C");
+        const Value &Dv = sys.field("D");
+        const size_t n = Av.dims().rows();
+        const size_t nu = Bv.dims().cols();
+        const size_t ny = Cv.dims().rows();
+        if ((nu > 1 || ny > 1) && !uIn.isComplex() && !x0In.isComplex()) {
+            const size_t N = t.size();
+            bool uTransposed = false;
+            if (uIn.dims().rows() == N && uIn.dims().cols() == nu) {
+                uTransposed = false;
+            } else if (uIn.dims().cols() == N && uIn.dims().rows() == nu) {
+                uTransposed = true;
+            } else {
+                throw Error("lsim: u dimensions must match time vector length and input count",
+                            0, 0, "lsim", "", "numkit:lsim:size");
+            }
+            if (x0In.numel() != 0 && x0In.numel() != n)
+                throw Error("lsim: input 4 (x0) must have one entry per state "
+                            "(got " + std::to_string(x0In.numel())
+                            + " entries for " + std::to_string(n) + " states).",
+                            0, 0, "lsim", "", "numkit:lsim:x0");
+
+            auto uAt = [&](size_t k, size_t j) -> double {
+                return uTransposed ? uIn.elemAsDouble(k * nu + j)
+                                   : uIn.elemAsDouble(j * N + k);
+            };
+            Vec x(n, 0.0);
+            if (x0In.numel() == n) {
+                for (size_t i = 0; i < n; ++i) x[i] = x0In.elemAsDouble(i);
+            }
+            Value yOut = Value::matrix(N, ny, ValueType::DOUBLE, mr);
+            double *yd = yOut.doubleDataMut();
+            if (xOut) *xOut = Value::matrix(N, n, ValueType::DOUBLE, mr);
+            double *xd = xOut ? xOut->doubleDataMut() : nullptr;
+
+            const double Ts = sys.field("Ts").toScalar();
+            auto fohStep = [&](double dt, Mat &Ad, Mat &B0, Mat &B1) {
+                const size_t m = n + 2 * nu;
+                Mat M = zeros(m, m);
+                for (size_t j = 0; j < n; ++j)
+                    for (size_t i = 0; i < n; ++i)
+                        M[j * m + i] = Av.elemAsDouble(j * n + i) * dt;
+                for (size_t j = 0; j < nu; ++j)
+                    for (size_t i = 0; i < n; ++i)
+                        M[(n + j) * m + i] = Bv.elemAsDouble(j * n + i) * dt;
+                for (size_t j = 0; j < nu; ++j)
+                    M[(n + nu + j) * m + (n + j)] = 1.0;
+                Mat E = expm(M, m);
+                Ad.assign(n * n, 0.0);
+                B0.assign(n * nu, 0.0);
+                B1.assign(n * nu, 0.0);
+                for (size_t j = 0; j < n; ++j)
+                    for (size_t i = 0; i < n; ++i)
+                        Ad[j * n + i] = E[j * m + i];
+                for (size_t j = 0; j < nu; ++j) {
+                    for (size_t i = 0; i < n; ++i) {
+                        const double phi1 = E[(n + j) * m + i];
+                        const double phi2 = E[(n + nu + j) * m + i];
+                        B0[j * n + i] = phi1 - phi2;
+                        B1[j * n + i] = phi2;
+                    }
+                }
+            };
+
+            bool uniform = true;
+            double dt = (N >= 2) ? (t[1] - t[0]) : 0.0;
+            for (size_t k = 2; k < N && uniform; ++k)
+                if (std::abs((t[k] - t[k - 1]) - dt) > 1e-12 * std::max(1.0, std::abs(dt)))
+                    uniform = false;
+
+            Mat Ad, B0, B1;
+            if (Ts <= 0.0 && uniform && dt > 0.0)
+                fohStep(dt, Ad, B0, B1);
+
+            for (size_t k = 0; k < N; ++k) {
+                if (xd) {
+                    for (size_t i = 0; i < n; ++i) xd[i * N + k] = x[i];
+                }
+                for (size_t p = 0; p < ny; ++p) {
+                    double ypk = 0.0;
+                    for (size_t i = 0; i < n; ++i)
+                        ypk += Cv.elemAsDouble(i * ny + p) * x[i];
+                    if (Dv.numel() == ny * nu) {
+                        for (size_t j = 0; j < nu; ++j)
+                            ypk += Dv.elemAsDouble(j * ny + p) * uAt(k, j);
+                    } else if (Dv.numel() == 1 && Dv.elemAsDouble(0) != 0.0) {
+                        for (size_t j = 0; j < nu; ++j)
+                            ypk += Dv.elemAsDouble(0) * uAt(k, j);
+                    }
+                    yd[p * N + k] = ypk;
+                }
+                if (k + 1 < N) {
+                    Vec xn(n, 0.0);
+                    if (Ts > 0.0) {
+                        for (size_t i = 0; i < n; ++i) {
+                            double s = 0.0;
+                            for (size_t j = 0; j < n; ++j)
+                                s += Av.elemAsDouble(j * n + i) * x[j];
+                            for (size_t j = 0; j < nu; ++j)
+                                s += Bv.elemAsDouble(j * n + i) * uAt(k, j);
+                            xn[i] = s;
+                        }
+                    } else {
+                        if (!uniform)
+                            fohStep(t[k + 1] - t[k], Ad, B0, B1);
+                        for (size_t i = 0; i < n; ++i) {
+                            double s = 0.0;
+                            for (size_t j = 0; j < n; ++j)
+                                s += Ad[j * n + i] * x[j];
+                            for (size_t j = 0; j < nu; ++j)
+                                s += B0[j * n + i] * uAt(k, j) + B1[j * n + i] * uAt(k + 1, j);
+                            xn[i] = s;
+                        }
+                    }
+                    x = std::move(xn);
+                }
+            }
+            return yOut;
+        }
+    }
+
+    SS s = toSSiso(sys, "lsim", mr);
     if (uIn.numel() != t.size())
         throw Error("lsim: u and t must be the same length",
                     0, 0, "lsim", "", "numkit:lsim:size");
