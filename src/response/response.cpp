@@ -491,7 +491,9 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     if (uIn.numel() != t.size())
         throw Error("lsim: u and t must be the same length",
                     0, 0, "lsim", "", "numkit:lsim:size");
-    if (x0In.numel() != 0 && x0In.numel() != s.n)
+    const bool x0IsScalarZero = (x0In.numel() == 1 && !x0In.isComplex()
+                                 && x0In.elemAsDouble(0) == 0.0);
+    if (x0In.numel() != 0 && x0In.numel() != s.n && !x0IsScalarZero)
         throw Error("lsim: input 4 (x0) must have one entry per state "
                     "(got " + std::to_string(x0In.numel())
                     + " entries for " + std::to_string(s.n) + " states).",
@@ -507,7 +509,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
             for (size_t i = 0; i < N; ++i) uRe[i] = uIn.elemAsDouble(i);
         }
         Vec x0Re(s.n, 0.0), x0Im(s.n, 0.0);
-        if (x0In.numel() != 0) {
+        if (x0In.numel() == s.n) {
             if (x0In.isComplex()) {
                 const std::complex<double> *cd = x0In.complexData();
                 for (size_t i = 0; i < s.n; ++i) { x0Re[i] = cd[i].real(); x0Im[i] = cd[i].imag(); }
@@ -533,7 +535,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     Vec u(t.size());
     for (size_t i = 0; i < t.size(); ++i) u[i] = uIn.elemAsDouble(i);
     Vec x0(s.n, 0.0);
-    if (x0In.numel() != 0) {
+    if (x0In.numel() == s.n) {
         for (size_t i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
     }
     Vec xTraj;

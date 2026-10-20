@@ -6,8 +6,8 @@
   "license": "0BSD",
   "library": "numkit_control",
   "exports": [
-    "tf", "zpk", "ss", "tfdata", "zpkdata", "ssdata", "filt", "frd", "frdata",
-    "ss2ss", "minreal", "tf2ss", "ss2tf", "tf2zp", "zp2tf",
+    "tf", "zpk", "ss", "tfdata", "zpkdata", "ssdata", "filt", "frd", "frdata", "ord2",
+    "ss2ss", "minreal", "modred", "tf2ss", "ss2tf", "tf2zp", "zp2tf",
     "isct", "isdt", "issiso", "isproper", "isstable", "order", "pole", "zero", "damp", "pzmap", "isstatic", "tzero",
     "series", "parallel", "feedback",
     "step", "impulse", "impulse_lti", "initial", "lsim", "evalfr", "freqresp", "bode", "nyquist", "rlocus",
@@ -18,8 +18,8 @@
     "care", "dare", "lqr", "dlqr"
   ],
   "functions": [
-    "tf", "zpk", "ss", "tfdata", "zpkdata", "ssdata", "filt", "frd", "frdata",
-    "ss2ss", "minreal", "tf2ss", "ss2tf", "tf2zp", "zp2tf",
+    "tf", "zpk", "ss", "tfdata", "zpkdata", "ssdata", "filt", "frd", "frdata", "ord2",
+    "ss2ss", "minreal", "modred", "tf2ss", "ss2tf", "tf2zp", "zp2tf",
     "isct", "isdt", "issiso", "isproper", "isstable", "order", "pole", "zero", "damp", "pzmap", "isstatic", "tzero",
     "series", "parallel", "feedback",
     "step", "impulse", "impulse_lti", "initial", "lsim", "evalfr", "freqresp", "bode", "nyquist", "rlocus",

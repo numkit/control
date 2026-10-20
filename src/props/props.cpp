@@ -92,6 +92,11 @@ Value polesOf(const Value &sys, std::pmr::memory_resource *mr) {
         auto cp = charPoly(sys.field("A"));
         return numkit::builtin::roots(rowFromCoeffs(cp, mr), mr);
     }
+    if ((sys.isNumeric() || sys.isComplex()) && !sys.isObject()
+        && sys.dims().rows() == sys.dims().cols()) {
+        auto cp = charPoly(sys);
+        return numkit::builtin::roots(rowFromCoeffs(cp, mr), mr);
+    }
     throw Error("expected an LTI struct (tf/zpk/ss)",
                 0, 0, "lti", "", "numkit:lti:kind");
 }

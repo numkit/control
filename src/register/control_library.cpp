@@ -30,6 +30,8 @@ void tf2ss_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
 void ss2tf_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
 void tf2zp_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
 void zp2tf_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
+void ord2_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
+void modred_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
 // props/props.cpp
 void isct_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
 void isdt_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
@@ -106,9 +108,11 @@ void ControlLibrary::install(PluginContext &engine)
     reg("lti", "filt",    &control::detail::filt_reg);
     reg("lti", "frd",     &control::detail::frd_reg);
     reg("lti", "frdata",  &control::detail::frdata_reg);
+    reg("lti", "ord2",    &control::detail::ord2_reg);
 
     reg("convert", "ss2ss",   &control::detail::ss2ss_reg);
     reg("convert", "minreal", &control::detail::minreal_reg);
+    reg("convert", "modred",  &control::detail::modred_reg);
     reg("convert", "tf2ss",   &control::detail::tf2ss_reg);
     reg("convert", "ss2tf",   &control::detail::ss2tf_reg);
     reg("convert", "tf2zp",   &control::detail::tf2zp_reg);

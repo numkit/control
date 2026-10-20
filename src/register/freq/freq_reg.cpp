@@ -49,10 +49,32 @@ void bode_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 6, "bode");
     auto *mr = c.engine->resource();
-    Value sys = a.empty() ? defaultDemoSys(mr) : a[0];
-    Value wArg = (a.size() >= 2) ? a[1]
-                : Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    Value sys;
+    Value wArg;
+    bool polyForm = false;
+    if (a.empty()) {
+        sys = defaultDemoSys(mr);
+        wArg = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    } else if (a.size() >= 2 && !a[0].isStruct() && !a[0].isObject()
+               && (a[0].isNumeric() || a[0].isComplex())
+               && (a[1].isNumeric() || a[1].isComplex())) {
+        sys = tf(a[0], a[1], 0.0, mr);
+        wArg = (a.size() >= 3) ? a[2] : Value::matrix(0, 0, ValueType::DOUBLE, mr);
+        polyForm = true;
+    } else {
+        sys = a[0];
+        wArg = (a.size() >= 2) ? a[1] : Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    }
     auto b = bode(sys, wArg, mr);
+    if (!polyForm && b.mag.numel() > 1) {
+        const size_t N = b.mag.numel();
+        Value m3 = Value::matrix3d(1, 1, N, ValueType::DOUBLE, mr);
+        Value p3 = Value::matrix3d(1, 1, N, ValueType::DOUBLE, mr);
+        std::copy(b.mag.doubleData(), b.mag.doubleData() + N, m3.doubleDataMut());
+        std::copy(b.phase.doubleData(), b.phase.doubleData() + N, p3.doubleDataMut());
+        b.mag = std::move(m3);
+        b.phase = std::move(p3);
+    }
     if (o.size() >= 1) o[0] = std::move(b.mag);
     if (o.size() >= 2) o[1] = std::move(b.phase);
     if (o.size() >= 3) o[2] = std::move(b.w);
@@ -62,9 +84,20 @@ void nyquist_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 6, "nyquist");
     auto *mr = c.engine->resource();
-    Value sys = a.empty() ? defaultDemoSys(mr) : a[0];
-    Value wArg = (a.size() >= 2) ? a[1]
-                : Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    Value sys;
+    Value wArg;
+    if (a.empty()) {
+        sys = defaultDemoSys(mr);
+        wArg = Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    } else if (a.size() >= 2 && !a[0].isStruct() && !a[0].isObject()
+               && (a[0].isNumeric() || a[0].isComplex())
+               && (a[1].isNumeric() || a[1].isComplex())) {
+        sys = tf(a[0], a[1], 0.0, mr);
+        wArg = (a.size() >= 3) ? a[2] : Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    } else {
+        sys = a[0];
+        wArg = (a.size() >= 2) ? a[1] : Value::matrix(0, 0, ValueType::DOUBLE, mr);
+    }
     auto n = nyquist(sys, wArg, mr);
     if (o.size() >= 1) o[0] = std::move(n.re);
     if (o.size() >= 2) o[1] = std::move(n.im);

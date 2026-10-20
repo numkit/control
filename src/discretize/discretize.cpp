@@ -267,6 +267,88 @@ Value c2d(const Value &sys, double Ts, const std::string &method, std::pmr::memo
     if (Ts <= 0.0)
         throw Error("c2d: Ts must be positive",
                     0, 0, "c2d", "", "numkit:c2d:Ts");
+    if (hasKind(sys, "ss")) {
+        const double sysTs = sampleTime(sys);
+        if (sysTs > 0.0)
+            throw Error("c2d: input system is already discrete (Ts > 0)",
+                        0, 0, "c2d", "", "numkit:c2d:already_discrete");
+        const Value &Av = sys.field("A");
+        const Value &Bv = sys.field("B");
+        const Value &Cv = sys.field("C");
+        const Value &Dv = sys.field("D");
+        const size_t n = Av.dims().rows();
+        const size_t nu = Bv.dims().cols();
+        const size_t ny = Cv.dims().rows();
+        if (method.empty() || method == "zoh" || method == "foh") {
+            Mat A(n * n, 0.0);
+            for (size_t i = 0; i < n * n; ++i) A[i] = Av.elemAsDouble(i);
+            Mat Ad = eyeM(n);
+            Value BdV = Value::matrix(n, nu, ValueType::DOUBLE, mr);
+            Value CdV = Cv;
+            Value DvOut = Value::matrix(ny, nu, ValueType::DOUBLE, mr);
+            for (size_t j = 0; j < nu; ++j)
+                for (size_t p = 0; p < ny; ++p)
+                    DvOut.doubleDataMut()[j * ny + p] =
+                        (Dv.numel() == ny * nu) ? Dv.elemAsDouble(j * ny + p)
+                        : ((Dv.numel() == 1) ? Dv.elemAsDouble(0) : 0.0);
+            Value GV = Value::matrix(n, n + nu, ValueType::DOUBLE, mr);
+            double *gd = GV.doubleDataMut();
+            std::fill(gd, gd + n * (n + nu), 0.0);
+            for (size_t i = 0; i < n; ++i) gd[i * n + i] = 1.0;
+
+            if (nu == 0 && n > 0) {
+                Mat M(n * n, 0.0);
+                for (size_t i = 0; i < n * n; ++i) M[i] = A[i] * Ts;
+                Ad = expm(M, n);
+            }
+            for (size_t j = 0; j < nu; ++j) {
+                Vec Bj(n, 0.0);
+                for (size_t i = 0; i < n; ++i) Bj[i] = Bv.elemAsDouble(j * n + i);
+                if (method.empty() || method == "zoh") {
+                    Vec Bdj;
+                    zohDiscretise(A, Bj, n, Ts, Ad, Bdj);
+                    for (size_t i = 0; i < n; ++i)
+                        BdV.doubleDataMut()[j * n + i] = Bdj[i];
+                } else {
+                    const size_t m = n + 2;
+                    Mat M = zerosM(m, m);
+                    for (size_t c = 0; c < n; ++c)
+                        for (size_t r = 0; r < n; ++r)
+                            M[c * m + r] = A[c * n + r] * Ts;
+                    for (size_t r = 0; r < n; ++r)
+                        M[n * m + r] = Bj[r] * Ts;
+                    M[(n + 1) * m + n] = Ts;
+                    Mat E = expm(M, m);
+                    Ad.assign(n * n, 0.0);
+                    for (size_t c = 0; c < n; ++c)
+                        for (size_t r = 0; r < n; ++r)
+                            Ad[c * n + r] = E[c * m + r];
+                    Vec G1(n, 0.0), G2(n, 0.0);
+                    for (size_t r = 0; r < n; ++r) {
+                        G1[r] = E[n * m + r];
+                        G2[r] = E[(n + 1) * m + r];
+                    }
+                    for (size_t r = 0; r < n; ++r) {
+                        double phiG2 = 0.0;
+                        for (size_t k = 0; k < n; ++k) phiG2 += Ad[k * n + r] * G2[k];
+                        BdV.doubleDataMut()[j * n + r] = G1[r] + phiG2 / Ts - G2[r] / Ts;
+                        gd[(n + j) * n + r] = -G2[r] / Ts;
+                    }
+                    for (size_t p = 0; p < ny; ++p) {
+                        double cg2 = 0.0;
+                        for (size_t k = 0; k < n; ++k)
+                            cg2 += Cv.elemAsDouble(k * ny + p) * G2[k];
+                        DvOut.doubleDataMut()[j * ny + p] += cg2 / Ts;
+                    }
+                }
+            }
+            Value AdV = matFromVec(n, n, Ad, mr);
+            Value res = ss(AdV, BdV, CdV, DvOut, Ts, mr);
+            res.field("G") = std::move(GV);
+            return res;
+        }
+    }
+
     SS s = toSSiso(sys, mr);
     if (s.Ts > 0.0)
         throw Error("c2d: input system is already discrete (Ts > 0)",
@@ -278,7 +360,7 @@ Value c2d(const Value &sys, double Ts, const std::string &method, std::pmr::memo
         // ZOH leaves C and D untouched.
         Cd = s.C;
         Dd = s.D;
-    } else if (method == "tustin" || method == "bilinear") {
+    } else if (method == "tustin" || method == "tutsin" || method == "bilinear") {
         tustinDiscretise(s.A, s.B, s.C, s.D, s.n, Ts, Ad, Bd, Cd, Dd);
     } else if (method == "foh") {
         fohDiscretise(s.A, s.B, s.C, s.D, s.n, Ts, Ad, Bd, Cd, Dd);

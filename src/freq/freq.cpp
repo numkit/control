@@ -200,13 +200,66 @@ BodeResult bode(const Value &sys, const Value &wArg, std::pmr::memory_resource *
     const double Ts = sampleTime(sys);
     auto w = readW(sys, wArg, mr);
     std::vector<double> mag(w.size()), phase(w.size());
+
+    double phi0 = 0.0;
+    bool hasPhi0 = false;
+    if (Ts == 0.0 && !w.empty() && w[0] >= 0.0) {
+        auto firstNonZero = [](const std::vector<double> &v, size_t &idx) -> double {
+            for (size_t i = 0; i < v.size(); ++i) {
+                if (v[i] != 0.0) { idx = i; return v[i]; }
+            }
+            idx = v.size();
+            return 0.0;
+        };
+        size_t in = 0, id = 0;
+        const double b0 = firstNonZero(nd.num, in);
+        const double a0 = firstNonZero(nd.den, id);
+        if (b0 != 0.0 && a0 != 0.0) {
+            auto polyPhaseAt = [&](const std::vector<double> &c, size_t start, double w0) -> double {
+                size_t end = c.size();
+                size_t q = 0;
+                while (end > start + 1 && c[end - 1] == 0.0) {
+                    --end;
+                    ++q;
+                }
+                double ang = static_cast<double>(q) * 90.0;
+                const size_t len = end - start;
+                if (len <= 1) return ang;
+                Value pv = Value::matrix(1, len, ValueType::DOUBLE, mr);
+                std::copy(c.begin() + start, c.begin() + end, pv.doubleDataMut());
+                Value rv = numkit::builtin::roots(pv, mr);
+                const size_t nr = rv.numel();
+                for (size_t k = 0; k < nr; ++k) {
+                    Cd r = (rv.type() == ValueType::COMPLEX)
+                        ? rv.complexData()[k]
+                        : Cd(rv.elemAsDouble(k), 0.0);
+                    if (std::abs(r.imag()) <= 1e-9 * std::max(1.0, std::abs(r.real()))) {
+                        ang += std::atan2(w0, -r.real()) * (180.0 / M_PI);
+                    } else if (r.imag() > 0.0) {
+                        const double mag2 = std::norm(r);
+                        ang += std::atan2(-2.0 * r.real() * w0, mag2 - w0 * w0) * (180.0 / M_PI);
+                    }
+                }
+                return ang;
+            };
+            const double kGain = b0 / a0;
+            phi0 = (kGain < 0.0 ? 180.0 : 0.0)
+                 + polyPhaseAt(nd.num, in, w[0])
+                 - polyPhaseAt(nd.den, id, w[0]);
+            hasPhi0 = true;
+        }
+    }
+
     double prev = 0.0;
     for (size_t i = 0; i < w.size(); ++i) {
         Cd h = hAt(nd.num, nd.den, freqArg(w[i], Ts));
         mag[i] = std::abs(h);
         // Unwrap phase to avoid 2π jumps.
         double ph = std::arg(h) * (180.0 / M_PI);
-        if (i > 0) {
+        if (i == 0 && hasPhi0) {
+            while (ph - phi0 > 180.0) ph -= 360.0;
+            while (ph - phi0 < -180.0) ph += 360.0;
+        } else if (i > 0) {
             while (ph - prev > 180.0) ph -= 360.0;
             while (ph - prev < -180.0) ph += 360.0;
         }
