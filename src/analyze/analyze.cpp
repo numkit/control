@@ -16,6 +16,7 @@
 // stepinfo builtins (CallContext wrappers) live in analyze_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -81,10 +82,44 @@ double interpAt(const std::vector<double> &x,
     return y[j - 1] + t * (y[j] - y[j - 1]);
 }
 
+void dcgain_argcheck(const Value &sys) {
+    if (sys.isStruct() && sys.hasField("kind")) {
+        const std::string k = sys.field("kind").toString();
+        if (k == "tf" || k == "zpk" || k == "ss") return;
+    }
+    throw Error("control freq: expected an LTI struct (tf/zpk/ss)",
+                0, 0, "freq", "", "numkit:control:kind");
+}
+
+void margin_argcheck(const Value &sys) {
+    dcgain_argcheck(sys);
+}
+
+void allmargin_argcheck(const Value &sys) {
+    if (sys.isStruct() && sys.hasField("kind")) {
+        const std::string k = sys.field("kind").toString();
+        if (k == "tf" || k == "zpk" || k == "ss") return;
+    }
+    throw Error("allmargin: expected an LTI struct (tf/zpk/ss)",
+                0, 0, "allmargin", "", "numkit:allmargin:kind");
+}
+
+void stepinfo_argcheck(const Value &sys) {
+    if (sys.isStruct() && sys.hasField("kind")) {
+        const std::string k = sys.field("kind").toString();
+        if (k == "tf" || k == "zpk" || k == "ss") return;
+        throw Error("step: input 1 (sys) has unknown LTI kind '" + k + "'",
+                    0, 0, "step", "", "numkit:step:kind");
+    }
+    throw Error("step: input 1 (sys) must be an LTI struct (tf/zpk/ss)",
+                0, 0, "step", "", "numkit:step:kind");
+}
+
 } // anonymous
 
 Value dcgain(const Value &sys, std::pmr::memory_resource *mr)
 {
+    dcgain_argcheck(sys);
     // evalfr already does the right thing: at f=0 it evaluates s = j0
     // = 0 for continuous, and z = exp(j·0·Ts) = 1 for discrete.
     return evalfr(sys, 0.0, mr);
@@ -92,6 +127,7 @@ Value dcgain(const Value &sys, std::pmr::memory_resource *mr)
 
 MarginResult margin(const Value &sys, std::pmr::memory_resource *mr)
 {
+    margin_argcheck(sys);
     // Build a dense default Bode grid (the auto-pick chooses ~200
     // points spanning two decades around the dominant poles).
     Value emptyW = Value::matrix(0, 0, ValueType::DOUBLE, mr);
@@ -200,6 +236,7 @@ double bisectRoot(F f, double a, double b) {
 
 Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
 {
+    allmargin_argcheck(sys);
     // Exact open-loop response G(jω) = num(jω)/den(jω) (no bode-grid
     // interpolation): scan a fine log-frequency grid for sign changes of
     // |G|−1 (gain crossovers) and Im(G) with Re(G)<0 (phase crossovers),
@@ -311,6 +348,7 @@ Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
 
 Value stepinfo(const Value &sys, std::pmr::memory_resource *mr)
 {
+    stepinfo_argcheck(sys);
     // Use a deliberately long horizon (multiplier on top of the
     // default Tfinal pickup) so settling-time detection has enough
     // tail to register. We do that by pre-computing the default

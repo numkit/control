@@ -22,6 +22,7 @@
 // builtins (CallContext wrappers) live in state/place_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -90,9 +91,7 @@ std::vector<T> phiOfA(const std::vector<T> &A, size_t n, const Vec &c) {
     return H;
 }
 
-} // anonymous
-
-Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_resource *mr)
+void acker_argcheck(const Value &Av, const Value &Bv, const Value &pv)
 {
     // acker argcheck (argcheck separation). Classes probed R2025b:
     // A/B coerce double/single/logical/char; integer matrices fail at
@@ -118,6 +117,19 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
     if (pv.numel() != n)
         throw Error("acker: pole list must have length n",
                     0, 0, "acker", "", "numkit:acker:p");
+}
+
+void place_argcheck(const Value &A, const Value &B, const Value &p)
+{
+    acker_argcheck(A, B, p);
+}
+
+} // anonymous
+
+Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_resource *mr)
+{
+    acker_argcheck(Av, Bv, pv);
+    const size_t n = Av.dims().rows();
 
     const bool wantSingle = (Av.type() == ValueType::SINGLE ||
                              Bv.type() == ValueType::SINGLE ||
@@ -207,6 +219,7 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
 
 Value place(const Value &A, const Value &B, const Value &p, std::pmr::memory_resource *mr)
 {
+    place_argcheck(A, B, p);
     return acker(A, B, p, mr);
 }
 

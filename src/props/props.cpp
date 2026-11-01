@@ -24,6 +24,7 @@
 // zero/damp/pzmap/tzero builtins (CallContext wrappers) live in props_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -130,13 +131,69 @@ Value zerosOf(const Value &sys, std::pmr::memory_resource *mr) {
                 0, 0, "lti", "", "numkit:lti:kind");
 }
 
+void isct_argcheck(const Value &sys) { (void)sys; }
+void isdt_argcheck(const Value &sys) { (void)sys; }
+
+void issiso_argcheck(const Value &sys) {
+    internal::requireLtiModel(sys, "issiso", /*acceptFrD=*/true);
+}
+
+void isproper_argcheck(const Value &sys) {
+    internal::requireLtiModel(sys, "isproper", /*acceptFrD=*/true);
+}
+
+void pole_argcheck(const Value &sys) {
+    if (hasKind(sys, "tf") || hasKind(sys, "zpk") || hasKind(sys, "ss")) return;
+    if ((sys.isNumeric() || sys.isComplex()) && !sys.isObject()
+        && sys.dims().rows() == sys.dims().cols()) return;
+    throw Error("expected an LTI struct (tf/zpk/ss)",
+                0, 0, "lti", "", "numkit:lti:kind");
+}
+
+void isstable_argcheck(const Value &sys) { pole_argcheck(sys); }
+void damp_argcheck(const Value &sys) { pole_argcheck(sys); }
+
+void order_argcheck(const Value &sys) {
+    internal::requireLtiModel(sys, "order", /*acceptFrD=*/false);
+}
+
+void isstatic_argcheck(const Value &sys) { order_argcheck(sys); }
+
+void zero_argcheck(const Value &sys) {
+    if (hasKind(sys, "tf") || hasKind(sys, "zpk")) return;
+    if (hasKind(sys, "ss")) {
+        const Value &B = sys.field("B");
+        const Value &C = sys.field("C");
+        if (B.dims().cols() != 1 || C.dims().rows() != 1) {
+            throw Error("zero(sys): MIMO state-space transmission zeros "
+                        "require a generalised eigenvalue (QZ) solver; "
+                        "not yet implemented in this build.",
+                        0, 0, "zero", "", "numkit:zero:miso");
+        }
+        return;
+    }
+    throw Error("expected an LTI struct (tf/zpk/ss)",
+                0, 0, "lti", "", "numkit:lti:kind");
+}
+
+void pzmap_argcheck(const Value &sys) {
+    pole_argcheck(sys);
+    zero_argcheck(sys);
+}
+
+void tzero_argcheck(const Value &sys) {
+    internal::requireLtiModel(sys, "issiso", /*acceptFrD=*/true);
+}
+
 } // anonymous
 
 Value isct(const Value &sys, std::pmr::memory_resource *mr) {
+    isct_argcheck(sys);
     return boolValue(sampleTime(sys) == 0.0, mr);
 }
 
 Value isdt(const Value &sys, std::pmr::memory_resource *mr) {
+    isdt_argcheck(sys);
     const double Ts = sampleTime(sys);
     return boolValue(Ts > 0.0 || Ts == -1.0, mr);
 }
@@ -145,7 +202,7 @@ Value issiso(const Value &sys, std::pmr::memory_resource *mr) {
     // Un-typed arguments are rejected, mirroring the reference's
     // UndefinedFunction dispatch (probed R2025b); frd models are
     // always SISO here and answer true.
-    internal::requireLtiModel(sys, "issiso", /*acceptFrD=*/true);
+    issiso_argcheck(sys);
     if (hasKind(sys, "tf")) {
         const Value &num = sys.field("num");
         if (num.isCell() && num.numel() > 1)
@@ -165,7 +222,7 @@ Value issiso(const Value &sys, std::pmr::memory_resource *mr) {
 }
 
 Value isproper(const Value &sys, std::pmr::memory_resource *mr) {
-    internal::requireLtiModel(sys, "isproper", /*acceptFrD=*/true);
+    isproper_argcheck(sys);
     if (hasKind(sys, "tf"))
         return boolValue(sys.field("num").numel() <= sys.field("den").numel(), mr);
     if (hasKind(sys, "zpk"))
@@ -176,6 +233,7 @@ Value isproper(const Value &sys, std::pmr::memory_resource *mr) {
 }
 
 Value isstable(const Value &sys, std::pmr::memory_resource *mr) {
+    isstable_argcheck(sys);
     Value p = polesOf(sys, mr);
     auto pv = toComplexVec(p);
     const bool discrete = (sampleTime(sys) > 0.0);
@@ -195,7 +253,7 @@ Value order(const Value &sys, std::pmr::memory_resource *mr) {
     // frd models are REJECTED here — the reference answers
     // NotSupportedModelsofClass for order(frd) while issiso/isproper
     // accept it (probed R2025b).
-    internal::requireLtiModel(sys, "order", /*acceptFrD=*/false);
+    order_argcheck(sys);
     if (hasKind(sys, "tf")) {
         // order = max(deg num, deg den) = max(numel-1).
         const size_t n = sys.field("num").numel();
@@ -214,15 +272,18 @@ Value order(const Value &sys, std::pmr::memory_resource *mr) {
 }
 
 Value pole(const Value &sys, std::pmr::memory_resource *mr) {
+    pole_argcheck(sys);
     return polesOf(sys, mr);
 }
 
 Value zero(const Value &sys, std::pmr::memory_resource *mr) {
+    zero_argcheck(sys);
     return zerosOf(sys, mr);
 }
 
 DampResult damp(const Value &sys, std::pmr::memory_resource *mr)
 {
+    damp_argcheck(sys);
     Value p = polesOf(sys, mr);
     auto pv = toComplexVec(p);
     const bool discrete = (sampleTime(sys) > 0.0);
@@ -251,17 +312,20 @@ DampResult damp(const Value &sys, std::pmr::memory_resource *mr)
 std::pair<Value, Value>
 pzmap(const Value &sys, std::pmr::memory_resource *mr)
 {
+    pzmap_argcheck(sys);
     return {polesOf(sys, mr), zerosOf(sys, mr)};
 }
 
 Value isstatic(const Value &sys, std::pmr::memory_resource *mr)
 {
+    isstatic_argcheck(sys);
     Value ord = order(sys, mr);
     return Value::logicalScalar(ord.toScalar() == 0.0, mr);
 }
 
 Value tzero(const Value &sys, std::pmr::memory_resource *mr)
 {
+    tzero_argcheck(sys);
     // SISO build: transmission zeros == ordinary zeros.
     Value siso = issiso(sys, mr);
     if (siso.toScalar() == 0.0)

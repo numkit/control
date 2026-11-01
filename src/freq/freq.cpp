@@ -18,6 +18,7 @@
 // bode/nyquist/rlocus builtins (CallContext wrappers) live in freq_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -171,10 +172,48 @@ Cd freqArg(double w, double Ts) {
     return Cd(0.0, w);                               // jω
 }
 
+void freq_sys_argcheck(const Value &sys)
+{
+    if (!hasKind(sys, "tf") && !hasKind(sys, "zpk") && !hasKind(sys, "ss"))
+        throw Error("control freq: expected an LTI struct (tf/zpk/ss)",
+                    0, 0, "freq", "", "numkit:control:kind");
+}
+
+void evalfr_argcheck(const Value &sys, double f)
+{
+    (void)f;
+    freq_sys_argcheck(sys);
+}
+
+void freqresp_argcheck(const Value &sys, const Value &w)
+{
+    (void)w;
+    freq_sys_argcheck(sys);
+}
+
+void bode_argcheck(const Value &sys, const Value &wArg)
+{
+    (void)wArg;
+    freq_sys_argcheck(sys);
+}
+
+void nyquist_argcheck(const Value &sys, const Value &wArg)
+{
+    (void)wArg;
+    freq_sys_argcheck(sys);
+}
+
+void rlocus_argcheck(const Value &sys, const Value &kArg)
+{
+    (void)kArg;
+    freq_sys_argcheck(sys);
+}
+
 } // anonymous
 
 Value evalfr(const Value &sys, double f, std::pmr::memory_resource *mr)
 {
+    evalfr_argcheck(sys, f);
     auto nd = toNumDen(sys, mr);
     const double Ts = sampleTime(sys);
     const Cd h = hAt(nd.num, nd.den, freqArg(f, Ts));
@@ -185,6 +224,7 @@ Value evalfr(const Value &sys, double f, std::pmr::memory_resource *mr)
 
 Value freqresp(const Value &sys, const Value &w, std::pmr::memory_resource *mr)
 {
+    freqresp_argcheck(sys, w);
     auto nd = toNumDen(sys, mr);
     const double Ts = sampleTime(sys);
     auto wv = readW(sys, w, mr);
@@ -196,6 +236,7 @@ Value freqresp(const Value &sys, const Value &w, std::pmr::memory_resource *mr)
 
 BodeResult bode(const Value &sys, const Value &wArg, std::pmr::memory_resource *mr)
 {
+    bode_argcheck(sys, wArg);
     auto nd = toNumDen(sys, mr);
     const double Ts = sampleTime(sys);
     auto w = readW(sys, wArg, mr);
@@ -273,6 +314,7 @@ BodeResult bode(const Value &sys, const Value &wArg, std::pmr::memory_resource *
 
 NyquistResult nyquist(const Value &sys, const Value &wArg, std::pmr::memory_resource *mr)
 {
+    nyquist_argcheck(sys, wArg);
     auto nd = toNumDen(sys, mr);
     const double Ts = sampleTime(sys);
     auto w = readW(sys, wArg, mr);
@@ -288,6 +330,7 @@ NyquistResult nyquist(const Value &sys, const Value &wArg, std::pmr::memory_reso
 std::pair<Value, Value>
 rlocus(const Value &sys, const Value &kArg, std::pmr::memory_resource *mr)
 {
+    rlocus_argcheck(sys, kArg);
     auto nd = toNumDen(sys, mr);
     // Strip any leading-zero padding so the polynomial sums align on
     // the trailing (constant) term.

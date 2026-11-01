@@ -27,6 +27,7 @@
 
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 #include <numkit/builtin/polyfun.hpp>   // numkit::builtin::roots
 
 #include <algorithm>
@@ -222,6 +223,23 @@ bool hasImagEig(const Mat &A, const Mat &B, const Mat &C, const Mat &D,
     return false;
 }
 
+bool hinfnorm_argcheck(const Value &sys)
+{
+    const ValueType t = sys.type();
+    const bool numericScalar = sys.numel() == 1
+        && (t == ValueType::DOUBLE || t == ValueType::COMPLEX
+            || t == ValueType::SINGLE || t == ValueType::LOGICAL
+            || isIntegerType(t));
+    if (numericScalar) return true;
+    if (!sys.isStruct() || !sys.hasField("kind"))
+        throw Error(std::string("hinfnorm: input 1 (sys) must be an LTI ")
+                    + "model struct (tf/zpk/ss) or a static-gain scalar "
+                    + "(got a " + internal::shapeOf(sys) + " "
+                    + mtypeName(t) + " array).",
+                    0, 0, "hinfnorm", "", "numkit:hinfnorm:inputType");
+    return false;
+}
+
 } // anonymous
 
 Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
@@ -232,26 +250,13 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
     // cell / char is rejected — the reference only dispatches models
     // and static gains. (Its Inf-with-warning answer for plain structs
     // is a dispatch accident we deliberately do not mirror.)
-    {
-        const ValueType t = sys.type();
-        const bool numericScalar = sys.numel() == 1
-            && (t == ValueType::DOUBLE || t == ValueType::COMPLEX
-                || t == ValueType::SINGLE || t == ValueType::LOGICAL
-                || isIntegerType(t));
-        if (numericScalar) {
-            const double g = sys.isComplex()
-                ? std::abs(sys.complexData()[0]) : std::abs(sys.elemAsDouble(0));
-            Value out = Value::matrix(1, 3, ValueType::DOUBLE, mr);
-            double *od = out.doubleDataMut();
-            od[0] = g; od[1] = g; od[2] = 0.0;
-            return out;
-        }
-        if (!sys.isStruct() || !sys.hasField("kind"))
-            throw Error(std::string("hinfnorm: input 1 (sys) must be an LTI ")
-                        + "model struct (tf/zpk/ss) or a static-gain scalar "
-                        + "(got a " + internal::shapeOf(sys) + " "
-                        + mtypeName(t) + " array).",
-                        0, 0, "hinfnorm", "", "numkit:hinfnorm:inputType");
+    if (hinfnorm_argcheck(sys)) {
+        const double g = sys.isComplex()
+            ? std::abs(sys.complexData()[0]) : std::abs(sys.elemAsDouble(0));
+        Value out = Value::matrix(1, 3, ValueType::DOUBLE, mr);
+        double *od = out.doubleDataMut();
+        od[0] = g; od[1] = g; od[2] = 0.0;
+        return out;
     }
 
     const bool discrete = (sampleTime(sys) != 0.0);

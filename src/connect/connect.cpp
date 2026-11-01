@@ -20,6 +20,7 @@
 // / feedback builtins (CallContext wrappers) live in connect/connect_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -124,10 +125,41 @@ double Ts_combine(double Ts1, double Ts2, const char *op) {
                 0, 0, op, "", "numkit:control:Ts");
 }
 
+void connect_sys_argcheck(const Value &sys) {
+    if (!sys.isStruct()) {
+        if (sys.numel() == 1) return;
+        throw Error("control connect: a numeric system must be a scalar gain",
+                    0, 0, "control", "", "numkit:control:kind");
+    }
+    if (!hasKind(sys, "tf") && !hasKind(sys, "zpk") && !hasKind(sys, "ss"))
+        throw Error("control connect: expected tf/zpk/ss struct",
+                    0, 0, "control", "", "numkit:control:kind");
+}
+
+void series_argcheck(const Value &sys1, const Value &sys2) {
+    connect_sys_argcheck(sys1);
+    connect_sys_argcheck(sys2);
+}
+
+void parallel_argcheck(const Value &sys1, const Value &sys2) {
+    connect_sys_argcheck(sys1);
+    connect_sys_argcheck(sys2);
+}
+
+void feedback_argcheck(const Value &G, const Value &H, int sign) {
+    if (sign != 1 && sign != -1) {
+        throw Error("feedback: sign must be 1 or -1", 0, 0, "feedback", "",
+                    "numkit:feedback:signNotChoice");
+    }
+    connect_sys_argcheck(G);
+    connect_sys_argcheck(H);
+}
+
 } // anonymous
 
 Value series(const Value &sys1, const Value &sys2, std::pmr::memory_resource *mr)
 {
+    series_argcheck(sys1, sys2);
     auto a = toNumDen(sys1, mr);
     auto b = toNumDen(sys2, mr);
     auto num = polyMul(a.num, b.num, mr);
@@ -139,6 +171,7 @@ Value series(const Value &sys1, const Value &sys2, std::pmr::memory_resource *mr
 
 Value parallel(const Value &sys1, const Value &sys2, std::pmr::memory_resource *mr)
 {
+    parallel_argcheck(sys1, sys2);
     auto a = toNumDen(sys1, mr);
     auto b = toNumDen(sys2, mr);
     auto t1 = polyMul(a.num, b.den, mr); // n1·d2
@@ -152,10 +185,7 @@ Value parallel(const Value &sys1, const Value &sys2, std::pmr::memory_resource *
 
 Value feedback(const Value &G, const Value &H, int sign, std::pmr::memory_resource *mr)
 {
-    if (sign != 1 && sign != -1) {
-        throw Error("feedback: sign must be 1 or -1", 0, 0, "feedback", "",
-                    "numkit:feedback:signNotChoice");
-    }
+    feedback_argcheck(G, H, sign);
     auto g = toNumDen(G, mr);
     auto h = toNumDen(H, mr);
     // T(s) = num_G · den_H / (den_G · den_H − sign · num_G · num_H)

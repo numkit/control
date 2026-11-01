@@ -20,6 +20,7 @@
 // (CallContext wrappers) live in discretize_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -260,18 +261,44 @@ Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, double Dd, size_t 
     return ss(Av, Bv, Cv, Dv, Ts, mr);
 }
 
-} // anonymous
-
-Value c2d(const Value &sys, double Ts, const std::string &method, std::pmr::memory_resource *mr)
+void c2d_argcheck(const Value &sys, double Ts, const std::string &method)
 {
     if (Ts <= 0.0)
         throw Error("c2d: Ts must be positive",
                     0, 0, "c2d", "", "numkit:c2d:Ts");
+    if (!hasKind(sys, "ss") && !hasKind(sys, "tf") && !hasKind(sys, "zpk"))
+        throw Error("c2d/d2c: expected an LTI struct (tf/zpk/ss)",
+                    0, 0, "discretize", "", "numkit:control:kind");
+    if (sampleTime(sys) > 0.0)
+        throw Error("c2d: input system is already discrete (Ts > 0)",
+                    0, 0, "c2d", "", "numkit:c2d:already_discrete");
+    if (!method.empty() && method != "zoh" && method != "foh" &&
+        method != "tustin" && method != "tutsin" && method != "bilinear")
+        throw Error("c2d: method must be 'zoh', 'foh', or 'tustin'",
+                    0, 0, "c2d", "", "numkit:c2d:method");
+}
+
+void d2c_argcheck(const Value &sys, const std::string &method)
+{
+    if (!hasKind(sys, "ss") && !hasKind(sys, "tf") && !hasKind(sys, "zpk"))
+        throw Error("c2d/d2c: expected an LTI struct (tf/zpk/ss)",
+                    0, 0, "discretize", "", "numkit:control:kind");
+    if (sampleTime(sys) <= 0.0)
+        throw Error("d2c: input system is already continuous (Ts == 0)",
+                    0, 0, "d2c", "", "numkit:d2c:already_continuous");
+    const bool isZoh = method.empty() || method == "zoh";
+    const bool isTustin = method == "tustin" || method == "bilinear";
+    if (!isZoh && !isTustin)
+        throw Error("d2c: method must be 'zoh' or 'tustin'",
+                    0, 0, "d2c", "", "numkit:d2c:method");
+}
+
+} // anonymous
+
+Value c2d(const Value &sys, double Ts, const std::string &method, std::pmr::memory_resource *mr)
+{
+    c2d_argcheck(sys, Ts, method);
     if (hasKind(sys, "ss")) {
-        const double sysTs = sampleTime(sys);
-        if (sysTs > 0.0)
-            throw Error("c2d: input system is already discrete (Ts > 0)",
-                        0, 0, "c2d", "", "numkit:c2d:already_discrete");
         const Value &Av = sys.field("A");
         const Value &Bv = sys.field("B");
         const Value &Cv = sys.field("C");
@@ -377,15 +404,9 @@ Value c2d(const Value &sys, double Ts, const std::string &method, std::pmr::memo
 
 Value d2c(const Value &sys, const std::string &method, std::pmr::memory_resource *mr)
 {
+    d2c_argcheck(sys, method);
     SS s = toSSiso(sys, mr);
-    if (s.Ts <= 0.0)
-        throw Error("d2c: input system is already continuous (Ts == 0)",
-                    0, 0, "d2c", "", "numkit:d2c:already_continuous");
     const bool isZoh = method.empty() || method == "zoh";
-    const bool isTustin = method == "tustin" || method == "bilinear";
-    if (!isZoh && !isTustin)
-        throw Error("d2c: method must be 'zoh' or 'tustin'",
-                    0, 0, "d2c", "", "numkit:d2c:method");
     const double Ts = s.Ts;
     const std::string origKind = sys.isStruct() && sys.hasField("kind")
                                  ? sys.field("kind").toString()

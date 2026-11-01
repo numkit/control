@@ -14,6 +14,7 @@
 // builtins (CallContext wrappers) live in state/state_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -98,6 +99,32 @@ void ctrb_obsv_argcheck(const Value &A, const Value &X, const char *fn,
     internal::requireNonIntegerMatrix(A, fn, "A", 1);
     internal::requireCoercibleMatrix(X, fn, xName, xNum);
     internal::requireNonIntegerMatrix(X, fn, xName, xNum);
+}
+
+char gram_argcheck(const Value &type)
+{
+    if (!type.isChar() && !type.isString())
+        throw Error(std::string("gram: input 2 (type) must be 'c' ")
+                    + "(controllability) or 'o' (observability), as char "
+                    + "or string (got a "
+                    + internal::shapeOf(type) + " "
+                    + mtypeName(type.type()) + " array).",
+                    0, 0, "gram", "", "numkit:gram:type");
+    const std::string ts = type.toString();
+    const char t = ts.empty()
+                 ? 'c'
+                 : static_cast<char>(std::tolower(static_cast<unsigned char>(ts[0])));
+    if (t != 'c' && t != 'o')
+        throw Error("gram: input 2 (type) must be 'c' (controllability) or "
+                    "'o' (observability), as char or string (got '" + ts + "').",
+                    0, 0, "gram", "", "numkit:gram:type");
+    return t;
+}
+
+void covar_argcheck(const Value &sys, const Value &Wv)
+{
+    (void)sys;
+    (void)Wv;
 }
 
 } // anonymous
@@ -253,27 +280,10 @@ Value obsv_sys(const Value &sys, std::pmr::memory_resource *mr) {
 Value gram(const Value &sys, const Value &type, std::pmr::memory_resource *mr)
 {
     auto abc = pullABC(sys, "gram", mr);
+    const char t = gram_argcheck(type);
     const size_t n = abc.A.dims().rows();
     const bool discrete =
         (sys.isStruct() && sys.hasField("Ts") && sys.field("Ts").toScalar() != 0.0);
-
-    // Type contract probed R2025b: only char/string are accepted, every
-    // other class is one rejection (Control:foundation:gram2).
-    if (!type.isChar() && !type.isString())
-        throw Error(std::string("gram: input 2 (type) must be 'c' ")
-                    + "(controllability) or 'o' (observability), as char "
-                    + "or string (got a "
-                    + internal::shapeOf(type) + " "
-                    + mtypeName(type.type()) + " array).",
-                    0, 0, "gram", "", "numkit:gram:type");
-    const std::string ts = type.toString();
-    const char t = ts.empty()
-                 ? 'c'
-                 : static_cast<char>(std::tolower(static_cast<unsigned char>(ts[0])));
-    if (t != 'c' && t != 'o')
-        throw Error("gram: input 2 (type) must be 'c' (controllability) or "
-                    "'o' (observability), as char or string (got '" + ts + "').",
-                    0, 0, "gram", "", "numkit:gram:type");
 
     // gram solves a Lyapunov equation; the controllability / observability
     // gramian differs only in which (A, Q) pair is fed to lyap / dlyap:
@@ -312,6 +322,7 @@ Value gram(const Value &sys, const Value &type, std::pmr::memory_resource *mr)
 
 CovarResult covar(const Value &sys, const Value &Wv, std::pmr::memory_resource *mr)
 {
+    covar_argcheck(sys, Wv);
     auto abc = pullABC(sys, "covar", mr);
     const size_t n = abc.A.dims().rows();
     const size_t m = abc.B.dims().cols();

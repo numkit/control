@@ -14,6 +14,7 @@
 // constructors + *data extractors (CallContext wrappers) live in lti_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -140,19 +141,52 @@ bool buildMimoCellTf(const Value &num, const Value &den, const char *fn,
     return true;
 }
 
+bool tf_argcheck(const Value &num, const Value &den, Value &numOut, Value &denOut,
+                 std::pmr::memory_resource *mr)
+{
+    if (buildMimoCellTf(num, den, "tf", /*broadNum=*/false, numOut, denOut, mr))
+        return true;
+    numOut = tfCoeffArg(num, "tf", "num", /*broadNum=*/false, mr);
+    denOut = tfCoeffArg(den, "tf", "den", /*broadNum=*/false, mr);
+    return false;
+}
+
+void zpk_argcheck(const Value &z, const Value &p, double k, double Ts)
+{
+    (void)z;
+    (void)p;
+    (void)k;
+    (void)Ts;
+}
+
+bool filt_argcheck(const Value &num, const Value &den, Value &numOut, Value &denOut,
+                   std::pmr::memory_resource *mr)
+{
+    if (buildMimoCellTf(num, den, "filt", /*broadNum=*/true, numOut, denOut, mr))
+        return true;
+    numOut = tfCoeffArg(num, "filt", "num", /*broadNum=*/true, mr);
+    denOut = tfCoeffArg(den, "filt", "den", /*broadNum=*/false, mr);
+    return false;
+}
+
+void frd_argcheck(const Value &response, const Value &frequency)
+{
+    if (response.numel() != frequency.numel())
+        throw Error("frd: response and frequency must have the same length",
+                    0, 0, "frd", "", "numkit:frd:size");
+}
+
 } // anonymous
 
 Value tf(const Value &num, const Value &den, double Ts, std::pmr::memory_resource *mr)
 {
-    Value numCell, denCell;
-    if (buildMimoCellTf(num, den, "tf", /*broadNum=*/false, numCell, denCell, mr)) {
+    Value numC, denC;
+    if (tf_argcheck(num, den, numC, denC, mr)) {
         Value s = tagStruct("tf", Ts, mr);
-        s.field("num") = std::move(numCell);
-        s.field("den") = std::move(denCell);
+        s.field("num") = std::move(numC);
+        s.field("den") = std::move(denC);
         return s;
     }
-    Value numC = tfCoeffArg(num, "tf", "num", /*broadNum=*/false, mr);
-    Value denC = tfCoeffArg(den, "tf", "den", /*broadNum=*/false, mr);
     Value s = tagStruct("tf", Ts, mr);
     s.field("num") = rowVec(numC, mr);
     s.field("den") = rowVec(denC, mr);
@@ -162,6 +196,7 @@ Value tf(const Value &num, const Value &den, double Ts, std::pmr::memory_resourc
 Value zpk(const Value &z, const Value &p, double k, double Ts,
           std::pmr::memory_resource *mr)
 {
+    zpk_argcheck(z, p, k, Ts);
     Value s = tagStruct("zpk", Ts, mr);
     s.field("z") = rowVec(z, mr);
     s.field("p") = rowVec(p, mr);
@@ -210,19 +245,15 @@ Value expandScalarBlock(const Value &m, size_t r, size_t c,
     return out;
 }
 
-} // anonymous
-
-Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double Ts, std::pmr::memory_resource *mr)
+void ss_argcheck(const Value &A, const Value &B, const Value &C, const Value &D,
+                 Value &Av, Value &Bv, Value &Cv, Value &Dv,
+                 std::pmr::memory_resource *mr)
 {
-    Value Av = ssMatArg(A, "ss", "A", mr);
-    Value Bv = ssMatArg(B, "ss", "B", mr);
-    Value Cv = ssMatArg(C, "ss", "C", mr);
-    Value Dv = ssMatArg(D, "ss", "D", mr);
+    Av = ssMatArg(A, "ss", "A", mr);
+    Bv = ssMatArg(B, "ss", "B", mr);
+    Cv = ssMatArg(C, "ss", "C", mr);
+    Dv = ssMatArg(D, "ss", "D", mr);
 
-    // Block-shape consistency, mirroring the reference's ssProperties
-    // rejections: A square (or empty for a static model), B with n
-    // rows, C with n columns, D matching p×m. Scalars expand; empties
-    // give the 0-state / 0-input forms (ss(A,[],[],D) is valid).
     using internal::shapeOf;
     const auto blockErr = [&](const char *arg, const Value &v) {
         throw Error(std::string("ss: input (") + arg + ") has shape "
@@ -243,6 +274,14 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
     Bv = expandScalarBlock(Bv, n, m, mr);
     Cv = expandScalarBlock(Cv, p, n, mr);
     Dv = expandScalarBlock(Dv, p ? p : 1, m ? m : 1, mr);
+}
+
+} // anonymous
+
+Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double Ts, std::pmr::memory_resource *mr)
+{
+    Value Av, Bv, Cv, Dv;
+    ss_argcheck(A, B, C, D, Av, Bv, Cv, Dv, mr);
 
     Value s = tagStruct("ss", Ts, mr);
     // Copy state-space matrices through the user resource.
@@ -270,19 +309,14 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
 
 Value filt(const Value &num, const Value &den, double Ts, std::pmr::memory_resource *mr)
 {
-    Value numCell, denCell;
-    if (buildMimoCellTf(num, den, "filt", /*broadNum=*/true, numCell, denCell, mr)) {
+    Value numC, denC;
+    if (filt_argcheck(num, den, numC, denC, mr)) {
         Value s = tagStruct("tf", Ts, mr);
-        s.field("num") = std::move(numCell);
-        s.field("den") = std::move(denCell);
+        s.field("num") = std::move(numC);
+        s.field("den") = std::move(denC);
         s.field("variable") = Value::fromString("z^-1", mr);
         return s;
     }
-    // The reference's filt coerces a broader numerator set than tf
-    // (logical/char/string all coerce — probed R2025b); its
-    // denominator rejects them exactly like tf's.
-    Value numC = tfCoeffArg(num, "filt", "num", /*broadNum=*/true, mr);
-    Value denC = tfCoeffArg(den, "filt", "den", /*broadNum=*/false, mr);
     Value s = tagStruct("tf", Ts, mr);
     s.field("num") = rowVec(numC, mr);
     s.field("den") = rowVec(denC, mr);
@@ -292,9 +326,7 @@ Value filt(const Value &num, const Value &den, double Ts, std::pmr::memory_resou
 
 Value frd(const Value &response, const Value &frequency, double Ts, std::pmr::memory_resource *mr)
 {
-    if (response.numel() != frequency.numel())
-        throw Error("frd: response and frequency must have the same length",
-                    0, 0, "frd", "", "numkit:frd:size");
+    frd_argcheck(response, frequency);
     Value s = tagStruct("frd", Ts, mr);
     const size_t N = frequency.numel();
     // resp may be complex; copy as column vector.
@@ -492,11 +524,59 @@ Value colVec(const Value &v, std::pmr::memory_resource *mr) {
     return r;
 }
 
+void tfdata_argcheck(const Value &sys)
+{
+    const std::string &k = kindOf(sys);
+    if (k != "tf" && k != "zpk" && k != "ss")
+        throw Error("tfdata: input must be tf / zpk / ss",
+                    0, 0, "tfdata", "", "numkit:tfdata:kind");
+}
+
+void zpkdata_argcheck(const Value &sys)
+{
+    const std::string &kind = kindOf(sys);
+    if (kind != "zpk" && kind != "tf" && kind != "ss")
+        throw Error("zpkdata: input must be tf / zpk / ss",
+                    0, 0, "zpkdata", "", "numkit:zpkdata:kind");
+}
+
+void ssdata_argcheck(const Value &sys)
+{
+    const std::string &kind = kindOf(sys);
+    if (kind != "ss" && kind != "tf" && kind != "zpk")
+        throw Error("ssdata: input must be tf / zpk / ss",
+                    0, 0, "ssdata", "", "numkit:ssdata:kind");
+}
+
+void frdata_argcheck(const Value &sys)
+{
+    if (kindOf(sys) != "frd")
+        throw Error("frdata: input must be an frd model",
+                    0, 0, "frdata", "", "numkit:frdata:kind");
+}
+
+void ss2ss_argcheck(const Value &sys, const Value &T, Value &Tc,
+                    std::pmr::memory_resource *mr)
+{
+    if (kindOf(sys) != "ss")
+        throw Error("ss2ss: input must be an ss model",
+                    0, 0, "ss2ss", "", "numkit:ss2ss:kind");
+    internal::requireCoercibleMatrix(T, "ss2ss", "T", 2);
+    internal::requireNonIntegerMatrix(T, "ss2ss", "T", 2);
+    Tc = internal::coerceToDoubleMatrix(T, mr);
+    const Value &Av = sys.field("A");
+    const size_t n = Av.dims().rows();
+    if (Av.dims().cols() != n || Tc.dims().rows() != n || Tc.dims().cols() != n)
+        throw Error("ss2ss: T must be n×n with n = order(sys)",
+                    0, 0, "ss2ss", "", "numkit:ss2ss:size");
+}
+
 } // anonymous
 
 std::tuple<Value, Value>
 tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
 {
+    tfdata_argcheck(sys);
     Value num, den;
     const std::string &k = kindOf(sys);
     if (k == "tf") {
@@ -504,12 +584,9 @@ tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
         den = sys.field("den");
     } else if (k == "zpk") {
         std::tie(num, den) = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
-    } else if (k == "ss") {
+    } else {
         std::tie(num, den) = ss2tf(sys.field("A"), sys.field("B"),
                                     sys.field("C"), sys.field("D"), 1, mr);
-    } else {
-        throw Error("tfdata: input must be tf / zpk / ss",
-                    0, 0, "tfdata", "", "numkit:tfdata:kind");
     }
     const size_t L = std::max(num.numel(), den.numel());
     Value np = padToLen(num, L, mr);
@@ -521,6 +598,7 @@ tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
 std::tuple<Value, Value, Value>
 zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
 {
+    zpkdata_argcheck(sys);
     Value z, p, k;
     const std::string &kind = kindOf(sys);
     if (kind == "zpk") {
@@ -532,16 +610,13 @@ zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
         z = colVec(r.z, mr);
         p = colVec(r.p, mr);
         k = Value::scalar(r.k.toScalar(), mr);
-    } else if (kind == "ss") {
+    } else {
         auto [n, d] = ss2tf(sys.field("A"), sys.field("B"),
                             sys.field("C"), sys.field("D"), 1, mr);
         auto r = tf2zp(n, d, mr);
         z = colVec(r.z, mr);
         p = colVec(r.p, mr);
         k = Value::scalar(r.k.toScalar(), mr);
-    } else {
-        throw Error("zpkdata: input must be tf / zpk / ss",
-                    0, 0, "zpkdata", "", "numkit:zpkdata:kind");
     }
     if (asVector) return {std::move(z), std::move(p), std::move(k)};
     return {wrapCell(z, mr), wrapCell(p, mr), std::move(k)};
@@ -550,6 +625,7 @@ zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
 std::tuple<Value, Value, Value, Value>
 ssdata(const Value &sys, std::pmr::memory_resource *mr)
 {
+    ssdata_argcheck(sys);
     const std::string &kind = kindOf(sys);
     Value A, B, C, D;
     if (kind == "ss") {
@@ -561,14 +637,11 @@ ssdata(const Value &sys, std::pmr::memory_resource *mr)
         auto ss = tf2ss(sys.field("num"), sys.field("den"), mr);
         A = std::move(ss.A); B = std::move(ss.B);
         C = std::move(ss.C); D = std::move(ss.D);
-    } else if (kind == "zpk") {
+    } else {
         auto [n, d] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
         auto ss = tf2ss(n, d, mr);
         A = std::move(ss.A); B = std::move(ss.B);
         C = std::move(ss.C); D = std::move(ss.D);
-    } else {
-        throw Error("ssdata: input must be tf / zpk / ss",
-                    0, 0, "ssdata", "", "numkit:ssdata:kind");
     }
     return {std::move(A), std::move(B), std::move(C), std::move(D)};
 }
@@ -576,9 +649,7 @@ ssdata(const Value &sys, std::pmr::memory_resource *mr)
 std::tuple<Value, Value>
 frdata(const Value &sys, std::pmr::memory_resource *mr)
 {
-    if (kindOf(sys) != "frd")
-        throw Error("frdata: input must be an frd model",
-                    0, 0, "frdata", "", "numkit:frdata:kind");
+    frdata_argcheck(sys);
     // Shallow copy through the user resource; resp / freq are already
     // stored as column vectors by frd().
     Value resp = sys.field("resp");
@@ -603,24 +674,13 @@ frdata(const Value &sys, std::pmr::memory_resource *mr)
 
 Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
 {
-    if (kindOf(sys) != "ss")
-        throw Error("ss2ss: input must be an ss model",
-                    0, 0, "ss2ss", "", "numkit:ss2ss:kind");
-    // T contract probed R2025b: double/single/logical/char coerce
-    // (logical-identity and char T both accepted); integer matrices
-    // fail at the reference's matmul layer; complex T yields a complex
-    // model.
-    internal::requireCoercibleMatrix(T, "ss2ss", "T", 2);
-    internal::requireNonIntegerMatrix(T, "ss2ss", "T", 2);
-    Value Tc = internal::coerceToDoubleMatrix(T, mr);
+    Value Tc;
+    ss2ss_argcheck(sys, T, Tc, mr);
     const Value &Av = sys.field("A");
     const Value &Bv = sys.field("B");
     const Value &Cv = sys.field("C");
     const Value &Dv = sys.field("D");
     const size_t n = Av.dims().rows();
-    if (Av.dims().cols() != n || Tc.dims().rows() != n || Tc.dims().cols() != n)
-        throw Error("ss2ss: T must be n×n with n = order(sys)",
-                    0, 0, "ss2ss", "", "numkit:ss2ss:size");
     const size_t m = Bv.dims().cols();
     const size_t p = Cv.dims().rows();
 

@@ -31,6 +31,7 @@
 
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 #include <numkit/builtin/polyfun.hpp>   // numkit::builtin::roots
 
 #include <algorithm>
@@ -170,9 +171,9 @@ Value closedLoopEig(const Mat &A, const Mat &B, const Mat &G,
     return numkit::builtin::roots(row, mr);
 }
 
-void checkShapes(const Value &A, const Value &B, const Value &Q,
-                 const Value &R, const char *name,
-                 size_t &n, size_t &m) {
+void riccati_argcheck(const Value &A, const Value &B, const Value &Q,
+                      const Value &R, const char *name,
+                      size_t &n, size_t &m) {
     if (A.dims().rows() != A.dims().cols())
         throw Error(std::string(name) + ": A must be square",
                     0, 0, name, "", "numkit:care:A");
@@ -189,13 +190,23 @@ void checkShapes(const Value &A, const Value &B, const Value &Q,
                     0, 0, name, "", "numkit:care:R");
 }
 
+void care_argcheck(const Value &A, const Value &B, const Value &Q,
+                   const Value &R, size_t &n, size_t &m) {
+    riccati_argcheck(A, B, Q, R, "care", n, m);
+}
+
+void dare_argcheck(const Value &A, const Value &B, const Value &Q,
+                   const Value &R, size_t &n, size_t &m) {
+    riccati_argcheck(A, B, Q, R, "dare", n, m);
+}
+
 } // anonymous
 
 RiccatiResult care(const Value &Av, const Value &Bv, const Value &Qv,
                    const Value &Rv, std::pmr::memory_resource *mr)
 {
     size_t n = 0, m = 0;
-    checkShapes(Av, Bv, Qv, Rv, "care", n, m);
+    care_argcheck(Av, Bv, Qv, Rv, n, m);
 
     auto A = readMat(Av, n, n);
     auto B = readMat(Bv, n, m);
@@ -249,7 +260,7 @@ RiccatiResult dare(const Value &Av, const Value &Bv, const Value &Qv,
                    const Value &Rv, std::pmr::memory_resource *mr)
 {
     size_t n = 0, m = 0;
-    checkShapes(Av, Bv, Qv, Rv, "dare", n, m);
+    dare_argcheck(Av, Bv, Qv, Rv, n, m);
 
     auto A = readMat(Av, n, n);
     auto B = readMat(Bv, n, m);

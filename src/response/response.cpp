@@ -29,6 +29,7 @@
 // builtins (CallContext wrappers) live in response_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
+#include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -293,12 +294,65 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
     return y;
 }
 
+void response_sys_argcheck(const Value &sys, const char *fn)
+{
+    if (sys.isStruct() && sys.hasField("kind")) {
+        const std::string k = sys.field("kind").toString();
+        if (k == "ss" || k == "tf" || k == "zpk") return;
+        throw Error(std::string(fn) + ": input 1 (sys) has unknown LTI "
+                    "kind '" + k + "'",
+                    0, 0, fn, "", std::string("numkit:") + fn + ":kind");
+    }
+    throw Error(std::string(fn) + ": input 1 (sys) must be an LTI struct "
+                "(tf/zpk/ss)",
+                0, 0, fn, "", std::string("numkit:") + fn + ":kind");
+}
+
+void step_response_argcheck(const Value &sys, const Value &tArg)
+{
+    (void)tArg;
+    response_sys_argcheck(sys, "step");
+}
+
+void impulse_response_argcheck(const Value &sys, const Value &tArg)
+{
+    (void)tArg;
+    response_sys_argcheck(sys, "impulse");
+}
+
+void lsim_argcheck(const Value &sys, const Value &uIn, const Value &tIn,
+                   const Value &x0In)
+{
+    (void)sys;
+    internal::requireNumericInput(uIn, "lsim", "u", 2);
+    const ValueType tt = tIn.type();
+    if (tt != ValueType::DOUBLE && tt != ValueType::SINGLE)
+        throw Error(std::string("lsim: input 3 (t) must be a real ")
+                    + "double or single time vector (got a "
+                    + internal::shapeOf(tIn) + " " + mtypeName(tt)
+                    + " array).",
+                    0, 0, "lsim", "", "numkit:lsim:t");
+    internal::requireNumericInput(x0In, "lsim", "x0", 4);
+    if (tIn.numel() < 2)
+        throw Error("lsim: t must have at least 2 samples",
+                    0, 0, "lsim", "", "numkit:lsim:t");
+}
+
+void initial_response_argcheck(const Value &sys, const Value &x0In,
+                               const Value &tArg)
+{
+    (void)x0In;
+    (void)tArg;
+    response_sys_argcheck(sys, "initial");
+}
+
 } // anonymous
 
 std::pair<Value, Value>
 step_response(const Value &sys, const Value &tArg,
               Value *xOut, std::pmr::memory_resource *mr)
 {
+    step_response_argcheck(sys, tArg);
     SS s = toSSiso(sys, "step", mr);
     Vec t = readTimeArg(sys, tArg, mr);
     Vec u(t.size(), 1.0);   // unit step
@@ -313,6 +367,7 @@ std::pair<Value, Value>
 impulse_response(const Value &sys, const Value &tArg,
                  Value *xOut, std::pmr::memory_resource *mr)
 {
+    impulse_response_argcheck(sys, tArg);
     SS s = toSSiso(sys, "impulse", mr);
     Vec t = readTimeArg(sys, tArg, mr);
     Vec x0(s.n, 0.0);
@@ -336,29 +391,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
            const Value &x0In,
            Value *xOut, std::pmr::memory_resource *mr)
 {
-    // lsim argcheck (argcheck separation). Classes probed R2025b:
-    // u coerces every NUMERIC class (int8 u accepted) but char/cell
-    // are rejected (Control:analysis:rfinputs02/18), and complex u
-    // yields a complex response; t must be a real
-    // double/single vector (int8/complex t rejected — rfinputs14); x0
-    // coerces numerics, complex x0 gives a complex response,
-    // and a non-empty x0 with the wrong length is a hard error
-    // (reference: timeresp1).
-    internal::requireNumericInput(uIn, "lsim", "u", 2);
-    {
-        const ValueType tt = tIn.type();
-        if (tt != ValueType::DOUBLE && tt != ValueType::SINGLE)
-            throw Error(std::string("lsim: input 3 (t) must be a real ")
-                        + "double or single time vector (got a "
-                        + internal::shapeOf(tIn) + " " + mtypeName(tt)
-                        + " array).",
-                        0, 0, "lsim", "", "numkit:lsim:t");
-    }
-    internal::requireNumericInput(x0In, "lsim", "x0", 4);
-
-    if (tIn.numel() < 2)
-        throw Error("lsim: t must have at least 2 samples",
-                    0, 0, "lsim", "", "numkit:lsim:t");
+    lsim_argcheck(sys, uIn, tIn, x0In);
     Vec t(tIn.numel());
     for (size_t i = 0; i < tIn.numel(); ++i) t[i] = tIn.elemAsDouble(i);
 
@@ -546,6 +579,7 @@ std::pair<Value, Value>
 initial_response(const Value &sys, const Value &x0In, const Value &tArg,
                  Value *xOut, std::pmr::memory_resource *mr)
 {
+    initial_response_argcheck(sys, x0In, tArg);
     SS s = toSSiso(sys, "initial", mr);
     Vec t = readTimeArg(sys, tArg, mr);
     Vec u(t.size(), 0.0);            // zero input
