@@ -491,9 +491,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     if (uIn.numel() != t.size())
         throw Error("lsim: u and t must be the same length",
                     0, 0, "lsim", "", "numkit:lsim:size");
-    const bool x0IsScalarZero = (x0In.numel() == 1 && !x0In.isComplex()
-                                 && x0In.elemAsDouble(0) == 0.0);
-    if (x0In.numel() != 0 && x0In.numel() != s.n && !x0IsScalarZero)
+    if (x0In.numel() != 0 && x0In.numel() != s.n)
         throw Error("lsim: input 4 (x0) must have one entry per state "
                     "(got " + std::to_string(x0In.numel())
                     + " entries for " + std::to_string(s.n) + " states).",
