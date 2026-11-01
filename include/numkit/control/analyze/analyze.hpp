@@ -1,6 +1,6 @@
 /// @file analyze.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/analyze/analyze.hpp
+// toolboxes/control/include/numkit/control/analyze/analyze.hpp
 //
 // Steady-state and time-domain quality metrics on top of the
 // existing tf/zpk/ss + step/bode primitives.

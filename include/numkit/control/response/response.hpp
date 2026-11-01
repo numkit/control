@@ -1,6 +1,6 @@
 /// @file response.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/response/response.hpp
+// toolboxes/control/include/numkit/control/response/response.hpp
 //
 // Time-domain responses for continuous and discrete LTI systems.
 // Returns column-vector outputs y(t) and the matching time grid t.

@@ -1,6 +1,6 @@
 /// @file lti.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/lti/lti.hpp
+// toolboxes/control/include/numkit/control/lti/lti.hpp
 //
 // LTI (Linear Time-Invariant) system constructors. Each returns a
 // nk struct value with a `kind` field tag ('tf', 'zpk', or 'ss')

@@ -1,6 +1,6 @@
 /// @file connect.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/connect/connect.hpp
+// toolboxes/control/include/numkit/control/connect/connect.hpp
 //
 // LTI block-diagram interconnections. All three return a `tf`
 // struct regardless of input forms — converting tf/zpk/ss inputs

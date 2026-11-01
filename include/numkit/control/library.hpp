@@ -1,6 +1,6 @@
 /// @file library.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/library.hpp
+// toolboxes/control/include/numkit/control/library.hpp
 //
 // Control-system builtins — function-form only. LTI systems are plain
 // nk struct values with a `kind` tag ('tf' / 'zpk' / 'ss'),

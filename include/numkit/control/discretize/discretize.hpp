@@ -1,6 +1,6 @@
 /// @file discretize.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/discretize/discretize.hpp
+// toolboxes/control/include/numkit/control/discretize/discretize.hpp
 //
 // Sample-time conversion: c2d (continuous → discrete) and d2c
 // (discrete → continuous). Returns the same kind of LTI struct as

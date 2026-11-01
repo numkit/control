@@ -1,6 +1,6 @@
 /// @file freq.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/freq/freq.hpp
+// toolboxes/control/include/numkit/control/freq/freq.hpp
 //
 // Frequency-domain responses for tf / zpk / ss systems.
 // Implementation reduces every input form to a (num, den) coefficient

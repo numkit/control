@@ -1,6 +1,6 @@
 /// @file place.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/state/place.hpp
+// toolboxes/control/include/numkit/control/state/place.hpp
 //
 // Pole-placement state-feedback design via Ackermann's formula.
 // SISO only — the multi-input `place` variant uses Kautsky–Nichols

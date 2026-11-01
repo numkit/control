@@ -1,6 +1,6 @@
 /// @file riccati.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/riccati/riccati.hpp
+// toolboxes/control/include/numkit/control/riccati/riccati.hpp
 //
 // Algebraic Riccati equation solvers.
 //

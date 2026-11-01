@@ -1,6 +1,6 @@
 /// @file conversion.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/conversion/conversion.hpp
+// toolboxes/control/include/numkit/control/conversion/conversion.hpp
 //
 // Inter-form converters between tf / zpk / ss representations. These
 // are the matrix forms that operate directly on the coefficient

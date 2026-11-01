@@ -1,4 +1,4 @@
-// toolboxes/control/include/nk/control/props/props.hpp
+// toolboxes/control/include/numkit/control/props/props.hpp
 //
 // Predicates and analytic properties of an LTI struct value (tf, zpk,
 // or ss as built by toolboxes/control/lti).

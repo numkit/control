@@ -1,6 +1,6 @@
 /// @file numerics.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/internal/numerics.hpp
+// toolboxes/control/include/numkit/control/internal/numerics.hpp
 //
 // Shared numerical kernels for toolboxes/control. All matrices are stored
 // column-major in flat std::vector<double>.

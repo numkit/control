@@ -1,6 +1,6 @@
 /// @file type_gates.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/internal/type_gates.hpp
+// toolboxes/control/include/numkit/control/internal/type_gates.hpp
 //
 // Shared <fn>_argcheck cores for toolboxes/control (argcheck
 // separation, dev-docs/todo/argcheck_separation.md — boundary rule:

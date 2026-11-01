@@ -1,6 +1,6 @@
 /// @file state.hpp
 /// @ingroup group_control
-// toolboxes/control/include/nk/control/state/state.hpp
+// toolboxes/control/include/numkit/control/state/state.hpp
 //
 // State-space structural primitives: controllability and
 // observability matrices, plus rank-based "is" predicates.
