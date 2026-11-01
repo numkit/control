@@ -8,7 +8,7 @@
 // is registered qualified-only (bare belongs to signal), so the guard
 // imports it first.
 
-#include <numkit/bundle/standard_engine.hpp>
+#include <numkit/core/standard_engine.hpp>
 #include <numkit/core/engine.hpp>
 #include <numkit/value/error.hpp>
 #include <gtest/gtest.h>

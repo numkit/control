@@ -5,7 +5,7 @@
 // MATLAB R2025b. The crossovers are computed exactly (G(jω) scan +
 // bisection), so margins match MATLAB to ~6 digits.
 
-#include <numkit/bundle/standard_engine.hpp>
+#include <numkit/core/standard_engine.hpp>
 #include <numkit/core/engine.hpp>
 #include <gtest/gtest.h>
 

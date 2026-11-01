@@ -4,7 +4,7 @@
 // bugs/control/minreal.md. Reference values from MATLAB R2025b.
 // tfdata('v') pads num to den length (MATLAB convention).
 
-#include <numkit/bundle/standard_engine.hpp>
+#include <numkit/core/standard_engine.hpp>
 #include <numkit/core/engine.hpp>
 #include <gtest/gtest.h>
 

@@ -5,7 +5,7 @@
 // Output order matches MATLAB: [X, L, G] (solution, closed-loop
 // eigenvalues, gain). One TEST_F per documented branch/output.
 
-#include <numkit/bundle/standard_engine.hpp>
+#include <numkit/core/standard_engine.hpp>
 #include <numkit/core/engine.hpp>
 #include <gtest/gtest.h>
 

@@ -10,7 +10,7 @@
 // answers garbage sys-args with clean rejections where nk used to
 // crash raw (cell/string) or silently drop imaginary parts.
 
-#include <numkit/bundle/standard_engine.hpp>
+#include <numkit/core/standard_engine.hpp>
 #include <numkit/core/engine.hpp>
 #include <gtest/gtest.h>
 
