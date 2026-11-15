@@ -6,6 +6,9 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/ref.h>
 #include <numkit/control/analyze/analyze.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -19,7 +22,7 @@ namespace numkit::control {
 namespace detail {
 
 namespace {
-Value defaultDemoSys(std::pmr::memory_resource *mr) {
+Value defaultDemoSys(keel::Allocator *mr) {
     Value num = Value::scalar(1.0, mr);
     Value den = Value::matrix(1, 3, ValueType::DOUBLE, mr);
     den.doubleDataMut()[0] = 1.0;
@@ -29,16 +32,16 @@ Value defaultDemoSys(std::pmr::memory_resource *mr) {
 }
 } // anonymous
 
-void dcgain_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void dcgain_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, 4, "dcgain");
-    o[0] = dcgain(a[0], c.engine->resource());
+    o[0] = dcgain(a[0], c.engine->allocator());
 }
 
-void margin_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void margin_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 4, "margin");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value sys = a.empty() ? defaultDemoSys(mr) : a[0];
     auto m = margin(sys, mr);
     if (o.size() >= 1) o[0] = std::move(m.Gm);
@@ -47,22 +50,22 @@ void margin_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
     if (o.size() >= 4) o[3] = std::move(m.Wcp);
 }
 
-void stepinfo_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void stepinfo_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, "stepinfo");  // no max: name-value tail in the reference (no count wall to 12 args)
-    o[0] = stepinfo(a[0], c.engine->resource());
+    o[0] = stepinfo(a[0], c.engine->allocator());
 }
 
-void hinfnorm_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void hinfnorm_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, 3, "hinfnorm");
-    o[0] = hinfnorm(a[0], c.engine->resource());
+    o[0] = hinfnorm(a[0], c.engine->allocator());
 }
 
-void allmargin_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void allmargin_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, 6, "allmargin");
-    o[0] = allmargin(a[0], c.engine->resource());
+    o[0] = allmargin(a[0], c.engine->allocator());
 }
 
 } // namespace detail

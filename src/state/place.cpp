@@ -11,6 +11,9 @@
 // the n×n linear system  ctrb(A, B)ᵀ · Kᵀ = (e_nᵀ · φ(A))ᵀ via the
 // partial-pivot LU kernel.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
 #include <numkit/control/state/place.hpp>
 #include <numkit/control/state/state.hpp>
 #include <numkit/control/internal/numerics.hpp>
@@ -39,28 +42,28 @@ using CVec = internal::CVec;
 using internal::solveInPlace;
 using internal::matmulSq;
 
-Mat readMat(const Value &v, size_t r, size_t c) {
+Mat readMat(const Value &v, keel::usize r, keel::usize c) {
     Mat M(r * c, 0.0);
-    for (size_t i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
     return M;
 }
 
-CMat readCMat(const Value &v, size_t r, size_t c) {
-    CMat M(r * c, std::complex<double>(0.0, 0.0));
+CMat readCMat(const Value &v, keel::usize r, keel::usize c) {
+    CMat M(r * c, keel::c64(0.0, 0.0));
     if (v.isComplex()) {
-        const std::complex<double> *cd = v.complexData();
-        for (size_t i = 0; i < r * c; ++i) M[i] = cd[i];
+        const keel::c64 *cd = v.complexData();
+        for (keel::usize i = 0; i < r * c; ++i) M[i] = cd[i];
     } else {
-        for (size_t i = 0; i < r * c; ++i) M[i] = std::complex<double>(v.elemAsDouble(i), 0.0);
+        for (keel::usize i = 0; i < r * c; ++i) M[i] = keel::c64(v.elemAsDouble(i), 0.0);
     }
     return M;
 }
 
-Value rowFromVec(const Vec &v, bool asSingle, std::pmr::memory_resource *mr) {
+Value rowFromVec(const Vec &v, bool asSingle, keel::Allocator *mr) {
     if (asSingle) {
         Value r = Value::matrix(1, v.size(), ValueType::SINGLE, mr);
         float *fd = r.singleDataMut();
-        for (size_t i = 0; i < v.size(); ++i) fd[i] = static_cast<float>(v[i]);
+        for (keel::usize i = 0; i < v.size(); ++i) fd[i] = static_cast<float>(v[i]);
         return r;
     }
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
@@ -68,7 +71,7 @@ Value rowFromVec(const Vec &v, bool asSingle, std::pmr::memory_resource *mr) {
     return r;
 }
 
-Value crowFromVec(const CVec &v, std::pmr::memory_resource *mr) {
+Value crowFromVec(const CVec &v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::COMPLEX, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.complexDataMut());
     return r;
@@ -80,13 +83,13 @@ Value crowFromVec(const CVec &v, std::pmr::memory_resource *mr) {
 // Implemented as Horner:
 //   φ(A) = ((( c[0]·I · A + c[1]·I ) · A + c[2]·I ) · A + … ) + c[n]·I
 template <typename T>
-std::vector<T> phiOfA(const std::vector<T> &A, size_t n, const Vec &c) {
+std::vector<T> phiOfA(const std::vector<T> &A, keel::usize n, const Vec &c) {
     std::vector<T> H(n * n, T(0));
-    for (size_t i = 0; i < n; ++i) H[i * n + i] = T(c[0]);
+    for (keel::usize i = 0; i < n; ++i) H[i * n + i] = T(c[0]);
 
-    for (size_t k = 1; k <= n; ++k) {
+    for (keel::usize k = 1; k <= n; ++k) {
         H = matmulSq(H, A, n);
-        for (size_t i = 0; i < n; ++i) H[i * n + i] += T(c[k]);
+        for (keel::usize i = 0; i < n; ++i) H[i * n + i] += T(c[k]);
     }
     return H;
 }
@@ -107,7 +110,7 @@ void acker_argcheck(const Value &Av, const Value &Bv, const Value &pv)
     internal::requireNumericInput(pv, "acker", "p", 3);
     internal::requireNonIntegerMatrix(pv, "acker", "p", 3);
 
-    const size_t n = Av.dims().rows();
+    const keel::usize n = Av.dims().rows();
     if (Av.dims().cols() != n)
         throw Error("acker: A must be square",
                     0, 0, "acker", "", "numkit:acker:A");
@@ -126,10 +129,10 @@ void place_argcheck(const Value &A, const Value &B, const Value &p)
 
 } // anonymous
 
-Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_resource *mr)
+Value acker(const Value &Av, const Value &Bv, const Value &pv, keel::Allocator *mr)
 {
     acker_argcheck(Av, Bv, pv);
-    const size_t n = Av.dims().rows();
+    const keel::usize n = Av.dims().rows();
 
     const bool wantSingle = (Av.type() == ValueType::SINGLE ||
                              Bv.type() == ValueType::SINGLE ||
@@ -144,7 +147,7 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
     Value pC = internal::coerceToDoubleMatrix(pv, mr);
     Value coeffs = numkit::builtin::poly(pC, mr);
     Vec c(coeffs.numel());
-    for (size_t i = 0; i < coeffs.numel(); ++i) c[i] = coeffs.elemAsDouble(i);
+    for (keel::usize i = 0; i < coeffs.numel(); ++i) c[i] = coeffs.elemAsDouble(i);
     if (c.size() != n + 1)
         throw Error("acker: poly(p) returned unexpected length",
                     0, 0, "acker", "", "numkit:acker:poly");
@@ -155,23 +158,23 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
         Value CoV = ctrb_AB(Av, Bv, mr);
         CMat Co = readCMat(CoV, n, n);
 
-        CMat CoT(n * n, std::complex<double>(0.0, 0.0));
-        for (size_t j = 0; j < n; ++j)
-            for (size_t i = 0; i < n; ++i)
+        CMat CoT(n * n, keel::c64(0.0, 0.0));
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
                 CoT[j * n + i] = Co[i * n + j];
 
-        CMat eN(n, std::complex<double>(0.0, 0.0));
-        eN[n - 1] = std::complex<double>(1.0, 0.0);
+        CMat eN(n, keel::c64(0.0, 0.0));
+        eN[n - 1] = keel::c64(1.0, 0.0);
 
         if (!solveInPlace(CoT, eN, n, 1))
             throw Error("acker: controllability matrix is singular "
                         "(system is uncontrollable)",
                         0, 0, "acker", "", "numkit:acker:singular");
 
-        CVec K(n, std::complex<double>(0.0, 0.0));
-        for (size_t k = 0; k < n; ++k) {
-            std::complex<double> s(0.0, 0.0);
-            for (size_t j = 0; j < n; ++j)
+        CVec K(n, keel::c64(0.0, 0.0));
+        for (keel::usize k = 0; k < n; ++k) {
+            keel::c64 s(0.0, 0.0);
+            for (keel::usize j = 0; j < n; ++j)
                 s += eN[j] * phi[k * n + j];
             K[k] = s;
         }
@@ -192,8 +195,8 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
     //   (1) v = e_nᵀ · Co⁻¹     ⟺  Coᵀ · vᵀ = e_n
     //   (2) K = v · φ(A)         (row × matrix → row)
     Mat CoT(n * n, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             CoT[j * n + i] = Co[i * n + j];
 
     // RHS column = e_n  (last basis vector — entry n-1 is 1).
@@ -208,16 +211,16 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, std::pmr::memory_
 
     // K[k] = sum_j v[j] · phi[j, k].   (column-major phi: phi[j,k] = phi[k*n + j])
     Vec K(n, 0.0);
-    for (size_t k = 0; k < n; ++k) {
+    for (keel::usize k = 0; k < n; ++k) {
         double s = 0.0;
-        for (size_t j = 0; j < n; ++j)
+        for (keel::usize j = 0; j < n; ++j)
             s += eN[j] * phi[k * n + j];
         K[k] = s;
     }
     return rowFromVec(K, wantSingle, mr);
 }
 
-Value place(const Value &A, const Value &B, const Value &p, std::pmr::memory_resource *mr)
+Value place(const Value &A, const Value &B, const Value &p, keel::Allocator *mr)
 {
     place_argcheck(A, B, p);
     return acker(A, B, p, mr);

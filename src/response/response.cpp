@@ -16,6 +16,10 @@
 // when the user passes no time argument; otherwise t is interpreted
 // as either tFinal (scalar) or the explicit grid (vector).
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
+#include <keel/math.h>
 #include <numkit/control/response/response.hpp>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>
@@ -33,7 +37,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <utility>
 #include <vector>
 
@@ -46,13 +49,13 @@ using Vec = internal::Vec;
 using internal::expm;
 using internal::solveInPlace;
 
-Mat zeros(size_t r, size_t c) { return Mat(r * c, 0.0); }
-Mat eye(size_t n) { Mat I(n * n, 0.0); for (size_t i = 0; i < n; ++i) I[i * n + i] = 1.0; return I; }
+Mat zeros(keel::usize r, keel::usize c) { return Mat(r * c, 0.0); }
+Mat eye(keel::usize n) { Mat I(n * n, 0.0); for (keel::usize i = 0; i < n; ++i) I[i * n + i] = 1.0; return I; }
 
 
 // Bring an LTI sys (any kind) into ss-form coefficient buffers.
 struct SS {
-    size_t n;          // state dim
+    keel::usize n;          // state dim
     Mat A;             // n×n
     Vec B;             // n
     Vec C;             // n
@@ -60,7 +63,7 @@ struct SS {
     double Ts;
 };
 
-SS toSSiso(const Value &sys, const char *fn, std::pmr::memory_resource *mr) {
+SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
     Value Av, Bv, Cv, Dv;
     double Ts = 0.0;
     if (sys.isStruct() && sys.hasField("kind")) {
@@ -93,60 +96,60 @@ SS toSSiso(const Value &sys, const char *fn, std::pmr::memory_resource *mr) {
     s.n = Av.dims().rows();
     s.Ts = Ts;
     s.A.resize(s.n * s.n);
-    for (size_t i = 0; i < s.n * s.n; ++i) s.A[i] = Av.elemAsDouble(i);
+    for (keel::usize i = 0; i < s.n * s.n; ++i) s.A[i] = Av.elemAsDouble(i);
     s.B.resize(s.n);
-    for (size_t i = 0; i < s.n; ++i) s.B[i] = Bv.elemAsDouble(i);
+    for (keel::usize i = 0; i < s.n; ++i) s.B[i] = Bv.elemAsDouble(i);
     s.C.resize(s.n);
     // C is 1×n — column-major elem 0..n-1 are exactly the row.
-    for (size_t i = 0; i < s.n; ++i) s.C[i] = Cv.elemAsDouble(i * 1 + 0);
+    for (keel::usize i = 0; i < s.n; ++i) s.C[i] = Cv.elemAsDouble(i * 1 + 0);
     s.D = (Dv.numel() == 0) ? 0.0 : Dv.toScalar();
     return s;
 }
 
 // Van Loan ZOH: M = [[A,B],[0,0]], expm(M*dt) → top-left A_d, top-right B_d.
-void zohDiscretise(const Mat &A, const Vec &B, size_t n, double dt,
+void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, double dt,
                    Mat &Ad, Vec &Bd)
 {
-    const size_t m = n + 1;
+    const keel::usize m = n + 1;
     Mat M = zeros(m, m);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             M[j * m + i] = A[j * n + i] * dt;
-    for (size_t i = 0; i < n; ++i)
+    for (keel::usize i = 0; i < n; ++i)
         M[n * m + i] = B[i] * dt;
     Mat E = expm(M, m);
     Ad.assign(n * n, 0.0);
     Bd.assign(n, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             Ad[j * n + i] = E[j * m + i];
-    for (size_t i = 0; i < n; ++i) Bd[i] = E[n * m + i];
+    for (keel::usize i = 0; i < n; ++i) Bd[i] = E[n * m + i];
 }
 
 // Decide a default time grid for continuous models: ~8 time
 // constants of the slowest stable mode, ~50 samples per slowest pole.
 struct Grid { Vec t; double dt; };
 
-Grid pickGrid(const Value &sys, std::pmr::memory_resource *mr) {
+Grid pickGrid(const Value &sys, keel::Allocator *mr) {
     // Find pole with smallest |real|, use that to set Tfinal; fastest
     // pole sets dt.
     Value pV = pole(sys, mr);
-    const size_t np = pV.numel();
+    const keel::usize np = pV.numel();
     double minAbsReal = 1.0;
     double maxAbsReal = 1.0;
     if (np > 0) {
-        std::vector<std::complex<double>> ps(np);
+        std::vector<keel::c64> ps(np);
         if (pV.type() == ValueType::COMPLEX) {
-            const std::complex<double> *src = pV.complexData();
-            for (size_t i = 0; i < np; ++i) ps[i] = src[i];
+            const keel::c64 *src = pV.complexData();
+            for (keel::usize i = 0; i < np; ++i) ps[i] = src[i];
         } else {
-            for (size_t i = 0; i < np; ++i)
-                ps[i] = std::complex<double>(pV.elemAsDouble(i), 0.0);
+            for (keel::usize i = 0; i < np; ++i)
+                ps[i] = keel::c64(pV.elemAsDouble(i), 0.0);
         }
         bool anyStable = false;
         for (auto &p : ps) {
-            const double ar = std::abs(p.real());
-            const double mag = std::abs(p);
+            const double ar = keel::abs(p.real());
+            const double mag = keel::abs(p);
             if (p.real() < 0.0 && mag > 0.0) {
                 if (!anyStable || ar < minAbsReal) minAbsReal = ar;
                 anyStable = true;
@@ -161,16 +164,16 @@ Grid pickGrid(const Value &sys, std::pmr::memory_resource *mr) {
     // get more samples via the maxAbsReal-based dt cap.
     const double Tfinal = 5.80251 / minAbsReal;
     const double dt = std::min(Tfinal / 126.0, 1.0 / (4.0 * maxAbsReal));
-    size_t N = static_cast<size_t>(std::ceil(Tfinal / dt)) + 1;
+    keel::usize N = static_cast<keel::usize>(std::ceil(Tfinal / dt)) + 1;
     if (N < 60) N = 60;
     if (N > 1000) N = 1000;
     const double dtFinal = Tfinal / static_cast<double>(N - 1);
     Vec t(N);
-    for (size_t i = 0; i < N; ++i) t[i] = i * dtFinal;
+    for (keel::usize i = 0; i < N; ++i) t[i] = i * dtFinal;
     return {t, dtFinal};
 }
 
-Vec readTimeArg(const Value &sys, const Value &tArg, std::pmr::memory_resource *mr)
+Vec readTimeArg(const Value &sys, const Value &tArg, keel::Allocator *mr)
 {
     if (tArg.numel() == 0) {
         return pickGrid(sys, mr).t;
@@ -180,17 +183,17 @@ Vec readTimeArg(const Value &sys, const Value &tArg, std::pmr::memory_resource *
         const Grid g = pickGrid(sys, mr);
         // Re-tile at the same dt up to user's Tfinal.
         const double dt = g.dt;
-        const size_t N = static_cast<size_t>(std::ceil(Tfinal / dt)) + 1;
+        const keel::usize N = static_cast<keel::usize>(std::ceil(Tfinal / dt)) + 1;
         Vec t(N);
-        for (size_t i = 0; i < N; ++i) t[i] = i * dt;
+        for (keel::usize i = 0; i < N; ++i) t[i] = i * dt;
         return t;
     }
     Vec t(tArg.numel());
-    for (size_t i = 0; i < tArg.numel(); ++i) t[i] = tArg.elemAsDouble(i);
+    for (keel::usize i = 0; i < tArg.numel(); ++i) t[i] = tArg.elemAsDouble(i);
     return t;
 }
 
-Value rowFromVec(const Vec &v, std::pmr::memory_resource *mr) {
+Value rowFromVec(const Vec &v, keel::Allocator *mr) {
     Value r = Value::matrix(v.size(), 1, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
@@ -198,7 +201,7 @@ Value rowFromVec(const Vec &v, std::pmr::memory_resource *mr) {
 
 // State trajectory → MATLAB-style N×n matrix (rows = time, cols = states).
 // xTraj is already column-major time×state, so it copies straight in.
-Value matFromTraj(const Vec &xTraj, size_t N, size_t n, std::pmr::memory_resource *mr) {
+Value matFromTraj(const Vec &xTraj, keel::usize N, keel::usize n, keel::Allocator *mr) {
     Value m = Value::matrix(N, n, ValueType::DOUBLE, mr);
     if (!xTraj.empty()) std::copy(xTraj.begin(), xTraj.end(), m.doubleDataMut());
     return m;
@@ -211,28 +214,28 @@ Value matFromTraj(const Vec &xTraj, size_t N, size_t n, std::pmr::memory_resourc
 Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
              Vec *xTraj = nullptr)
 {
-    const size_t N = t.size();
-    const size_t n = sys.n;
+    const keel::usize N = t.size();
+    const keel::usize n = sys.n;
     Vec x = x0;
     if (x.size() != n) x.assign(n, 0.0);
     Vec y(N, 0.0);
     if (xTraj) xTraj->assign(N * n, 0.0);
-    auto record = [&](size_t k) {
-        if (xTraj) for (size_t i = 0; i < n; ++i) (*xTraj)[i * N + k] = x[i];
+    auto record = [&](keel::usize k) {
+        if (xTraj) for (keel::usize i = 0; i < n; ++i) (*xTraj)[i * N + k] = x[i];
     };
 
     if (sys.Ts > 0.0) {
         // Already discrete.
-        for (size_t k = 0; k < N; ++k) {
+        for (keel::usize k = 0; k < N; ++k) {
             record(k);
             double yk = sys.D * u[k];
-            for (size_t i = 0; i < n; ++i) yk += sys.C[i] * x[i];
+            for (keel::usize i = 0; i < n; ++i) yk += sys.C[i] * x[i];
             y[k] = yk;
             // x_{k+1} = A·x + B·u
             Vec xn(n, 0.0);
-            for (size_t i = 0; i < n; ++i) {
+            for (keel::usize i = 0; i < n; ++i) {
                 double s = sys.B[i] * u[k];
-                for (size_t j = 0; j < n; ++j)
+                for (keel::usize j = 0; j < n; ++j)
                     s += sys.A[j * n + i] * x[j];
                 xn[i] = s;
             }
@@ -246,23 +249,23 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
     // robust).
     bool uniform = true;
     double dt = (N >= 2) ? (t[1] - t[0]) : 0.0;
-    for (size_t k = 2; k < N && uniform; ++k)
-        if (std::abs((t[k] - t[k - 1]) - dt) > 1e-12 * std::max(1.0, std::abs(dt)))
+    for (keel::usize k = 2; k < N && uniform; ++k)
+        if (keel::abs((t[k] - t[k - 1]) - dt) > 1e-12 * std::max(1.0, keel::abs(dt)))
             uniform = false;
 
     if (uniform && dt > 0.0) {
         Mat Ad; Vec Bd;
         zohDiscretise(sys.A, sys.B, n, dt, Ad, Bd);
-        for (size_t k = 0; k < N; ++k) {
+        for (keel::usize k = 0; k < N; ++k) {
             record(k);
             double yk = sys.D * u[k];
-            for (size_t i = 0; i < n; ++i) yk += sys.C[i] * x[i];
+            for (keel::usize i = 0; i < n; ++i) yk += sys.C[i] * x[i];
             y[k] = yk;
             if (k + 1 < N) {
                 Vec xn(n, 0.0);
-                for (size_t i = 0; i < n; ++i) {
+                for (keel::usize i = 0; i < n; ++i) {
                     double s = Bd[i] * u[k];
-                    for (size_t j = 0; j < n; ++j)
+                    for (keel::usize j = 0; j < n; ++j)
                         s += Ad[j * n + i] * x[j];
                     xn[i] = s;
                 }
@@ -271,19 +274,19 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
         }
     } else {
         // Non-uniform grid: per-step expm.
-        for (size_t k = 0; k < N; ++k) {
+        for (keel::usize k = 0; k < N; ++k) {
             record(k);
             double yk = sys.D * u[k];
-            for (size_t i = 0; i < n; ++i) yk += sys.C[i] * x[i];
+            for (keel::usize i = 0; i < n; ++i) yk += sys.C[i] * x[i];
             y[k] = yk;
             if (k + 1 < N) {
                 const double dtk = t[k + 1] - t[k];
                 Mat Ad; Vec Bd;
                 zohDiscretise(sys.A, sys.B, n, dtk, Ad, Bd);
                 Vec xn(n, 0.0);
-                for (size_t i = 0; i < n; ++i) {
+                for (keel::usize i = 0; i < n; ++i) {
                     double s = Bd[i] * u[k];
-                    for (size_t j = 0; j < n; ++j)
+                    for (keel::usize j = 0; j < n; ++j)
                         s += Ad[j * n + i] * x[j];
                     xn[i] = s;
                 }
@@ -350,7 +353,7 @@ void initial_response_argcheck(const Value &sys, const Value &x0In,
 
 std::pair<Value, Value>
 step_response(const Value &sys, const Value &tArg,
-              Value *xOut, std::pmr::memory_resource *mr)
+              Value *xOut, keel::Allocator *mr)
 {
     step_response_argcheck(sys, tArg);
     SS s = toSSiso(sys, "step", mr);
@@ -365,7 +368,7 @@ step_response(const Value &sys, const Value &tArg,
 
 std::pair<Value, Value>
 impulse_response(const Value &sys, const Value &tArg,
-                 Value *xOut, std::pmr::memory_resource *mr)
+                 Value *xOut, keel::Allocator *mr)
 {
     impulse_response_argcheck(sys, tArg);
     SS s = toSSiso(sys, "impulse", mr);
@@ -389,11 +392,11 @@ impulse_response(const Value &sys, const Value &tArg,
 
 Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
            const Value &x0In,
-           Value *xOut, std::pmr::memory_resource *mr)
+           Value *xOut, keel::Allocator *mr)
 {
     lsim_argcheck(sys, uIn, tIn, x0In);
     Vec t(tIn.numel());
-    for (size_t i = 0; i < tIn.numel(); ++i) t[i] = tIn.elemAsDouble(i);
+    for (keel::usize i = 0; i < tIn.numel(); ++i) t[i] = tIn.elemAsDouble(i);
 
     // MIMO state-space path when B has multiple inputs or C has multiple outputs.
     if (sys.isStruct() && sys.hasField("kind") && sys.field("kind").toString() == "ss") {
@@ -401,11 +404,11 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
         const Value &Bv = sys.field("B");
         const Value &Cv = sys.field("C");
         const Value &Dv = sys.field("D");
-        const size_t n = Av.dims().rows();
-        const size_t nu = Bv.dims().cols();
-        const size_t ny = Cv.dims().rows();
+        const keel::usize n = Av.dims().rows();
+        const keel::usize nu = Bv.dims().cols();
+        const keel::usize ny = Cv.dims().rows();
         if ((nu > 1 || ny > 1) && !uIn.isComplex() && !x0In.isComplex()) {
-            const size_t N = t.size();
+            const keel::usize N = t.size();
             bool uTransposed = false;
             if (uIn.dims().rows() == N && uIn.dims().cols() == nu) {
                 uTransposed = false;
@@ -421,13 +424,13 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                             + " entries for " + std::to_string(n) + " states).",
                             0, 0, "lsim", "", "numkit:lsim:x0");
 
-            auto uAt = [&](size_t k, size_t j) -> double {
+            auto uAt = [&](keel::usize k, keel::usize j) -> double {
                 return uTransposed ? uIn.elemAsDouble(k * nu + j)
                                    : uIn.elemAsDouble(j * N + k);
             };
             Vec x(n, 0.0);
             if (x0In.numel() == n) {
-                for (size_t i = 0; i < n; ++i) x[i] = x0In.elemAsDouble(i);
+                for (keel::usize i = 0; i < n; ++i) x[i] = x0In.elemAsDouble(i);
             }
             Value yOut = Value::matrix(N, ny, ValueType::DOUBLE, mr);
             double *yd = yOut.doubleDataMut();
@@ -436,25 +439,25 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
 
             const double Ts = sys.field("Ts").toScalar();
             auto fohStep = [&](double dt, Mat &Ad, Mat &B0, Mat &B1) {
-                const size_t m = n + 2 * nu;
+                const keel::usize m = n + 2 * nu;
                 Mat M = zeros(m, m);
-                for (size_t j = 0; j < n; ++j)
-                    for (size_t i = 0; i < n; ++i)
+                for (keel::usize j = 0; j < n; ++j)
+                    for (keel::usize i = 0; i < n; ++i)
                         M[j * m + i] = Av.elemAsDouble(j * n + i) * dt;
-                for (size_t j = 0; j < nu; ++j)
-                    for (size_t i = 0; i < n; ++i)
+                for (keel::usize j = 0; j < nu; ++j)
+                    for (keel::usize i = 0; i < n; ++i)
                         M[(n + j) * m + i] = Bv.elemAsDouble(j * n + i) * dt;
-                for (size_t j = 0; j < nu; ++j)
+                for (keel::usize j = 0; j < nu; ++j)
                     M[(n + nu + j) * m + (n + j)] = 1.0;
                 Mat E = expm(M, m);
                 Ad.assign(n * n, 0.0);
                 B0.assign(n * nu, 0.0);
                 B1.assign(n * nu, 0.0);
-                for (size_t j = 0; j < n; ++j)
-                    for (size_t i = 0; i < n; ++i)
+                for (keel::usize j = 0; j < n; ++j)
+                    for (keel::usize i = 0; i < n; ++i)
                         Ad[j * n + i] = E[j * m + i];
-                for (size_t j = 0; j < nu; ++j) {
-                    for (size_t i = 0; i < n; ++i) {
+                for (keel::usize j = 0; j < nu; ++j) {
+                    for (keel::usize i = 0; i < n; ++i) {
                         const double phi1 = E[(n + j) * m + i];
                         const double phi2 = E[(n + nu + j) * m + i];
                         B0[j * n + i] = phi1 - phi2;
@@ -465,27 +468,27 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
 
             bool uniform = true;
             double dt = (N >= 2) ? (t[1] - t[0]) : 0.0;
-            for (size_t k = 2; k < N && uniform; ++k)
-                if (std::abs((t[k] - t[k - 1]) - dt) > 1e-12 * std::max(1.0, std::abs(dt)))
+            for (keel::usize k = 2; k < N && uniform; ++k)
+                if (keel::abs((t[k] - t[k - 1]) - dt) > 1e-12 * std::max(1.0, keel::abs(dt)))
                     uniform = false;
 
             Mat Ad, B0, B1;
             if (Ts <= 0.0 && uniform && dt > 0.0)
                 fohStep(dt, Ad, B0, B1);
 
-            for (size_t k = 0; k < N; ++k) {
+            for (keel::usize k = 0; k < N; ++k) {
                 if (xd) {
-                    for (size_t i = 0; i < n; ++i) xd[i * N + k] = x[i];
+                    for (keel::usize i = 0; i < n; ++i) xd[i * N + k] = x[i];
                 }
-                for (size_t p = 0; p < ny; ++p) {
+                for (keel::usize p = 0; p < ny; ++p) {
                     double ypk = 0.0;
-                    for (size_t i = 0; i < n; ++i)
+                    for (keel::usize i = 0; i < n; ++i)
                         ypk += Cv.elemAsDouble(i * ny + p) * x[i];
                     if (Dv.numel() == ny * nu) {
-                        for (size_t j = 0; j < nu; ++j)
+                        for (keel::usize j = 0; j < nu; ++j)
                             ypk += Dv.elemAsDouble(j * ny + p) * uAt(k, j);
                     } else if (Dv.numel() == 1 && Dv.elemAsDouble(0) != 0.0) {
-                        for (size_t j = 0; j < nu; ++j)
+                        for (keel::usize j = 0; j < nu; ++j)
                             ypk += Dv.elemAsDouble(0) * uAt(k, j);
                     }
                     yd[p * N + k] = ypk;
@@ -493,22 +496,22 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                 if (k + 1 < N) {
                     Vec xn(n, 0.0);
                     if (Ts > 0.0) {
-                        for (size_t i = 0; i < n; ++i) {
+                        for (keel::usize i = 0; i < n; ++i) {
                             double s = 0.0;
-                            for (size_t j = 0; j < n; ++j)
+                            for (keel::usize j = 0; j < n; ++j)
                                 s += Av.elemAsDouble(j * n + i) * x[j];
-                            for (size_t j = 0; j < nu; ++j)
+                            for (keel::usize j = 0; j < nu; ++j)
                                 s += Bv.elemAsDouble(j * n + i) * uAt(k, j);
                             xn[i] = s;
                         }
                     } else {
                         if (!uniform)
                             fohStep(t[k + 1] - t[k], Ad, B0, B1);
-                        for (size_t i = 0; i < n; ++i) {
+                        for (keel::usize i = 0; i < n; ++i) {
                             double s = 0.0;
-                            for (size_t j = 0; j < n; ++j)
+                            for (keel::usize j = 0; j < n; ++j)
                                 s += Ad[j * n + i] * x[j];
-                            for (size_t j = 0; j < nu; ++j)
+                            for (keel::usize j = 0; j < nu; ++j)
                                 s += B0[j * n + i] * uAt(k, j) + B1[j * n + i] * uAt(k + 1, j);
                             xn[i] = s;
                         }
@@ -531,21 +534,21 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                     0, 0, "lsim", "", "numkit:lsim:x0");
 
     if (uIn.isComplex() || x0In.isComplex()) {
-        const size_t N = t.size();
+        const keel::usize N = t.size();
         Vec uRe(N, 0.0), uIm(N, 0.0);
         if (uIn.isComplex()) {
-            const std::complex<double> *cd = uIn.complexData();
-            for (size_t i = 0; i < N; ++i) { uRe[i] = cd[i].real(); uIm[i] = cd[i].imag(); }
+            const keel::c64 *cd = uIn.complexData();
+            for (keel::usize i = 0; i < N; ++i) { uRe[i] = cd[i].real(); uIm[i] = cd[i].imag(); }
         } else {
-            for (size_t i = 0; i < N; ++i) uRe[i] = uIn.elemAsDouble(i);
+            for (keel::usize i = 0; i < N; ++i) uRe[i] = uIn.elemAsDouble(i);
         }
         Vec x0Re(s.n, 0.0), x0Im(s.n, 0.0);
         if (x0In.numel() == s.n) {
             if (x0In.isComplex()) {
-                const std::complex<double> *cd = x0In.complexData();
-                for (size_t i = 0; i < s.n; ++i) { x0Re[i] = cd[i].real(); x0Im[i] = cd[i].imag(); }
+                const keel::c64 *cd = x0In.complexData();
+                for (keel::usize i = 0; i < s.n; ++i) { x0Re[i] = cd[i].real(); x0Im[i] = cd[i].imag(); }
             } else {
-                for (size_t i = 0; i < s.n; ++i) x0Re[i] = x0In.elemAsDouble(i);
+                for (keel::usize i = 0; i < s.n; ++i) x0Re[i] = x0In.elemAsDouble(i);
             }
         }
         Vec xTrajRe, xTrajIm;
@@ -553,21 +556,21 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
         Vec yIm = simulate(s, t, uIm, x0Im, xOut ? &xTrajIm : nullptr);
         if (xOut) {
             Value xm = Value::matrix(N, s.n, ValueType::COMPLEX, mr);
-            std::complex<double> *xd = xm.complexDataMut();
-            for (size_t i = 0; i < N * s.n; ++i) xd[i] = std::complex<double>(xTrajRe[i], xTrajIm[i]);
+            keel::c64 *xd = xm.complexDataMut();
+            for (keel::usize i = 0; i < N * s.n; ++i) xd[i] = keel::c64(xTrajRe[i], xTrajIm[i]);
             *xOut = std::move(xm);
         }
         Value yOut = Value::matrix(N, 1, ValueType::COMPLEX, mr);
-        std::complex<double> *yd = yOut.complexDataMut();
-        for (size_t i = 0; i < N; ++i) yd[i] = std::complex<double>(yRe[i], yIm[i]);
+        keel::c64 *yd = yOut.complexDataMut();
+        for (keel::usize i = 0; i < N; ++i) yd[i] = keel::c64(yRe[i], yIm[i]);
         return yOut;
     }
 
     Vec u(t.size());
-    for (size_t i = 0; i < t.size(); ++i) u[i] = uIn.elemAsDouble(i);
+    for (keel::usize i = 0; i < t.size(); ++i) u[i] = uIn.elemAsDouble(i);
     Vec x0(s.n, 0.0);
     if (x0In.numel() == s.n) {
-        for (size_t i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
+        for (keel::usize i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
     }
     Vec xTraj;
     Vec y = simulate(s, t, u, x0, xOut ? &xTraj : nullptr);
@@ -577,7 +580,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
 
 std::pair<Value, Value>
 initial_response(const Value &sys, const Value &x0In, const Value &tArg,
-                 Value *xOut, std::pmr::memory_resource *mr)
+                 Value *xOut, keel::Allocator *mr)
 {
     initial_response_argcheck(sys, x0In, tArg);
     SS s = toSSiso(sys, "initial", mr);
@@ -585,7 +588,7 @@ initial_response(const Value &sys, const Value &x0In, const Value &tArg,
     Vec u(t.size(), 0.0);            // zero input
     Vec x0(s.n, 0.0);
     if (x0In.numel() == s.n)
-        for (size_t i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
+        for (keel::usize i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
     else if (x0In.numel() != 0)
         throw Error("initial: x0 length must equal the number of states",
                     0, 0, "initial", "", "numkit:initial:x0");

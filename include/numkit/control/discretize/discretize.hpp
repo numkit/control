@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/core.h>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 #include <string>
 
@@ -44,8 +45,8 @@ namespace numkit::control {
 /// @endcode
 ///
 /// @see d2c
-Value c2d(const Value &sys, double Ts, const std::string &method,
-          std::pmr::memory_resource *mr = nullptr);
+Value c2d(const Value &sys, keel::f64 Ts, const std::string &method,
+          keel::Allocator *mr = nullptr);
 
 /// Discrete-to-continuous conversion (`d2c(sys, method)`).
 ///
@@ -61,7 +62,7 @@ Value c2d(const Value &sys, double Ts, const std::string &method,
 ///
 /// @see c2d
 Value d2c(const Value &sys, const std::string &method,
-          std::pmr::memory_resource *mr = nullptr);
+          keel::Allocator *mr = nullptr);
 
 
 /// @}

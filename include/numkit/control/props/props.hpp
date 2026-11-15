@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 #include <utility>
 
@@ -31,7 +31,7 @@ namespace numkit::control {
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     LOGICAL scalar.
 /// @see isdt
-Value isct(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value isct(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Discrete-time predicate (`isdt(sys)`).
 ///
@@ -42,7 +42,7 @@ Value isct(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     LOGICAL scalar.
 /// @see isct
-Value isdt(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value isdt(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief SISO predicate (`issiso(sys)`).
 ///
@@ -52,7 +52,7 @@ Value isdt(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param sys  LTI struct.
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     LOGICAL scalar.
-Value issiso(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value issiso(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Proper rational predicate (`isproper(sys)`).
 ///
@@ -63,7 +63,7 @@ Value issiso(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param sys  LTI struct.
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     LOGICAL scalar.
-Value isproper(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value isproper(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Stability predicate (`isstable(sys)`).
 ///
@@ -74,7 +74,7 @@ Value isproper(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     LOGICAL scalar.
 /// @see pole, isstatic
-Value isstable(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value isstable(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief System order (`order(sys)`).
 ///
@@ -86,7 +86,7 @@ Value isstable(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     DOUBLE scalar.
 /// @see isstatic
-Value order(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value order(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Poles of the system (`pole(sys)`).
 ///
@@ -97,7 +97,7 @@ Value order(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     Column vector of poles (possibly COMPLEX).
 /// @see zero, pzmap, damp
-Value pole(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value pole(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief (Transmission) zeros of the system (`zero(sys)`).
 ///
@@ -110,7 +110,7 @@ Value pole(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @return     Column vector of zeros.
 /// @throws Error  MIMO `ss` input.
 /// @see pole, tzero
-Value zero(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value zero(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Result of @ref damp.
 struct DampResult {
@@ -132,7 +132,7 @@ struct DampResult {
 /// @return     @ref DampResult; bind via `auto d = damp(sys);`.
 /// @see pole
 DampResult damp(const Value &sys,
-                std::pmr::memory_resource *mr = nullptr);
+                keel::Allocator *mr = nullptr);
 
 /// @brief Pole / zero map (`[p, z] = pzmap(sys)`).
 ///
@@ -144,7 +144,7 @@ DampResult damp(const Value &sys,
 /// @return     `(poles, zeros)` pair; bind via `auto [p, z] = pzmap(sys);`.
 /// @see pole, zero
 std::pair<Value, Value>
-pzmap(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+pzmap(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Static-system predicate (`isstatic(sys)`).
 ///
@@ -155,7 +155,7 @@ pzmap(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     LOGICAL scalar.
 /// @see order
-Value isstatic(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value isstatic(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Transmission zeros (`tzero(sys)`).
 ///
@@ -167,7 +167,7 @@ Value isstatic(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @return     Column vector of transmission zeros.
 /// @throws Error  MIMO `ss` input.
 /// @see zero
-Value tzero(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value tzero(const Value &sys, keel::Allocator *mr = nullptr);
 
 
 /// @}

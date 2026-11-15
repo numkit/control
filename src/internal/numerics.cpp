@@ -2,6 +2,8 @@
 //
 // Shared numerical kernels — see internal/numerics.hpp.
 
+#include <keel/core.h>
+#include <keel/math.h>
 #include <numkit/control/internal/numerics.hpp>
 
 #include <algorithm>
@@ -10,36 +12,36 @@
 namespace numkit::control::internal {
 
 template <typename T>
-bool solveInPlaceTpl(std::vector<T> &A, std::vector<T> &B, std::size_t n, std::size_t nrhs)
+bool solveInPlaceTpl(std::vector<T> &A, std::vector<T> &B, keel::usize n, keel::usize nrhs)
 {
-    for (std::size_t k = 0; k < n; ++k) {
-        std::size_t pk = k;
-        double bestAbs = std::abs(A[k * n + k]);
-        for (std::size_t i = k + 1; i < n; ++i) {
-            const double v = std::abs(A[k * n + i]);
+    for (keel::usize k = 0; k < n; ++k) {
+        keel::usize pk = k;
+        double bestAbs = keel::abs(A[k * n + k]);
+        for (keel::usize i = k + 1; i < n; ++i) {
+            const double v = keel::abs(A[k * n + i]);
             if (v > bestAbs) { bestAbs = v; pk = i; }
         }
         if (bestAbs < 1e-14) return false;
         if (pk != k) {
-            for (std::size_t j = 0; j < n; ++j)
+            for (keel::usize j = 0; j < n; ++j)
                 std::swap(A[j * n + k], A[j * n + pk]);
-            for (std::size_t j = 0; j < nrhs; ++j)
+            for (keel::usize j = 0; j < nrhs; ++j)
                 std::swap(B[j * n + k], B[j * n + pk]);
         }
         const T diag = A[k * n + k];
-        for (std::size_t i = k + 1; i < n; ++i) {
+        for (keel::usize i = k + 1; i < n; ++i) {
             const T f = A[k * n + i] / diag;
             A[k * n + i] = f;
-            for (std::size_t j = k + 1; j < n; ++j)
+            for (keel::usize j = k + 1; j < n; ++j)
                 A[j * n + i] -= f * A[j * n + k];
-            for (std::size_t j = 0; j < nrhs; ++j)
+            for (keel::usize j = 0; j < nrhs; ++j)
                 B[j * n + i] -= f * B[j * n + k];
         }
     }
-    for (std::size_t j = 0; j < nrhs; ++j) {
-        for (std::size_t i = n; i-- > 0;) {
+    for (keel::usize j = 0; j < nrhs; ++j) {
+        for (keel::usize i = n; i-- > 0;) {
             T s = B[j * n + i];
-            for (std::size_t k = i + 1; k < n; ++k)
+            for (keel::usize k = i + 1; k < n; ++k)
                 s -= A[k * n + i] * B[j * n + k];
             B[j * n + i] = s / A[i * n + i];
         }
@@ -48,64 +50,64 @@ bool solveInPlaceTpl(std::vector<T> &A, std::vector<T> &B, std::size_t n, std::s
 }
 
 template <typename T>
-std::vector<T> matmulSqTpl(const std::vector<T> &A, const std::vector<T> &B, std::size_t n)
+std::vector<T> matmulSqTpl(const std::vector<T> &A, const std::vector<T> &B, keel::usize n)
 {
     std::vector<T> C(n * n, T(0));
-    for (std::size_t j = 0; j < n; ++j)
-        for (std::size_t i = 0; i < n; ++i) {
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i) {
             T s(0);
-            for (std::size_t k = 0; k < n; ++k)
+            for (keel::usize k = 0; k < n; ++k)
                 s += A[k * n + i] * B[j * n + k];
             C[j * n + i] = s;
         }
     return C;
 }
 
-bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs)
+bool solveInPlace(Mat &A, Mat &B, keel::usize n, keel::usize nrhs)
 {
     return solveInPlaceTpl(A, B, n, nrhs);
 }
 
-bool solveInPlace(CMat &A, CMat &B, std::size_t n, std::size_t nrhs)
+bool solveInPlace(CMat &A, CMat &B, keel::usize n, keel::usize nrhs)
 {
     return solveInPlaceTpl(A, B, n, nrhs);
 }
 
-Mat matmulSq(const Mat &A, const Mat &B, std::size_t n)
+Mat matmulSq(const Mat &A, const Mat &B, keel::usize n)
 {
     return matmulSqTpl(A, B, n);
 }
 
-CMat matmulSq(const CMat &A, const CMat &B, std::size_t n)
+CMat matmulSq(const CMat &A, const CMat &B, keel::usize n)
 {
     return matmulSqTpl(A, B, n);
 }
 
 namespace {
 
-double matInfNorm(const Mat &A, std::size_t n) {
+double matInfNorm(const Mat &A, keel::usize n) {
     double m = 0.0;
-    for (std::size_t i = 0; i < n; ++i) {
+    for (keel::usize i = 0; i < n; ++i) {
         double s = 0.0;
-        for (std::size_t j = 0; j < n; ++j) s += std::abs(A[j * n + i]);
+        for (keel::usize j = 0; j < n; ++j) s += keel::abs(A[j * n + i]);
         m = std::max(m, s);
     }
     return m;
 }
 
-Mat eyeM(std::size_t n) {
+Mat eyeM(keel::usize n) {
     Mat I(n * n, 0.0);
-    for (std::size_t i = 0; i < n; ++i) I[i * n + i] = 1.0;
+    for (keel::usize i = 0; i < n; ++i) I[i * n + i] = 1.0;
     return I;
 }
 
-Mat zerosM(std::size_t r, std::size_t c) {
+Mat zerosM(keel::usize r, keel::usize c) {
     return Mat(r * c, 0.0);
 }
 
 } // anonymous
 
-Mat expm(const Mat &Ain, std::size_t n)
+Mat expm(const Mat &Ain, keel::usize n)
 {
     if (n == 0) return Mat{};
     Mat A = Ain;
@@ -138,7 +140,7 @@ Mat expm(const Mat &Ain, std::size_t n)
     Mat A6 = matmulSq(A4, A2, n);
 
     auto axpy = [&](Mat &dst, const Mat &src, double a) {
-        for (std::size_t i = 0; i < n * n; ++i) dst[i] += a * src[i];
+        for (keel::usize i = 0; i < n * n; ++i) dst[i] += a * src[i];
     };
     Mat N = zerosM(n, n), D = zerosM(n, n);
     axpy(N, I,   c[0]); axpy(D, I,   c[0]);
@@ -159,7 +161,7 @@ Mat expm(const Mat &Ain, std::size_t n)
             term = matmulSq(term, A, n);
             const double inv = 1.0 / static_cast<double>(k);
             for (auto &v : term) v *= inv;
-            for (std::size_t i = 0; i < n * n; ++i) E[i] += term[i];
+            for (keel::usize i = 0; i < n * n; ++i) E[i] += term[i];
         }
         X = E;
     }
@@ -167,20 +169,20 @@ Mat expm(const Mat &Ain, std::size_t n)
     return X;
 }
 
-Vec charPoly(const Mat &A, std::size_t n)
+Vec charPoly(const Mat &A, keel::usize n)
 {
     Mat M(n * n, 0.0);
-    for (std::size_t i = 0; i < n; ++i) M[i * n + i] = 1.0;   // I
+    for (keel::usize i = 0; i < n; ++i) M[i * n + i] = 1.0;   // I
     Vec coeff(n + 1, 0.0);
     coeff[0] = 1.0;
 
-    for (std::size_t k = 1; k <= n; ++k) {
+    for (keel::usize k = 1; k <= n; ++k) {
         Mat AM = matmulSq(A, M, n);
         double tr = 0.0;
-        for (std::size_t i = 0; i < n; ++i) tr += AM[i * n + i];
+        for (keel::usize i = 0; i < n; ++i) tr += AM[i * n + i];
         const double ck = -tr / static_cast<double>(k);
         coeff[k] = ck;
-        for (std::size_t i = 0; i < n; ++i) AM[i * n + i] += ck;
+        for (keel::usize i = 0; i < n; ++i) AM[i * n + i] += ck;
         M = std::move(AM);
     }
     return coeff;

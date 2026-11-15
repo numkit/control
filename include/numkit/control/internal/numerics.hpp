@@ -13,7 +13,8 @@
 
 #pragma once
 
-#include <complex>
+#include <keel/core.h>
+#include <keel/complex.h>
 #include <cstddef>
 #include <vector>
 
@@ -23,10 +24,10 @@ namespace numkit::control::internal {
 /// @{
 
 
-using Mat = std::vector<double>;
-using Vec = std::vector<double>;
-using CMat = std::vector<std::complex<double>>;
-using CVec = std::vector<std::complex<double>>;
+using Mat = std::vector<keel::f64>;
+using Vec = std::vector<keel::f64>;
+using CMat = std::vector<keel::c64>;
+using CVec = std::vector<keel::c64>;
 
 /// @brief In-place partial-pivot LU decomposition + back-substitution.
 ///
@@ -41,8 +42,8 @@ using CVec = std::vector<std::complex<double>>;
 ///              the contents of `A` and `B` are unspecified in that
 ///              case. `true` on success.
 /// @see expm, charPoly
-bool solveInPlace(Mat &A, Mat &B, std::size_t n, std::size_t nrhs);
-bool solveInPlace(CMat &A, CMat &B, std::size_t n, std::size_t nrhs);
+bool solveInPlace(Mat &A, Mat &B, keel::usize n, keel::usize nrhs);
+bool solveInPlace(CMat &A, CMat &B, keel::usize n, keel::usize nrhs);
 
 /// @brief Matrix exponential via the canonical [6/6] Padé approximant
 /// with scaling and squaring.
@@ -55,7 +56,7 @@ bool solveInPlace(CMat &A, CMat &B, std::size_t n, std::size_t nrhs);
 /// @param n  Matrix dimension.
 /// @return   Column-major n×n matrix exponential.
 /// @see solveInPlace, matmulSq
-Mat expm(const Mat &A, std::size_t n);
+Mat expm(const Mat &A, keel::usize n);
 
 /// @brief Faddeev–LeVerrier characteristic polynomial of an n×n
 /// column-major matrix.
@@ -69,7 +70,7 @@ Mat expm(const Mat &A, std::size_t n);
 /// @param n  Matrix dimension.
 /// @return   Coefficient vector of length n+1.
 /// @see expm
-Vec charPoly(const Mat &A, std::size_t n);
+Vec charPoly(const Mat &A, keel::usize n);
 
 /// @brief Square matrix multiply `C = A·B` (all n×n column-major).
 ///
@@ -77,8 +78,8 @@ Vec charPoly(const Mat &A, std::size_t n);
 /// @param B  Column-major n×n right operand.
 /// @param n  Matrix dimension.
 /// @return   Column-major n×n product.
-Mat matmulSq(const Mat &A, const Mat &B, std::size_t n);
-CMat matmulSq(const CMat &A, const CMat &B, std::size_t n);
+Mat matmulSq(const Mat &A, const Mat &B, keel::usize n);
+CMat matmulSq(const CMat &A, const CMat &B, keel::usize n);
 
 
 /// @}

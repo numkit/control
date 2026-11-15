@@ -20,6 +20,10 @@
 // Engine-free compute TU. The hinfnorm builtin (CallContext wrapper)
 // lives in analyze_reg.cpp.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
+#include <keel/math.h>
 #include <numkit/control/analyze/analyze.hpp>
 #include <numkit/control/conversion/conversion.hpp>
 #include <numkit/control/internal/numerics.hpp>
@@ -32,7 +36,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <limits>
 #include <vector>
 
@@ -41,7 +44,6 @@ namespace numkit::control {
 namespace {
 
 using Mat = internal::Mat;            // column-major flat std::vector<double>
-using Cd  = std::complex<double>;
 using internal::solveInPlace;
 using internal::charPoly;
 
@@ -56,7 +58,7 @@ double sampleTime(const Value &sys) {
 }
 
 // (A, B, C, D) extraction — ss read directly, tf/zpk converted to ss.
-StateSpace pullABCD(const Value &sys, std::pmr::memory_resource *mr) {
+StateSpace pullABCD(const Value &sys, keel::Allocator *mr) {
     StateSpace out;
     if (hasKind(sys, "ss")) {
         out.A = sys.field("A"); out.B = sys.field("B");
@@ -73,96 +75,96 @@ StateSpace pullABCD(const Value &sys, std::pmr::memory_resource *mr) {
     return out;
 }
 
-Mat readMat(const Value &v, size_t r, size_t c) {
+Mat readMat(const Value &v, keel::usize r, keel::usize c) {
     Mat M(r * c, 0.0);
-    for (size_t i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
     return M;
 }
 
 // C = A·B, A: ra×ca, B: rb×cb (ca == rb), result ra×cb column-major.
-Mat matmul(const Mat &A, size_t ra, size_t ca, const Mat &B, size_t cb) {
+Mat matmul(const Mat &A, keel::usize ra, keel::usize ca, const Mat &B, keel::usize cb) {
     Mat C(ra * cb, 0.0);
-    for (size_t j = 0; j < cb; ++j)
-        for (size_t k = 0; k < ca; ++k) {
+    for (keel::usize j = 0; j < cb; ++j)
+        for (keel::usize k = 0; k < ca; ++k) {
             const double b = B[j * ca + k];
             if (b == 0.0) continue;
-            for (size_t i = 0; i < ra; ++i)
+            for (keel::usize i = 0; i < ra; ++i)
                 C[j * ra + i] += A[k * ra + i] * b;
         }
     return C;
 }
 
-Mat transpose(const Mat &A, size_t r, size_t c) {
+Mat transpose(const Mat &A, keel::usize r, keel::usize c) {
     Mat T(r * c, 0.0);
-    for (size_t j = 0; j < c; ++j)
-        for (size_t i = 0; i < r; ++i)
+    for (keel::usize j = 0; j < c; ++j)
+        for (keel::usize i = 0; i < r; ++i)
             T[i * c + j] = A[j * r + i];
     return T;
 }
 
-bool inverse(const Mat &A, size_t n, Mat &out) {
+bool inverse(const Mat &A, keel::usize n, Mat &out) {
     Mat lu = A;
     out.assign(n * n, 0.0);
-    for (size_t i = 0; i < n; ++i) out[i * n + i] = 1.0;
+    for (keel::usize i = 0; i < n; ++i) out[i * n + i] = 1.0;
     return solveInPlace(lu, out, n, n);
 }
 
 // Largest singular value of a real r×c matrix via Rayleigh power
 // iteration on the smaller Gram matrix. The Rayleigh quotient never
 // exceeds λ_max, so the returned value is ≤ σ_max — a SAFE lower bracket.
-double sigmaMax(const Mat &M, size_t r, size_t c) {
+double sigmaMax(const Mat &M, keel::usize r, keel::usize c) {
     if (r == 0 || c == 0) return 0.0;
-    const size_t g = std::min(r, c);
+    const keel::usize g = std::min(r, c);
     // Gram = MᵀM (c×c) if c≤r, else MMᵀ (r×r); take the g×g one.
     Mat G(g * g, 0.0);
     if (c <= r) {
-        for (size_t a = 0; a < c; ++a)
-            for (size_t b = 0; b < c; ++b) {
+        for (keel::usize a = 0; a < c; ++a)
+            for (keel::usize b = 0; b < c; ++b) {
                 double s = 0.0;
-                for (size_t k = 0; k < r; ++k) s += M[a * r + k] * M[b * r + k];
+                for (keel::usize k = 0; k < r; ++k) s += M[a * r + k] * M[b * r + k];
                 G[b * c + a] = s;   // (MᵀM)[a,b]
             }
     } else {
-        for (size_t a = 0; a < r; ++a)
-            for (size_t b = 0; b < r; ++b) {
+        for (keel::usize a = 0; a < r; ++a)
+            for (keel::usize b = 0; b < r; ++b) {
                 double s = 0.0;
-                for (size_t k = 0; k < c; ++k) s += M[k * r + a] * M[k * r + b];
+                for (keel::usize k = 0; k < c; ++k) s += M[k * r + a] * M[k * r + b];
                 G[b * r + a] = s;   // (MMᵀ)[a,b]
             }
     }
     std::vector<double> x(g, 1.0), y(g, 0.0);
     double lambda = 0.0;
     for (int it = 0; it < 200; ++it) {
-        for (size_t i = 0; i < g; ++i) {
+        for (keel::usize i = 0; i < g; ++i) {
             double s = 0.0;
-            for (size_t k = 0; k < g; ++k) s += G[k * g + i] * x[k];
+            for (keel::usize k = 0; k < g; ++k) s += G[k * g + i] * x[k];
             y[i] = s;
         }
         double num = 0.0, den = 0.0;
-        for (size_t i = 0; i < g; ++i) { num += x[i] * y[i]; den += x[i] * x[i]; }
+        for (keel::usize i = 0; i < g; ++i) { num += x[i] * y[i]; den += x[i] * x[i]; }
         if (den <= 0.0) break;
         lambda = num / den;                       // Rayleigh quotient ≤ λ_max
         double nrm = 0.0;
-        for (size_t i = 0; i < g; ++i) nrm += y[i] * y[i];
+        for (keel::usize i = 0; i < g; ++i) nrm += y[i] * y[i];
         nrm = std::sqrt(nrm);
         if (nrm <= 0.0) break;
-        for (size_t i = 0; i < g; ++i) x[i] = y[i] / nrm;
+        for (keel::usize i = 0; i < g; ++i) x[i] = y[i] / nrm;
     }
     return std::sqrt(std::max(lambda, 0.0));
 }
 
-std::vector<Cd> eigOf(const Mat &M, size_t n, std::pmr::memory_resource *mr) {
+std::vector<keel::c64> eigOf(const Mat &M, keel::usize n, keel::Allocator *mr) {
     auto cp = charPoly(M, n);                    // [1, c1, …, cn]
     Value row = Value::matrix(1, cp.size(), ValueType::DOUBLE, mr);
     if (!cp.empty()) std::copy(cp.begin(), cp.end(), row.doubleDataMut());
     Value r = numkit::builtin::roots(row, mr);
-    const size_t N = r.numel();
-    std::vector<Cd> out(N);
+    const keel::usize N = r.numel();
+    std::vector<keel::c64> out(N);
     if (r.type() == ValueType::COMPLEX) {
-        const Cd *src = r.complexData();
-        for (size_t i = 0; i < N; ++i) out[i] = src[i];
+        const keel::c64 *src = r.complexData();
+        for (keel::usize i = 0; i < N; ++i) out[i] = src[i];
     } else {
-        for (size_t i = 0; i < N; ++i) out[i] = Cd(r.elemAsDouble(i), 0.0);
+        for (keel::usize i = 0; i < N; ++i) out[i] = keel::c64(r.elemAsDouble(i), 0.0);
     }
     return out;
 }
@@ -170,16 +172,16 @@ std::vector<Cd> eigOf(const Mat &M, size_t n, std::pmr::memory_resource *mr) {
 // Does the Hamiltonian M(γ) have a purely imaginary eigenvalue?
 // (γ ≤ σ_max(D) ⇒ R not positive-definite ⇒ treat as "yes".)
 bool hasImagEig(const Mat &A, const Mat &B, const Mat &C, const Mat &D,
-                size_t n, size_t m, size_t p, double gamma, double sigD,
-                std::pmr::memory_resource *mr)
+                keel::usize n, keel::usize m, keel::usize p, double gamma, double sigD,
+                keel::Allocator *mr)
 {
     if (gamma <= sigD * (1.0 + 1e-12)) return true;
 
     Mat Dt = transpose(D, p, m);                 // m×p
     Mat DtD = matmul(Dt, m, p, D, m);            // m×m
     Mat R(m * m, 0.0);
-    for (size_t i = 0; i < m * m; ++i) R[i] = -DtD[i];
-    for (size_t i = 0; i < m; ++i) R[i * m + i] += gamma * gamma;
+    for (keel::usize i = 0; i < m * m; ++i) R[i] = -DtD[i];
+    for (keel::usize i = 0; i < m; ++i) R[i * m + i] += gamma * gamma;
     Mat Ri;
     if (!inverse(R, m, Ri)) return true;         // singular → γ too small
 
@@ -190,7 +192,7 @@ bool hasImagEig(const Mat &A, const Mat &B, const Mat &C, const Mat &D,
     Mat RiDt  = matmul(Ri, m, m, Dt, p);         // m×p
     Mat BRiDt = matmul(B, n, m, RiDt, p);        // n×p
     Mat Abar  = matmul(BRiDt, n, p, C, n);       // n×n
-    for (size_t i = 0; i < n * n; ++i) Abar[i] += A[i];
+    for (keel::usize i = 0; i < n * n; ++i) Abar[i] += A[i];
 
     // B·Ri·Bᵀ
     Mat RiBt  = matmul(Ri, m, m, Bt, n);         // m×n
@@ -199,15 +201,15 @@ bool hasImagEig(const Mat &A, const Mat &B, const Mat &C, const Mat &D,
     // Cᵀ·(I + D·Ri·Dᵀ)·C
     Mat DRi   = matmul(D, p, m, Ri, m);          // p×m
     Mat DRiDt = matmul(DRi, p, m, Dt, p);        // p×p
-    for (size_t i = 0; i < p; ++i) DRiDt[i * p + i] += 1.0;
+    for (keel::usize i = 0; i < p; ++i) DRiDt[i * p + i] += 1.0;
     Mat midC  = matmul(DRiDt, p, p, C, n);       // p×n
     Mat Cmid  = matmul(Ct, n, p, midC, n);       // n×n
 
     // Assemble M(γ) = [Ā, BRiBt; −Cmid, −Āᵀ]  (2n×2n column-major)
-    const size_t k = 2 * n;
+    const keel::usize k = 2 * n;
     Mat M(k * k, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i) {
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i) {
             M[(j) * k + (i)]         =  Abar[j * n + i];
             M[(n + j) * k + (i)]     =  BRiBt[j * n + i];
             M[(j) * k + (n + i)]     = -Cmid[j * n + i];
@@ -216,10 +218,10 @@ bool hasImagEig(const Mat &A, const Mat &B, const Mat &C, const Mat &D,
 
     auto ev = eigOf(M, k, mr);
     double scale = 1.0;
-    for (const auto &e : ev) scale = std::max(scale, std::abs(e));
+    for (const auto &e : ev) scale = std::max(scale, keel::abs(e));
     const double tol = 1e-7 * scale;
     for (const auto &e : ev)
-        if (std::abs(e.real()) < tol && std::abs(e.imag()) > tol) return true;
+        if (keel::abs(e.real()) < tol && keel::abs(e.imag()) > tol) return true;
     return false;
 }
 
@@ -242,7 +244,7 @@ bool hinfnorm_argcheck(const Value &sys)
 
 } // anonymous
 
-Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
+Value hinfnorm(const Value &sys, keel::Allocator *mr)
 {
     // hinfnorm argcheck (argcheck separation). Probed R2025b: a numeric
     // scalar is the static-gain form and answers [|x|, |x|, 0] there
@@ -252,7 +254,7 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
     // is a dispatch accident we deliberately do not mirror.)
     if (hinfnorm_argcheck(sys)) {
         const double g = sys.isComplex()
-            ? std::abs(sys.complexData()[0]) : std::abs(sys.elemAsDouble(0));
+            ? keel::abs(sys.complexData()[0]) : keel::abs(sys.elemAsDouble(0));
         Value out = Value::matrix(1, 3, ValueType::DOUBLE, mr);
         double *od = out.doubleDataMut();
         od[0] = g; od[1] = g; od[2] = 0.0;
@@ -262,9 +264,9 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
     const bool discrete = (sampleTime(sys) != 0.0);
 
     StateSpace ss = pullABCD(sys, mr);
-    const size_t n = ss.A.dims().rows();
-    const size_t m = ss.B.dims().cols();
-    const size_t p = ss.C.dims().rows();
+    const keel::usize n = ss.A.dims().rows();
+    const keel::usize m = ss.B.dims().cols();
+    const keel::usize p = ss.C.dims().rows();
     if (ss.A.dims().cols() != n)
         throw Error("hinfnorm: A must be square",
                     0, 0, "hinfnorm", "", "numkit:hinfnorm:A");
@@ -285,7 +287,7 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
         // Unstable / unit-circle poles (|λ| >= 1) → Inf.
         auto ev = eigOf(A, n, mr);
         double maxAbs = 0.0;
-        for (const auto &e : ev) maxAbs = std::max(maxAbs, std::abs(e));
+        for (const auto &e : ev) maxAbs = std::max(maxAbs, keel::abs(e));
         if (maxAbs >= 1.0 - 1e-9) { g = Value::scalar(inf, mr); return g; }
 
         // Isometric bilinear transform z = (1+s)/(1-s):
@@ -296,7 +298,7 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
         //   Dc = D - C * M^-1 * B
         Mat M = A;
         Mat AmI = A;
-        for (size_t i = 0; i < n; ++i) {
+        for (keel::usize i = 0; i < n; ++i) {
             M[i + i * n] += 1.0;
             AmI[i + i * n] -= 1.0;
         }
@@ -310,7 +312,7 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
         for (double &v : MiB) v *= s2;
         for (double &v : CMi) v *= s2;
         Mat Dc(p * m);
-        for (size_t i = 0; i < p * m; ++i) Dc[i] = D[i] - CMiB[i];
+        for (keel::usize i = 0; i < p * m; ++i) Dc[i] = D[i] - CMiB[i];
         A = std::move(Ac);
         B = std::move(MiB);
         C = std::move(CMi);
@@ -333,7 +335,7 @@ Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr)
             Mat AiB  = matmul(Ai, n, n, B, m);   // n×m
             Mat CAiB = matmul(C, p, n, AiB, m);  // p×m
             Mat G0(p * m, 0.0);
-            for (size_t i = 0; i < p * m; ++i) G0[i] = D[i] - CAiB[i];
+            for (keel::usize i = 0; i < p * m; ++i) G0[i] = D[i] - CAiB[i];
             lb = std::max(lb, sigmaMax(G0, p, m));
         }
     }

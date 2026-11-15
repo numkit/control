@@ -8,6 +8,8 @@
 // `regOnly` so engine startup doesn't trip the duplicate-registration
 // guard.
 
+#include <keel/core.h>
+#include <keel/ref.h>
 #include <numkit/control/library.hpp>
 
 #include <numkit/sys/plugin.hpp>
@@ -15,76 +17,76 @@
 
 namespace numkit::control::detail {
 // lti/lti.cpp
-void tf_reg       (Span<const Value>, size_t, Span<Value>, CallContext &);
-void zpk_reg      (Span<const Value>, size_t, Span<Value>, CallContext &);
-void ss_reg       (Span<const Value>, size_t, Span<Value>, CallContext &);
-void tfdata_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void zpkdata_reg  (Span<const Value>, size_t, Span<Value>, CallContext &);
-void ssdata_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void filt_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void frd_reg      (Span<const Value>, size_t, Span<Value>, CallContext &);
-void frdata_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void ss2ss_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void minreal_reg  (Span<const Value>, size_t, Span<Value>, CallContext &);
-void tf2ss_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void ss2tf_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void tf2zp_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void zp2tf_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void ord2_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void modred_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
+void tf_reg       (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void zpk_reg      (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void ss_reg       (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void tfdata_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void zpkdata_reg  (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void ssdata_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void filt_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void frd_reg      (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void frdata_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void ss2ss_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void minreal_reg  (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void tf2ss_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void ss2tf_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void tf2zp_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void zp2tf_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void ord2_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void modred_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // props/props.cpp
-void isct_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void isdt_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void issiso_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void isproper_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
-void isstable_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
-void order_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void pole_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void zero_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void damp_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void pzmap_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void isstatic_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
-void tzero_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
+void isct_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void isdt_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void issiso_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void isproper_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void isstable_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void order_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void pole_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void zero_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void damp_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void pzmap_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void isstatic_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void tzero_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // connect/connect.cpp
-void series_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void parallel_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
-void feedback_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
+void series_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void parallel_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void feedback_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // response/response.cpp
-void step_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void impulse_reg  (Span<const Value>, size_t, Span<Value>, CallContext &);
-void initial_reg  (Span<const Value>, size_t, Span<Value>, CallContext &);
-void lsim_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
+void step_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void impulse_reg  (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void initial_reg  (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void lsim_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // freq/freq.cpp
-void evalfr_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void freqresp_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
-void bode_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void nyquist_reg  (Span<const Value>, size_t, Span<Value>, CallContext &);
-void rlocus_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
+void evalfr_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void freqresp_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void bode_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void nyquist_reg  (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void rlocus_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // analyze/analyze.cpp
-void dcgain_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void margin_reg   (Span<const Value>, size_t, Span<Value>, CallContext &);
-void stepinfo_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
-void hinfnorm_reg (Span<const Value>, size_t, Span<Value>, CallContext &);
-void allmargin_reg(Span<const Value>, size_t, Span<Value>, CallContext &);
+void dcgain_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void margin_reg   (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void stepinfo_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void hinfnorm_reg (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void allmargin_reg(keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // discretize/discretize.cpp
-void c2d_reg      (Span<const Value>, size_t, Span<Value>, CallContext &);
-void d2c_reg      (Span<const Value>, size_t, Span<Value>, CallContext &);
+void c2d_reg      (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void d2c_reg      (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // state/state.cpp
-void ctrb_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void obsv_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void gram_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void covar_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
+void ctrb_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void obsv_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void gram_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void covar_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // state/place.cpp
-void acker_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
-void place_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
+void acker_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void place_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // lyapunov/lyapunov.cpp
-void lyap_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void dlyap_reg    (Span<const Value>, size_t, Span<Value>, CallContext &);
+void lyap_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void dlyap_reg    (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 // riccati/riccati.cpp
-void care_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void dare_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
-void lqr_reg      (Span<const Value>, size_t, Span<Value>, CallContext &);
-void dlqr_reg     (Span<const Value>, size_t, Span<Value>, CallContext &);
+void care_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void dare_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void lqr_reg      (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
+void dlqr_reg     (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 } // namespace numkit::control::detail
 
 namespace numkit {

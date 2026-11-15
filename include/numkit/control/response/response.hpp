@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 #include <utility>
 
@@ -46,7 +46,7 @@ namespace numkit::control {
 /// @see impulse_response, lsim
 std::pair<Value, Value>
 step_response(const Value &sys, const Value &tArg,
-              Value *xOut = nullptr, std::pmr::memory_resource *mr = nullptr);
+              Value *xOut = nullptr, keel::Allocator *mr = nullptr);
 
 /// Unit-impulse response (`[y, t] = impulse(sys, tFinal_or_t)`).
 ///
@@ -64,7 +64,7 @@ step_response(const Value &sys, const Value &tArg,
 /// @see step_response, lsim
 std::pair<Value, Value>
 impulse_response(const Value &sys, const Value &tArg,
-                 Value *xOut = nullptr, std::pmr::memory_resource *mr = nullptr);
+                 Value *xOut = nullptr, keel::Allocator *mr = nullptr);
 
 /// Linear simulation with arbitrary input (`y = lsim(sys, u, t, x0)`).
 ///
@@ -84,7 +84,7 @@ impulse_response(const Value &sys, const Value &tArg,
 /// @see step_response, impulse_response
 Value lsim(const Value &sys, const Value &u, const Value &t,
            const Value &x0,
-           Value *xOut = nullptr, std::pmr::memory_resource *mr = nullptr);
+           Value *xOut = nullptr, keel::Allocator *mr = nullptr);
 
 /// Initial-condition response (`[y, t] = initial(sys, x0, tArg)`).
 ///
@@ -104,7 +104,7 @@ Value lsim(const Value &sys, const Value &u, const Value &t,
 /// @see step_response, impulse_response, lsim
 std::pair<Value, Value>
 initial_response(const Value &sys, const Value &x0, const Value &tArg,
-                 Value *xOut = nullptr, std::pmr::memory_resource *mr = nullptr);
+                 Value *xOut = nullptr, keel::Allocator *mr = nullptr);
 
 
 /// @}

@@ -9,6 +9,9 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/ref.h>
 #include <numkit/control/riccati/riccati.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -22,14 +25,14 @@ namespace detail {
 namespace {
 
 // m×m identity Value (default R for the 3-argument forms).
-Value eyeVal(size_t m, std::pmr::memory_resource *mr) {
+Value eyeVal(keel::usize m, keel::Allocator *mr) {
     Value I = Value::matrix(m, m, ValueType::DOUBLE, mr);
     double *d = I.doubleDataMut();
-    for (size_t i = 0; i < m; ++i) d[i * m + i] = 1.0;
+    for (keel::usize i = 0; i < m; ++i) d[i * m + i] = 1.0;
     return I;
 }
 
-void emit(const RiccatiResult &r, Span<Value> o) {
+void emit(const RiccatiResult &r, keel::MutArrayRef<Value> o) {
     if (o.size() >= 1) o[0] = r.X;
     if (o.size() >= 2) o[1] = r.L;
     if (o.size() >= 3) o[2] = r.G;
@@ -37,18 +40,18 @@ void emit(const RiccatiResult &r, Span<Value> o) {
 
 } // anonymous
 
-void care_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void care_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 3, "care");  // no max: name-value tail in the reference (no count wall to 12 args)
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value R = (a.size() >= 4) ? a[3] : eyeVal(a[1].dims().cols(), mr);
     emit(care(a[0], a[1], a[2], R, mr), o);
 }
 
-void dare_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void dare_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 3, "dare");  // no max: name-value tail in the reference (no count wall to 12 args)
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value R = (a.size() >= 4) ? a[3] : eyeVal(a[1].dims().cols(), mr);
     emit(dare(a[0], a[1], a[2], R, mr), o);
 }
@@ -57,16 +60,16 @@ namespace {
 // lqr / dlqr are thin wrappers on care / dare. MATLAB returns [K, S, P]:
 // optimal gain, Riccati solution, closed-loop poles — i.e. care's
 // {G, X, L} re-ordered.
-void emitLqr(const RiccatiResult &r, Span<Value> o) {
+void emitLqr(const RiccatiResult &r, keel::MutArrayRef<Value> o) {
     if (o.size() >= 1) o[0] = r.G;   // K — optimal gain
     if (o.size() >= 2) o[1] = r.X;   // S — Riccati solution
     if (o.size() >= 3) o[2] = r.L;   // P — closed-loop poles
 }
 } // anonymous
 
-void lqr_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void lqr_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     if (!a.empty() && a[0].isStruct()) {
         argcheck::checkNargin(a.size(), 3, 4, "lqr");
         auto [A, B, C, D] = ssdata(a[0], mr);
@@ -77,9 +80,9 @@ void lqr_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
     emitLqr(care(a[0], a[1], a[2], a[3], mr), o);
 }
 
-void dlqr_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void dlqr_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     if (!a.empty() && a[0].isStruct()) {
         argcheck::checkNargin(a.size(), 3, 4, "dlqr");
         auto [A, B, C, D] = ssdata(a[0], mr);

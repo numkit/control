@@ -7,6 +7,8 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/ref.h>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>   // minreal
 
@@ -22,16 +24,16 @@
 namespace numkit::control {
 namespace detail {
 
-static double argTs(Span<const Value> args, size_t pos) {
+static double argTs(keel::ArrayRef<Value> args, keel::usize pos) {
     if (args.size() <= pos || args[pos].isEmpty()) return 0.0;
     return args[pos].toScalar();
 }
 
-void tf_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
+void tf_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
             CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 0, "tf");
-    auto *mr = ctx.engine->resource();
+    auto *mr = ctx.engine->allocator();
     if (args.empty()) {
         Value s = Value::structure(mr);
         s.field("kind") = Value::fromString("tf", mr);
@@ -79,11 +81,11 @@ void tf_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
     outs[0] = tf(args[0], args[1], argTs(args, 2), mr);
 }
 
-void zpk_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
+void zpk_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
              CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 0, "zpk");
-    auto *mr = ctx.engine->resource();
+    auto *mr = ctx.engine->allocator();
     if (args.empty()) {
         Value s = Value::structure(mr);
         s.field("kind") = Value::fromString("zpk", mr);
@@ -124,11 +126,11 @@ void zpk_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
     outs[0] = zpk(args[0], args[1], args[2].toScalar(), argTs(args, 3), mr);
 }
 
-void ss_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
+void ss_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
             CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 0, "ss");
-    auto *mr = ctx.engine->resource();
+    auto *mr = ctx.engine->allocator();
     if (args.empty()) {
         Value s = Value::structure(mr);
         s.field("kind") = Value::fromString("ss", mr);
@@ -157,11 +159,11 @@ void ss_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
     outs[0] = ss(args[0], args[1], args[2], args[3], argTs(args, 4), mr);
 }
 
-void filt_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
+void filt_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
               CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 0, "filt");
-    auto *mr = ctx.engine->resource();
+    auto *mr = ctx.engine->allocator();
     if (args.empty()) {
         Value s = Value::structure(mr);
         s.field("kind") = Value::fromString("tf", mr);
@@ -182,11 +184,11 @@ void filt_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
     outs[0] = filt(args[0], args[1], Ts, mr);
 }
 
-void frd_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
+void frd_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
              CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 0, "frd");
-    auto *mr = ctx.engine->resource();
+    auto *mr = ctx.engine->allocator();
     if (args.empty()) {
         Value s = Value::structure(mr);
         s.field("kind") = Value::fromString("frd", mr);
@@ -200,7 +202,7 @@ void frd_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
     outs[0] = frd(args[0], args[1], argTs(args, 2), mr);
 }
 
-static bool wantVector(Span<const Value> args, size_t pos) {
+static bool wantVector(keel::ArrayRef<Value> args, keel::usize pos) {
     if (args.size() <= pos) return false;
     if (!args[pos].isChar() && !args[pos].isString()) return false;
     std::string s = args[pos].toString();
@@ -208,46 +210,46 @@ static bool wantVector(Span<const Value> args, size_t pos) {
     return s == "v" || s == "vector";
 }
 
-void tfdata_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void tfdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                 CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 1, "tfdata");  // no max: model-array tail in the reference (no count wall to 7 args)
-    auto [num, den] = tfdata(args[0], wantVector(args, 1), ctx.engine->resource());
+    auto [num, den] = tfdata(args[0], wantVector(args, 1), ctx.engine->allocator());
     outs[0] = std::move(num);
     if (nargout > 1) outs[1] = std::move(den);
 }
 
-void zpkdata_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void zpkdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                  CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 1, "zpkdata");  // no max: model-array tail in the reference (no count wall to 7 args)
-    auto [z, p, k] = zpkdata(args[0], wantVector(args, 1), ctx.engine->resource());
+    auto [z, p, k] = zpkdata(args[0], wantVector(args, 1), ctx.engine->allocator());
     outs[0] = std::move(z);
     if (nargout > 1) outs[1] = std::move(p);
     if (nargout > 2) outs[2] = std::move(k);
 }
 
-void ssdata_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void ssdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                 CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 1, "ssdata");  // no max: model-array tail in the reference (no count wall to 7 args)
-    auto [A, B, C, D] = ssdata(args[0], ctx.engine->resource());
+    auto [A, B, C, D] = ssdata(args[0], ctx.engine->allocator());
     outs[0] = std::move(A);
     if (nargout > 1) outs[1] = std::move(B);
     if (nargout > 2) outs[2] = std::move(C);
     if (nargout > 3) outs[3] = std::move(D);
 }
 
-void ss2ss_reg(Span<const Value> args, size_t /*nargout*/,
-               Span<Value> outs, CallContext &ctx)
+void ss2ss_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/,
+               keel::MutArrayRef<Value> outs, CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 5, "ss2ss");
     if (args[0].isStruct())
         argcheck::checkNargin(args.size(), 2, 2, "ss2ss");
-    outs[0] = ss2ss(args[0], args[1], ctx.engine->resource());
+    outs[0] = ss2ss(args[0], args[1], ctx.engine->allocator());
 }
 
-void minreal_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
+void minreal_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
                  CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 1, 5, "minreal");
@@ -272,33 +274,33 @@ void minreal_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
         tol = tv.isComplex() ? tv.complexData()[0].real()
                              : tv.elemAsDouble(0);
     }
-    outs[0] = minreal(args[0], tol, ctx.engine->resource());
+    outs[0] = minreal(args[0], tol, ctx.engine->allocator());
 }
 
-void frdata_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void frdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                 CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 1, "frdata");  // no max: model-array tail in the reference (no count wall to 7 args)
     // 'v' flag accepted for MATLAB compatibility; frdata always returns
     // column vectors regardless (we don't model SISO 1×1×N tensors).
     (void)wantVector(args, 1);
-    auto [resp, freq] = frdata(args[0], ctx.engine->resource());
+    auto [resp, freq] = frdata(args[0], ctx.engine->allocator());
     outs[0] = std::move(resp);
     if (nargout > 1) outs[1] = std::move(freq);
 }
 
-void tf2ss_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void tf2ss_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 2, "tf2ss");
-    auto r = tf2ss(args[0], args[1], ctx.engine->resource());
+    auto r = tf2ss(args[0], args[1], ctx.engine->allocator());
     outs[0] = std::move(r.A);
     if (nargout > 1) outs[1] = std::move(r.B);
     if (nargout > 2) outs[2] = std::move(r.C);
     if (nargout > 3) outs[3] = std::move(r.D);
 }
 
-void ss2tf_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void ss2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 4, 5, "ss2tf");
@@ -307,37 +309,37 @@ void ss2tf_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
         const double iuVal = argcheck::expectedReal(args[4], 5, "iu", "ss2tf");
         iu = argcheck::expectedPositiveInteger(iuVal, 5, "iu", "ss2tf");
     }
-    auto [num, den] = ss2tf(args[0], args[1], args[2], args[3], iu, ctx.engine->resource());
+    auto [num, den] = ss2tf(args[0], args[1], args[2], args[3], iu, ctx.engine->allocator());
     outs[0] = std::move(num);
     if (nargout > 1) outs[1] = std::move(den);
 }
 
-void tf2zp_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void tf2zp_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 2, "tf2zp");
-    auto r = tf2zp(args[0], args[1], ctx.engine->resource());
+    auto r = tf2zp(args[0], args[1], ctx.engine->allocator());
     outs[0] = std::move(r.z);
     if (nargout > 1) outs[1] = std::move(r.p);
     if (nargout > 2) outs[2] = std::move(r.k);
 }
 
-void zp2tf_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void zp2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
                CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 3, 3, "zp2tf");
-    auto [num, den] = zp2tf(args[0], args[1], args[2], ctx.engine->resource());
+    auto [num, den] = zp2tf(args[0], args[1], args[2], ctx.engine->allocator());
     outs[0] = std::move(num);
     if (nargout > 1) outs[1] = std::move(den);
 }
 
-void ord2_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
+void ord2_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
               CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 2, "ord2");
     const double wn = argcheck::expectedReal(args[0], 1, "wn", "ord2");
     const double z  = argcheck::expectedReal(args[1], 2, "z", "ord2");
-    auto *mr = ctx.engine->resource();
+    auto *mr = ctx.engine->allocator();
     if (nargout <= 2) {
         outs[0] = Value::scalar(1.0, mr);
         if (outs.size() >= 2) {
@@ -366,29 +368,29 @@ void ord2_reg(Span<const Value> args, size_t nargout, Span<Value> outs,
     if (outs.size() >= 4) outs[3] = Value::scalar(0.0, mr);
 }
 
-void modred_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
+void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
                 CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 3, "modred");
-    auto *mr = ctx.engine->resource();
+    auto *mr = ctx.engine->allocator();
     auto [A, B, C, D] = ssdata(args[0], mr);
     const double Ts = (args[0].isStruct() && args[0].hasField("Ts"))
         ? args[0].field("Ts").toScalar() : 0.0;
-    const size_t n = A.dims().rows();
-    const size_t nu = B.dims().cols();
-    const size_t ny = C.dims().rows();
+    const keel::usize n = A.dims().rows();
+    const keel::usize nu = B.dims().cols();
+    const keel::usize ny = C.dims().rows();
 
     std::vector<bool> isElim(n, false);
-    for (size_t i = 0; i < args[1].numel(); ++i) {
+    for (keel::usize i = 0; i < args[1].numel(); ++i) {
         const double v = args[1].elemAsDouble(i);
         const int idx = static_cast<int>(v) - 1;
-        if (idx < 0 || static_cast<size_t>(idx) >= n)
+        if (idx < 0 || static_cast<keel::usize>(idx) >= n)
             throw Error("modred: state elimination index out of range.",
                         0, 0, "modred", "", "numkit:modred:elim");
-        isElim[static_cast<size_t>(idx)] = true;
+        isElim[static_cast<keel::usize>(idx)] = true;
     }
-    std::vector<size_t> keep, elim;
-    for (size_t i = 0; i < n; ++i) {
+    std::vector<keel::usize> keep, elim;
+    for (keel::usize i = 0; i < n; ++i) {
         if (isElim[i]) elim.push_back(i);
         else keep.push_back(i);
     }
@@ -399,22 +401,22 @@ void modred_reg(Span<const Value> args, size_t /*nargout*/, Span<Value> outs,
         for (char &ch : method) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     }
 
-    const size_t nk = keep.size();
+    const keel::usize nk = keep.size();
     Value Ar = Value::matrix(nk, nk, ValueType::DOUBLE, mr);
     Value Br = Value::matrix(nk, nu, ValueType::DOUBLE, mr);
     Value Cr = Value::matrix(ny, nk, ValueType::DOUBLE, mr);
     Value Dr = Value::matrix(ny, nu, ValueType::DOUBLE, mr);
-    for (size_t j = 0; j < nk; ++j)
-        for (size_t i = 0; i < nk; ++i)
+    for (keel::usize j = 0; j < nk; ++j)
+        for (keel::usize i = 0; i < nk; ++i)
             Ar.doubleDataMut()[j * nk + i] = A.elemAsDouble(keep[j] * n + keep[i]);
-    for (size_t j = 0; j < nu; ++j)
-        for (size_t i = 0; i < nk; ++i)
+    for (keel::usize j = 0; j < nu; ++j)
+        for (keel::usize i = 0; i < nk; ++i)
             Br.doubleDataMut()[j * nk + i] = B.elemAsDouble(j * n + keep[i]);
-    for (size_t j = 0; j < nk; ++j)
-        for (size_t i = 0; i < ny; ++i)
+    for (keel::usize j = 0; j < nk; ++j)
+        for (keel::usize i = 0; i < ny; ++i)
             Cr.doubleDataMut()[j * ny + i] = C.elemAsDouble(keep[j] * ny + i);
-    for (size_t j = 0; j < nu; ++j)
-        for (size_t i = 0; i < ny; ++i)
+    for (keel::usize j = 0; j < nu; ++j)
+        for (keel::usize i = 0; i < ny; ++i)
             Dr.doubleDataMut()[j * ny + i] = (D.numel() == ny * nu)
                 ? D.elemAsDouble(j * ny + i) : D.elemAsDouble(0);
 

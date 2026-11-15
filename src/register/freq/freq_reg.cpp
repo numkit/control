@@ -6,6 +6,9 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/ref.h>
 #include <numkit/control/freq/freq.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -20,7 +23,7 @@ namespace numkit::control {
 namespace detail {
 
 namespace {
-Value defaultDemoSys(std::pmr::memory_resource *mr) {
+Value defaultDemoSys(keel::Allocator *mr) {
     Value num = Value::scalar(1.0, mr);
     Value den = Value::matrix(1, 3, ValueType::DOUBLE, mr);
     den.doubleDataMut()[0] = 1.0;
@@ -30,25 +33,25 @@ Value defaultDemoSys(std::pmr::memory_resource *mr) {
 }
 } // anonymous
 
-void evalfr_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void evalfr_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 2, "evalfr");
-    o[0] = evalfr(a[0], a[1].toScalar(), c.engine->resource());
+    o[0] = evalfr(a[0], a[1].toScalar(), c.engine->allocator());
 }
 
-void freqresp_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void freqresp_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, 6, "freqresp");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value wArg = (a.size() >= 2) ? a[1]
                 : Value::matrix(0, 0, ValueType::DOUBLE, mr);
     o[0] = freqresp(a[0], wArg, mr);
 }
 
-void bode_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void bode_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 6, "bode");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value sys;
     Value wArg;
     bool polyForm = false;
@@ -67,7 +70,7 @@ void bode_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
     }
     auto b = bode(sys, wArg, mr);
     if (!polyForm && b.mag.numel() > 1) {
-        const size_t N = b.mag.numel();
+        const keel::usize N = b.mag.numel();
         Value m3 = Value::matrix3d(1, 1, N, ValueType::DOUBLE, mr);
         Value p3 = Value::matrix3d(1, 1, N, ValueType::DOUBLE, mr);
         std::copy(b.mag.doubleData(), b.mag.doubleData() + N, m3.doubleDataMut());
@@ -80,10 +83,10 @@ void bode_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
     if (o.size() >= 3) o[2] = std::move(b.w);
 }
 
-void nyquist_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void nyquist_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 6, "nyquist");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value sys;
     Value wArg;
     if (a.empty()) {
@@ -104,10 +107,10 @@ void nyquist_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
     if (o.size() >= 3) o[2] = std::move(n.w);
 }
 
-void rlocus_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void rlocus_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 5, "rlocus");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value sys = a.empty() ? defaultDemoSys(mr) : a[0];
     Value kArg = (a.size() >= 2) ? a[1]
                 : Value::matrix(0, 0, ValueType::DOUBLE, mr);

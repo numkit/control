@@ -6,6 +6,8 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/ref.h>
 #include <numkit/control/connect/connect.hpp>
 
 #include <numkit/sys/plugin.hpp>   // CallContext, ctx.engine->resource()
@@ -15,17 +17,17 @@
 namespace numkit::control {
 namespace detail {
 
-void series_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c) {
+void series_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c) {
     argcheck::checkNargin(a.size(), 2, 10, "series");
-    o[0] = series(a[0], a[1], c.engine->resource());
+    o[0] = series(a[0], a[1], c.engine->allocator());
 }
 
-void parallel_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c) {
+void parallel_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c) {
     argcheck::checkNargin(a.size(), 2, "parallel");  // no max: name-value tail in the reference (no count wall to 12 args)
-    o[0] = parallel(a[0], a[1], c.engine->resource());
+    o[0] = parallel(a[0], a[1], c.engine->allocator());
 }
 
-void feedback_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c) {
+void feedback_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c) {
     argcheck::checkNargin(a.size(), 2, 10, "feedback");
     int sign = -1;
     if (a.size() >= 3 && !a[2].isEmpty()) {
@@ -36,7 +38,7 @@ void feedback_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c) {
                         0, 0, "feedback", "", "numkit:feedback:signNotChoice");
         sign = static_cast<int>(sv);
     }
-    o[0] = feedback(a[0], a[1], sign, c.engine->resource());
+    o[0] = feedback(a[0], a[1], sign, c.engine->allocator());
 }
 
 } // namespace detail

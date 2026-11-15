@@ -17,6 +17,9 @@
 // larger systems but would need a Schur decomposition we don't
 // have yet.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
 #include <numkit/control/lyapunov/lyapunov.hpp>
 #include <numkit/control/internal/numerics.hpp>
 #include <numkit/control/internal/type_gates.hpp>
@@ -41,30 +44,30 @@ using CMat = internal::CMat;
 using CVec = internal::CVec;
 using internal::solveInPlace;
 
-Mat readMat(const Value &v, size_t r, size_t c) {
+Mat readMat(const Value &v, keel::usize r, keel::usize c) {
     Mat M(r * c, 0.0);
-    for (size_t i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
     return M;
 }
 
-CMat readCMat(const Value &v, size_t r, size_t c) {
-    CMat M(r * c, std::complex<double>(0.0, 0.0));
+CMat readCMat(const Value &v, keel::usize r, keel::usize c) {
+    CMat M(r * c, keel::c64(0.0, 0.0));
     if (v.isComplex()) {
-        const std::complex<double> *cd = v.complexData();
-        for (size_t i = 0; i < r * c; ++i) M[i] = cd[i];
+        const keel::c64 *cd = v.complexData();
+        for (keel::usize i = 0; i < r * c; ++i) M[i] = cd[i];
     } else {
-        for (size_t i = 0; i < r * c; ++i) M[i] = std::complex<double>(v.elemAsDouble(i), 0.0);
+        for (keel::usize i = 0; i < r * c; ++i) M[i] = keel::c64(v.elemAsDouble(i), 0.0);
     }
     return M;
 }
 
-Value matFromVec(size_t r, size_t c, const Mat &v, std::pmr::memory_resource *mr) {
+Value matFromVec(keel::usize r, keel::usize c, const Mat &v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
-Value cmatFromVec(size_t r, size_t c, const CMat &v, std::pmr::memory_resource *mr) {
+Value cmatFromVec(keel::usize r, keel::usize c, const CMat &v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::COMPLEX, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.complexDataMut());
     return m;
@@ -94,7 +97,7 @@ void lyap_argcheck(const Value &A, const Value &Q, const char *name)
 // Used by both lyap and dlyap; the only difference is how M is
 // constructed. `fn` names the entry in the singular-system voice.
 template <typename MatT>
-MatT solveKron(MatT &M, MatT &rhs, size_t n2, const char *fn)
+MatT solveKron(MatT &M, MatT &rhs, keel::usize n2, const char *fn)
 {
     MatT rhsMat = rhs;  // single-rhs solveInPlace expects column-major
     if (!solveInPlace(M, rhsMat, n2, 1))
@@ -108,39 +111,39 @@ MatT solveKron(MatT &M, MatT &rhs, size_t n2, const char *fn)
 
 } // anonymous
 
-Value lyap(const Value &Av, const Value &Qv, std::pmr::memory_resource *mr)
+Value lyap(const Value &Av, const Value &Qv, keel::Allocator *mr)
 {
     lyap_argcheck(Av, Qv, "lyap");
-    const size_t n = Av.dims().rows();
+    const keel::usize n = Av.dims().rows();
     const bool isCplx = Av.isComplex() || Qv.isComplex();
     if (n == 0) return Value::matrix(0, 0, isCplx ? ValueType::COMPLEX : ValueType::DOUBLE, mr);
 
-    const size_t n2 = n * n;
+    const keel::usize n2 = n * n;
     if (isCplx) {
         auto A = readCMat(Av, n, n);
         auto Q = readCMat(Qv, n, n);
         // Continuous Hermitian Lyapunov: A·X + X·A^H + Q = 0
         // vectorises to (I ⊗ A + conj(A) ⊗ I) · vec(X) = −vec(Q).
-        CMat M(n2 * n2, std::complex<double>(0.0, 0.0));
-        auto setEntry = [&](size_t row, size_t col, std::complex<double> v) {
+        CMat M(n2 * n2, keel::c64(0.0, 0.0));
+        auto setEntry = [&](keel::usize row, keel::usize col, keel::c64 v) {
             M[col * n2 + row] += v;
         };
-        for (size_t p = 0; p < n; ++p)
-            for (size_t i = 0; i < n; ++i)
-                for (size_t j = 0; j < n; ++j)
+        for (keel::usize p = 0; p < n; ++p)
+            for (keel::usize i = 0; i < n; ++i)
+                for (keel::usize j = 0; j < n; ++j)
                     setEntry(i + n * p, j + n * p, A[j * n + i]);
-        for (size_t p = 0; p < n; ++p)
-            for (size_t q = 0; q < n; ++q)
-                for (size_t i = 0; i < n; ++i)
-                    setEntry(i + n * p, i + n * q, std::conj(A[q * n + p]));
+        for (keel::usize p = 0; p < n; ++p)
+            for (keel::usize q = 0; q < n; ++q)
+                for (keel::usize i = 0; i < n; ++i)
+                    setEntry(i + n * p, i + n * q, keel::conj(A[q * n + p]));
         CVec rhs(n2);
-        for (size_t j = 0; j < n; ++j)
-            for (size_t i = 0; i < n; ++i)
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
                 rhs[i + n * j] = -Q[j * n + i];
         auto x = solveKron(M, rhs, n2, "lyap");
         CMat X(n2);
-        for (size_t j = 0; j < n; ++j)
-            for (size_t i = 0; i < n; ++i)
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
                 X[j * n + i] = x[i + n * j];
         return cmatFromVec(n, n, X, mr);
     }
@@ -154,75 +157,75 @@ Value lyap(const Value &Av, const Value &Qv, std::pmr::memory_resource *mr)
     // vec(X)[i + n·j] = X[i,j].
     Mat M(n2 * n2, 0.0);
 
-    auto setEntry = [&](size_t row, size_t col, double v) {
+    auto setEntry = [&](keel::usize row, keel::usize col, double v) {
         M[col * n2 + row] += v;
     };
 
     // (I⊗A): row = i + n·p, col = j + n·q with q == p, contribution A[i,j].
-    for (size_t p = 0; p < n; ++p)
-        for (size_t i = 0; i < n; ++i)
-            for (size_t j = 0; j < n; ++j) {
-                const size_t row = i + n * p;
-                const size_t col = j + n * p;
+    for (keel::usize p = 0; p < n; ++p)
+        for (keel::usize i = 0; i < n; ++i)
+            for (keel::usize j = 0; j < n; ++j) {
+                const keel::usize row = i + n * p;
+                const keel::usize col = j + n * p;
                 setEntry(row, col, A[j * n + i]);  // A[i, j] in col-major: A[j*n + i]
             }
 
     // (A⊗I): row = i + n·p, col = j + n·q with i == j, contribution A[p,q].
-    for (size_t p = 0; p < n; ++p)
-        for (size_t q = 0; q < n; ++q)
-            for (size_t i = 0; i < n; ++i) {
-                const size_t row = i + n * p;
-                const size_t col = i + n * q;
+    for (keel::usize p = 0; p < n; ++p)
+        for (keel::usize q = 0; q < n; ++q)
+            for (keel::usize i = 0; i < n; ++i) {
+                const keel::usize row = i + n * p;
+                const keel::usize col = i + n * q;
                 setEntry(row, col, A[q * n + p]);   // A[p, q]
             }
 
     // RHS = -vec(Q), column-major.
     Vec rhs(n2, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             rhs[i + n * j] = -Q[j * n + i];
 
     auto x = solveKron(M, rhs, n2, "lyap");
 
     // Reshape vec back into n×n column-major X.
     Mat X(n2, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             X[j * n + i] = x[i + n * j];
     return matFromVec(n, n, X, mr);
 }
 
-Value dlyap(const Value &Av, const Value &Qv, std::pmr::memory_resource *mr)
+Value dlyap(const Value &Av, const Value &Qv, keel::Allocator *mr)
 {
     lyap_argcheck(Av, Qv, "dlyap");
-    const size_t n = Av.dims().rows();
+    const keel::usize n = Av.dims().rows();
     const bool isCplx = Av.isComplex() || Qv.isComplex();
     if (n == 0) return Value::matrix(0, 0, isCplx ? ValueType::COMPLEX : ValueType::DOUBLE, mr);
 
-    const size_t n2 = n * n;
+    const keel::usize n2 = n * n;
     if (isCplx) {
         auto A = readCMat(Av, n, n);
         auto Q = readCMat(Qv, n, n);
         // Discrete Hermitian Lyapunov: A·X·A^H − X + Q = 0
         // vectorises to (conj(A) ⊗ A − I) · vec(X) = −vec(Q).
-        CMat M(n2 * n2, std::complex<double>(0.0, 0.0));
-        for (size_t p = 0; p < n; ++p)
-            for (size_t q = 0; q < n; ++q)
-                for (size_t i = 0; i < n; ++i)
-                    for (size_t j = 0; j < n; ++j) {
-                        const size_t row = i + n * p;
-                        const size_t col = j + n * q;
-                        M[col * n2 + row] += std::conj(A[q * n + p]) * A[j * n + i];
+        CMat M(n2 * n2, keel::c64(0.0, 0.0));
+        for (keel::usize p = 0; p < n; ++p)
+            for (keel::usize q = 0; q < n; ++q)
+                for (keel::usize i = 0; i < n; ++i)
+                    for (keel::usize j = 0; j < n; ++j) {
+                        const keel::usize row = i + n * p;
+                        const keel::usize col = j + n * q;
+                        M[col * n2 + row] += keel::conj(A[q * n + p]) * A[j * n + i];
                     }
-        for (size_t k = 0; k < n2; ++k) M[k * n2 + k] -= 1.0;
+        for (keel::usize k = 0; k < n2; ++k) M[k * n2 + k] -= 1.0;
         CVec rhs(n2);
-        for (size_t j = 0; j < n; ++j)
-            for (size_t i = 0; i < n; ++i)
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
                 rhs[i + n * j] = -Q[j * n + i];
         auto x = solveKron(M, rhs, n2, "dlyap");
         CMat X(n2);
-        for (size_t j = 0; j < n; ++j)
-            for (size_t i = 0; i < n; ++i)
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i)
                 X[j * n + i] = x[i + n * j];
         return cmatFromVec(n, n, X, mr);
     }
@@ -233,27 +236,27 @@ Value dlyap(const Value &Av, const Value &Qv, std::pmr::memory_resource *mr)
     Mat M(n2 * n2, 0.0);
 
     // (A⊗A): row = i + n·p, col = j + n·q, contribution A[p,q] · A[i,j].
-    for (size_t p = 0; p < n; ++p)
-        for (size_t q = 0; q < n; ++q)
-            for (size_t i = 0; i < n; ++i)
-                for (size_t j = 0; j < n; ++j) {
-                    const size_t row = i + n * p;
-                    const size_t col = j + n * q;
+    for (keel::usize p = 0; p < n; ++p)
+        for (keel::usize q = 0; q < n; ++q)
+            for (keel::usize i = 0; i < n; ++i)
+                for (keel::usize j = 0; j < n; ++j) {
+                    const keel::usize row = i + n * p;
+                    const keel::usize col = j + n * q;
                     M[col * n2 + row] += A[q * n + p] * A[j * n + i];
                 }
     // − I (n² × n²)
-    for (size_t k = 0; k < n2; ++k) M[k * n2 + k] -= 1.0;
+    for (keel::usize k = 0; k < n2; ++k) M[k * n2 + k] -= 1.0;
 
     Vec rhs(n2, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             rhs[i + n * j] = -Q[j * n + i];
 
     auto x = solveKron(M, rhs, n2, "dlyap");
 
     Mat X(n2, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             X[j * n + i] = x[i + n * j];
     return matFromVec(n, n, X, mr);
 }

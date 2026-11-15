@@ -26,6 +26,8 @@
 // Engine-free compute TU: Value substrate + Error + math::roots only.
 // The care / dare builtins (CallContext wrappers) live in riccati_reg.cpp.
 
+#include <keel/core.h>
+#include <keel/memory.h>
 #include <numkit/control/riccati/riccati.hpp>
 #include <numkit/control/internal/numerics.hpp>
 
@@ -48,49 +50,49 @@ using internal::charPoly;
 
 // --- small column-major matrix helpers ------------------------------
 
-Mat readMat(const Value &v, size_t r, size_t c) {
+Mat readMat(const Value &v, keel::usize r, keel::usize c) {
     Mat M(r * c, 0.0);
-    for (size_t i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
     return M;
 }
 
-Value matFromVec(size_t r, size_t c, const Mat &v, std::pmr::memory_resource *mr) {
+Value matFromVec(keel::usize r, keel::usize c, const Mat &v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
 // C = A·B with A: ra×ca, B: rb×cb (ca == rb), result ra×cb, column-major.
-Mat matmul(const Mat &A, size_t ra, size_t ca,
-           const Mat &B, size_t rb, size_t cb) {
+Mat matmul(const Mat &A, keel::usize ra, keel::usize ca,
+           const Mat &B, keel::usize rb, keel::usize cb) {
     (void)rb;  // ca == rb by contract
     Mat C(ra * cb, 0.0);
-    for (size_t j = 0; j < cb; ++j)
-        for (size_t k = 0; k < ca; ++k) {
+    for (keel::usize j = 0; j < cb; ++j)
+        for (keel::usize k = 0; k < ca; ++k) {
             const double b = B[j * ca + k];          // B[k, j]
             if (b == 0.0) continue;
-            for (size_t i = 0; i < ra; ++i)
+            for (keel::usize i = 0; i < ra; ++i)
                 C[j * ra + i] += A[k * ra + i] * b;   // A[i, k] · B[k, j]
         }
     return C;
 }
 
-Mat transpose(const Mat &A, size_t r, size_t c) {
+Mat transpose(const Mat &A, keel::usize r, keel::usize c) {
     Mat T(r * c, 0.0);
-    for (size_t j = 0; j < c; ++j)
-        for (size_t i = 0; i < r; ++i)
+    for (keel::usize j = 0; j < c; ++j)
+        for (keel::usize i = 0; i < r; ++i)
             T[i * c + j] = A[j * r + i];   // T[j, i] = A[i, j]
     return T;
 }
 
-Mat identity(size_t n) {
+Mat identity(keel::usize n) {
     Mat I(n * n, 0.0);
-    for (size_t i = 0; i < n; ++i) I[i * n + i] = 1.0;
+    for (keel::usize i = 0; i < n; ++i) I[i * n + i] = 1.0;
     return I;
 }
 
 // Inverse of an n×n matrix via LU + identity RHS. Returns false if singular.
-bool inverse(const Mat &A, size_t n, Mat &out) {
+bool inverse(const Mat &A, keel::usize n, Mat &out) {
     Mat lu = A;            // solveInPlace overwrites
     out = identity(n);
     return solveInPlace(lu, out, n, n);
@@ -105,7 +107,7 @@ double frobNorm(const Mat &A) {
 // Matrix sign function via scaled Newton (Higham). Converges quadratically
 // for a matrix with no purely-imaginary eigenvalues (true for the
 // Hamiltonian / Cayley-transformed symplectic of a well-posed Riccati).
-bool matsign(Mat Z, size_t k, Mat &out) {
+bool matsign(Mat Z, keel::usize k, Mat &out) {
     const double tol = 1e-14;
     for (int iter = 0; iter < 200; ++iter) {
         Mat Zi;
@@ -113,7 +115,7 @@ bool matsign(Mat Z, size_t k, Mat &out) {
         const double c = std::sqrt(frobNorm(Zi) / std::max(frobNorm(Z), 1e-300));
         Mat Zn(k * k, 0.0);
         double diff = 0.0, scale = 0.0;
-        for (size_t i = 0; i < k * k; ++i) {
+        for (keel::usize i = 0; i < k * k; ++i) {
             Zn[i] = 0.5 * (c * Z[i] + Zi[i] / c);
             const double d = Zn[i] - Z[i];
             diff += d * d;
@@ -130,11 +132,11 @@ bool matsign(Mat Z, size_t k, Mat &out) {
 // then symmetrize. Solves the 2n×n least-squares system W1·X = W2 via the
 // normal equations (W1ᵀW1)·X = W1ᵀW2 (n×n, well-conditioned because the
 // columns of W1 span the stable subspace).
-bool subspaceToX(const Mat &S, size_t n, Mat &X) {
-    const size_t k = 2 * n;
+bool subspaceToX(const Mat &S, keel::usize n, Mat &X) {
+    const keel::usize k = 2 * n;
     Mat W1(k * n, 0.0), W2(k * n, 0.0);
-    for (size_t j = 0; j < n; ++j) {
-        for (size_t i = 0; i < n; ++i) {
+    for (keel::usize j = 0; j < n; ++j) {
+        for (keel::usize i = 0; i < n; ++i) {
             const double z11 = S[(j) * k + (i)];
             const double z12 = S[(n + j) * k + (i)];
             const double z21 = S[(j) * k + (n + i)];
@@ -153,18 +155,18 @@ bool subspaceToX(const Mat &S, size_t n, Mat &X) {
     if (!solveInPlace(A, Bn, n, n)) return false;
     // symmetrize
     X.assign(n * n, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i)
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i)
             X[j * n + i] = 0.5 * (Bn[j * n + i] + Bn[i * n + j]);
     return true;
 }
 
 // Closed-loop eigenvalues eig(A − B·G) as a (possibly complex) column Value.
 Value closedLoopEig(const Mat &A, const Mat &B, const Mat &G,
-                    size_t n, size_t m, std::pmr::memory_resource *mr) {
+                    keel::usize n, keel::usize m, keel::Allocator *mr) {
     Mat BG = matmul(B, n, m, G, m, n);   // n×n
     Mat Acl(n * n, 0.0);
-    for (size_t i = 0; i < n * n; ++i) Acl[i] = A[i] - BG[i];
+    for (keel::usize i = 0; i < n * n; ++i) Acl[i] = A[i] - BG[i];
     auto cp = charPoly(Acl, n);          // [1, c1, …, cn]
     Value row = Value::matrix(1, cp.size(), ValueType::DOUBLE, mr);
     if (!cp.empty()) std::copy(cp.begin(), cp.end(), row.doubleDataMut());
@@ -173,7 +175,7 @@ Value closedLoopEig(const Mat &A, const Mat &B, const Mat &G,
 
 void riccati_argcheck(const Value &A, const Value &B, const Value &Q,
                       const Value &R, const char *name,
-                      size_t &n, size_t &m) {
+                      keel::usize &n, keel::usize &m) {
     if (A.dims().rows() != A.dims().cols())
         throw Error(std::string(name) + ": A must be square",
                     0, 0, name, "", "numkit:care:A");
@@ -191,21 +193,21 @@ void riccati_argcheck(const Value &A, const Value &B, const Value &Q,
 }
 
 void care_argcheck(const Value &A, const Value &B, const Value &Q,
-                   const Value &R, size_t &n, size_t &m) {
+                   const Value &R, keel::usize &n, keel::usize &m) {
     riccati_argcheck(A, B, Q, R, "care", n, m);
 }
 
 void dare_argcheck(const Value &A, const Value &B, const Value &Q,
-                   const Value &R, size_t &n, size_t &m) {
+                   const Value &R, keel::usize &n, keel::usize &m) {
     riccati_argcheck(A, B, Q, R, "dare", n, m);
 }
 
 } // anonymous
 
 RiccatiResult care(const Value &Av, const Value &Bv, const Value &Qv,
-                   const Value &Rv, std::pmr::memory_resource *mr)
+                   const Value &Rv, keel::Allocator *mr)
 {
-    size_t n = 0, m = 0;
+    keel::usize n = 0, m = 0;
     care_argcheck(Av, Bv, Qv, Rv, n, m);
 
     auto A = readMat(Av, n, n);
@@ -224,11 +226,11 @@ RiccatiResult care(const Value &Av, const Value &Bv, const Value &Qv,
     Mat Gbr = matmul(B, n, m, RiBt, m, n);     // n×n
 
     // Hamiltonian H = [A, -G_BR; -Q, -Aᵀ]   (2n×2n, column-major)
-    const size_t k = 2 * n;
+    const keel::usize k = 2 * n;
     Mat H(k * k, 0.0);
     Mat At = transpose(A, n, n);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i) {
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i) {
             H[(j) * k + (i)]         =  A[j * n + i];
             H[(n + j) * k + (i)]     = -Gbr[j * n + i];
             H[(j) * k + (n + i)]     = -Q[j * n + i];
@@ -257,9 +259,9 @@ RiccatiResult care(const Value &Av, const Value &Bv, const Value &Qv,
 }
 
 RiccatiResult dare(const Value &Av, const Value &Bv, const Value &Qv,
-                   const Value &Rv, std::pmr::memory_resource *mr)
+                   const Value &Rv, keel::Allocator *mr)
 {
-    size_t n = 0, m = 0;
+    keel::usize n = 0, m = 0;
     dare_argcheck(Av, Bv, Qv, Rv, n, m);
 
     auto A = readMat(Av, n, n);
@@ -290,10 +292,10 @@ RiccatiResult dare(const Value &Av, const Value &Bv, const Value &Qv,
     Mat AiTQ   = matmul(AiT, n, n, Q,  n, n);  // n×n
     Mat top    = matmul(GbrAiT, n, n, Q, n, n);// n×n  (= G_BR·A⁻ᵀ·Q)
 
-    const size_t k = 2 * n;
+    const keel::usize k = 2 * n;
     Mat Sp(k * k, 0.0);
-    for (size_t j = 0; j < n; ++j)
-        for (size_t i = 0; i < n; ++i) {
+    for (keel::usize j = 0; j < n; ++j)
+        for (keel::usize i = 0; i < n; ++i) {
             Sp[(j) * k + (i)]         =  A[j * n + i] + top[j * n + i];
             Sp[(n + j) * k + (i)]     = -GbrAiT[j * n + i];
             Sp[(j) * k + (n + i)]     = -AiTQ[j * n + i];
@@ -302,7 +304,7 @@ RiccatiResult dare(const Value &Av, const Value &Bv, const Value &Qv,
 
     // Cayley: C = (Sp − I)·(Sp + I)⁻¹   (unit disk → left half-plane)
     Mat SmI = Sp, SpI = Sp;
-    for (size_t i = 0; i < k; ++i) { SmI[i * k + i] -= 1.0; SpI[i * k + i] += 1.0; }
+    for (keel::usize i = 0; i < k; ++i) { SmI[i * k + i] -= 1.0; SpI[i * k + i] += 1.0; }
     Mat SpIinv;
     if (!inverse(SpI, k, SpIinv))
         throw Error("dare: Cayley transform singular (Sp has an eigenvalue at −1)",
@@ -323,7 +325,7 @@ RiccatiResult dare(const Value &Av, const Value &Bv, const Value &Qv,
     Mat XB  = matmul(X, n, n, B, n, m);        // n×m
     Mat BtXB = matmul(Bt, m, n, XB, n, m);     // m×m
     Mat M(m * m, 0.0);
-    for (size_t i = 0; i < m * m; ++i) M[i] = R[i] + BtXB[i];
+    for (keel::usize i = 0; i < m * m; ++i) M[i] = R[i] + BtXB[i];
     Mat BtX = matmul(Bt, m, n, X, n, n);       // m×n
     Mat BtXA = matmul(BtX, m, n, A, n, n);     // m×n
     if (!solveInPlace(M, BtXA, m, n))

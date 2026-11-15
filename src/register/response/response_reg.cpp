@@ -6,6 +6,9 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/ref.h>
 #include <numkit/control/response/response.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -21,7 +24,7 @@ namespace numkit::control {
 namespace detail {
 
 namespace {
-Value defaultDemoSys(std::pmr::memory_resource *mr) {
+Value defaultDemoSys(keel::Allocator *mr) {
     Value num = Value::scalar(1.0, mr);
     Value den = Value::matrix(1, 3, ValueType::DOUBLE, mr);
     den.doubleDataMut()[0] = 1.0;
@@ -31,11 +34,11 @@ Value defaultDemoSys(std::pmr::memory_resource *mr) {
 }
 } // anonymous
 
-void step_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
+void step_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
               CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 6, "step");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value sys;
     Value tArg;
     if (a.empty()) {
@@ -59,11 +62,11 @@ void step_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
     if (outs.size() >= 3) outs[2] = std::move(xOut);
 }
 
-void impulse_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
+void impulse_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
                  CallContext &c)
 {
     argcheck::checkNargin(a.size(), 0, 6, "impulse");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     Value sys;
     Value tArg;
     if (a.empty()) {
@@ -87,25 +90,25 @@ void impulse_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
     if (outs.size() >= 3) outs[2] = std::move(xOut);
 }
 
-void initial_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
+void initial_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
                  CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 6, "initial");
-    Value tArg = (a.size() >= 3) ? a[2] : Value::matrix(1, 0, ValueType::DOUBLE, c.engine->resource());
+    Value tArg = (a.size() >= 3) ? a[2] : Value::matrix(1, 0, ValueType::DOUBLE, c.engine->allocator());
     Value xOut;
     auto [y, t] = initial_response(a[0], a[1], tArg,
                                    outs.size() >= 3 ? &xOut : nullptr,
-                                   c.engine->resource());
+                                   c.engine->allocator());
     if (outs.size() >= 1) outs[0] = std::move(y);
     if (outs.size() >= 2) outs[1] = std::move(t);
     if (outs.size() >= 3) outs[2] = std::move(xOut);
 }
 
-void lsim_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
+void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
               CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 7, "lsim");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     if (!a[0].isStruct() && !a[0].isObject()
         && (a[0].isNumeric() || a[0].isComplex())
         && (a[1].isNumeric() || a[1].isComplex())) {
@@ -138,9 +141,9 @@ void lsim_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
             throw Error("lsim: time vector t is required for continuous-time models.",
                         0, 0, "lsim", "", "numkit:lsim:t");
         const double dt = (Ts > 0.0) ? Ts : 1.0;
-        const std::size_t N = a[1].numel();
+        const keel::usize N = a[1].numel();
         tIn = Value::matrix(N, 1, ValueType::DOUBLE, mr);
-        for (std::size_t i = 0; i < N; ++i)
+        for (keel::usize i = 0; i < N; ++i)
             tIn.doubleDataMut()[i] = static_cast<double>(i) * dt;
     }
     Value x0 = (a.size() >= 4 && !a[3].isChar() && !a[3].isString())
@@ -152,7 +155,7 @@ void lsim_reg(Span<const Value> a, size_t /*nargout*/, Span<Value> outs,
     // MATLAB: [y, t, x] = lsim(...). t echoes the input time grid.
     if (outs.size() >= 2) {
         Value t = Value::matrix(tIn.numel(), 1, ValueType::DOUBLE, mr);
-        for (std::size_t i = 0; i < tIn.numel(); ++i)
+        for (keel::usize i = 0; i < tIn.numel(); ++i)
             t.doubleDataMut()[i] = tIn.elemAsDouble(i);
         outs[1] = std::move(t);
     }

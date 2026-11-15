@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 
 namespace numkit::control {
@@ -44,7 +44,7 @@ namespace numkit::control {
 ///
 /// @see place
 Value acker(const Value &A, const Value &B, const Value &p,
-            std::pmr::memory_resource *mr = nullptr);
+            keel::Allocator *mr = nullptr);
 
 /// @brief SISO alias for @ref acker — `K = place(A, B, p)`.
 ///
@@ -63,7 +63,7 @@ Value acker(const Value &A, const Value &B, const Value &p,
 ///            disagree, or `(A, B)` is uncontrollable.
 /// @see acker
 Value place(const Value &A, const Value &B, const Value &p,
-            std::pmr::memory_resource *mr = nullptr);
+            keel::Allocator *mr = nullptr);
 
 
 /// @}

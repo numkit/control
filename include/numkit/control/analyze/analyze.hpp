@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 
 namespace numkit::control {
@@ -32,7 +32,7 @@ namespace numkit::control {
 /// @endcode
 ///
 /// @see margin, stepinfo, evalfr
-Value dcgain(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value dcgain(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// Result of @ref margin "margin(sys)" — gain / phase margin pair plus
 /// the frequencies at which they occur.
@@ -66,7 +66,7 @@ struct MarginResult {
 ///
 /// @see bode, dcgain, stepinfo
 MarginResult margin(const Value &sys,
-                    std::pmr::memory_resource *mr = nullptr);
+                    keel::Allocator *mr = nullptr);
 
 /// Step-response quality metrics (`S = stepinfo(sys)`).
 ///
@@ -90,7 +90,7 @@ MarginResult margin(const Value &sys,
 /// @return     Struct Value with the 8 fields above.
 ///
 /// @see margin, dcgain, step_response
-Value stepinfo(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value stepinfo(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// All stability margins as a struct (`S = allmargin(sys)`).
 ///
@@ -106,7 +106,7 @@ Value stepinfo(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     Struct Value with the 7 fields above.
 /// @see margin, hinfnorm
-Value allmargin(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value allmargin(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// H-infinity norm of a continuous-time LTI system (`g = hinfnorm(sys)`).
 ///
@@ -122,7 +122,7 @@ Value allmargin(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @throws     Error on a non-LTI input or a discrete-time system
 ///             (discrete H∞ is not yet supported).
 /// @see margin, sigma, dcgain
-Value hinfnorm(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value hinfnorm(const Value &sys, keel::Allocator *mr = nullptr);
 
 
 /// @}

@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <keel/core.h>
+#include <keel/memory.h>
 #include <string>
 #include <string_view>
 
@@ -177,7 +179,7 @@ inline void requireLtiModel(const Value &sys, std::string_view fn,
 /// per-function first — the reference's coercion set differs per
 /// entry (probed R2025b 2026-09-18).
 inline Value coerceToDoubleMatrix(const Value &v,
-                                  std::pmr::memory_resource *mr = nullptr)
+                                  keel::Allocator *mr = nullptr)
 {
     const ValueType t = v.type();
     if (t == ValueType::DOUBLE || t == ValueType::COMPLEX)
@@ -186,18 +188,18 @@ inline Value coerceToDoubleMatrix(const Value &v,
         // String scalars coerce like char rows (filt's numerator).
         const std::string sv = v.toString();
         Value out = Value::matrix(1, sv.size(), ValueType::DOUBLE, mr);
-        double *od = out.doubleDataMut();
-        for (std::size_t i = 0; i < sv.size(); ++i)
-            od[i] = static_cast<double>(static_cast<unsigned char>(sv[i]));
+        keel::f64 *od = out.doubleDataMut();
+        for (keel::usize i = 0; i < sv.size(); ++i)
+            od[i] = static_cast<keel::f64>(static_cast<unsigned char>(sv[i]));
         return out;
     }
     if (t == ValueType::SINGLE || t == ValueType::LOGICAL
         || t == ValueType::CHAR || isIntegerType(t)) {
         Value out = Value::matrix(v.dims().rows(), v.dims().cols(),
                                   ValueType::DOUBLE, mr);
-        const std::size_t n = v.numel();
-        double *od = out.doubleDataMut();
-        for (std::size_t i = 0; i < n; ++i)
+        const keel::usize n = v.numel();
+        keel::f64 *od = out.doubleDataMut();
+        for (keel::usize i = 0; i < n; ++i)
             od[i] = v.elemAsDouble(i);
         return out;
     }

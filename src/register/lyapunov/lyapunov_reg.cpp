@@ -6,6 +6,8 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/ref.h>
 #include <numkit/control/lyapunov/lyapunov.hpp>
 
 #include <numkit/sys/plugin.hpp>   // CallContext, ctx.engine->resource()
@@ -15,16 +17,16 @@
 namespace numkit::control {
 namespace detail {
 
-void lyap_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void lyap_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 4, "lyap");
-    o[0] = lyap(a[0], a[1], c.engine->resource());
+    o[0] = lyap(a[0], a[1], c.engine->allocator());
 }
 
-void dlyap_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void dlyap_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 4, "dlyap");
-    o[0] = dlyap(a[0], a[1], c.engine->resource());
+    o[0] = dlyap(a[0], a[1], c.engine->allocator());
 }
 
 } // namespace detail

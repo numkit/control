@@ -6,6 +6,10 @@
 // proper rational form) — that's left to the user / converters which
 // check on-demand.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
+#include <keel/math.h>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>
 #include <numkit/control/internal/type_gates.hpp>
@@ -24,25 +28,25 @@ namespace numkit::control {
 
 namespace {
 
-Value rowVec(const Value &v, std::pmr::memory_resource *mr) {
+Value rowVec(const Value &v, keel::Allocator *mr) {
     // Always represent coefficient lists as a row vector, copying
     // through the user memory resource so the struct fields don't
     // alias caller-side scratch memory.
-    const size_t N = v.numel();
+    const keel::usize N = v.numel();
     if (v.type() == ValueType::COMPLEX) {
         Value r = Value::matrix(1, N, ValueType::COMPLEX, mr);
-        const std::complex<double> *src = v.complexData();
-        std::complex<double> *rd = r.complexDataMut();
-        for (size_t i = 0; i < N; ++i) rd[i] = src[i];
+        const keel::c64 *src = v.complexData();
+        keel::c64 *rd = r.complexDataMut();
+        for (keel::usize i = 0; i < N; ++i) rd[i] = src[i];
         return r;
     }
     Value r = Value::matrix(1, N, ValueType::DOUBLE, mr);
     double *rd = r.doubleDataMut();
-    for (size_t i = 0; i < N; ++i) rd[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < N; ++i) rd[i] = v.elemAsDouble(i);
     return r;
 }
 
-Value tagStruct(const char *kind, double Ts, std::pmr::memory_resource *mr) {
+Value tagStruct(const char *kind, double Ts, keel::Allocator *mr) {
     Value s = Value::structure(mr);
     s.field("kind") = Value::fromString(kind, mr);
     s.field("Ts") = Value::scalar(Ts, mr);
@@ -60,7 +64,7 @@ Value tagStruct(const char *kind, double Ts, std::pmr::memory_resource *mr) {
 // the MIMO form (unsupported stub).
 // ──────────────────────────────────────────────────────────────────────
 Value tfCoeffArg(const Value &v, const char *fn, const char *argName,
-                 bool broadNum, std::pmr::memory_resource *mr)
+                 bool broadNum, keel::Allocator *mr)
 {
     using internal::shapeOf;
     Value u = v;
@@ -99,7 +103,7 @@ Value tfCoeffArg(const Value &v, const char *fn, const char *argName,
 // Build a MIMO cell grid when either num or den is a multi-element cell.
 bool buildMimoCellTf(const Value &num, const Value &den, const char *fn,
                      bool broadNum, Value &numOut, Value &denOut,
-                     std::pmr::memory_resource *mr)
+                     keel::Allocator *mr)
 {
     Value uNum = num;
     while (uNum.isCell() && uNum.numel() == 1) {
@@ -113,7 +117,7 @@ bool buildMimoCellTf(const Value &num, const Value &den, const char *fn,
     }
     if (!uNum.isCell() && !uDen.isCell()) return false;
 
-    size_t r = 1, c = 1;
+    keel::usize r = 1, c = 1;
     if (uNum.isCell() && uDen.isCell()) {
         if (uNum.dims().rows() != uDen.dims().rows() ||
             uNum.dims().cols() != uDen.dims().cols())
@@ -131,8 +135,8 @@ bool buildMimoCellTf(const Value &num, const Value &den, const char *fn,
 
     numOut = Value::cell(r, c, mr);
     denOut = Value::cell(r, c, mr);
-    const size_t total = r * c;
-    for (size_t i = 0; i < total; ++i) {
+    const keel::usize total = r * c;
+    for (keel::usize i = 0; i < total; ++i) {
         const Value &ni = uNum.isCell() ? uNum.cellAt(i) : uNum;
         const Value &di = uDen.isCell() ? uDen.cellAt(i) : uDen;
         numOut.cellAt(i) = rowVec(tfCoeffArg(ni, fn, "num", broadNum, mr), mr);
@@ -142,7 +146,7 @@ bool buildMimoCellTf(const Value &num, const Value &den, const char *fn,
 }
 
 bool tf_argcheck(const Value &num, const Value &den, Value &numOut, Value &denOut,
-                 std::pmr::memory_resource *mr)
+                 keel::Allocator *mr)
 {
     if (buildMimoCellTf(num, den, "tf", /*broadNum=*/false, numOut, denOut, mr))
         return true;
@@ -160,7 +164,7 @@ void zpk_argcheck(const Value &z, const Value &p, double k, double Ts)
 }
 
 bool filt_argcheck(const Value &num, const Value &den, Value &numOut, Value &denOut,
-                   std::pmr::memory_resource *mr)
+                   keel::Allocator *mr)
 {
     if (buildMimoCellTf(num, den, "filt", /*broadNum=*/true, numOut, denOut, mr))
         return true;
@@ -178,7 +182,7 @@ void frd_argcheck(const Value &response, const Value &frequency)
 
 } // anonymous
 
-Value tf(const Value &num, const Value &den, double Ts, std::pmr::memory_resource *mr)
+Value tf(const Value &num, const Value &den, double Ts, keel::Allocator *mr)
 {
     Value numC, denC;
     if (tf_argcheck(num, den, numC, denC, mr)) {
@@ -194,7 +198,7 @@ Value tf(const Value &num, const Value &den, double Ts, std::pmr::memory_resourc
 }
 
 Value zpk(const Value &z, const Value &p, double k, double Ts,
-          std::pmr::memory_resource *mr)
+          keel::Allocator *mr)
 {
     zpk_argcheck(z, p, k, Ts);
     Value s = tagStruct("zpk", Ts, mr);
@@ -210,7 +214,7 @@ namespace {
 // double storage but rejects logical/char/cell/string (probed R2025b —
 // Control:ltiobject:ssProperties6).
 Value ssMatArg(const Value &m, const char *fn, const char *argName,
-               std::pmr::memory_resource *mr)
+               keel::Allocator *mr)
 {
     using internal::shapeOf;
     const ValueType t = m.type();
@@ -226,28 +230,28 @@ Value ssMatArg(const Value &m, const char *fn, const char *argName,
 
 // Expand a scalar block to r×c; pass everything else through. Scalars
 // expand exactly like the reference's documented D-gain expansion.
-Value expandScalarBlock(const Value &m, size_t r, size_t c,
-                        std::pmr::memory_resource *mr)
+Value expandScalarBlock(const Value &m, keel::usize r, keel::usize c,
+                        keel::Allocator *mr)
 {
     if (m.numel() != 1 || (r == 1 && c == 1) || r == 0 || c == 0)
         return m;
     if (m.type() == ValueType::COMPLEX) {
         Value out = Value::matrix(r, c, ValueType::COMPLEX, mr);
-        const std::complex<double> src = m.complexData()[0];
-        std::complex<double> *od = out.complexDataMut();
-        for (size_t i = 0; i < r * c; ++i) od[i] = src;
+        const keel::c64 src = m.complexData()[0];
+        keel::c64 *od = out.complexDataMut();
+        for (keel::usize i = 0; i < r * c; ++i) od[i] = src;
         return out;
     }
     Value out = Value::matrix(r, c, ValueType::DOUBLE, mr);
     const double src = m.elemAsDouble(0);
     double *od = out.doubleDataMut();
-    for (size_t i = 0; i < r * c; ++i) od[i] = src;
+    for (keel::usize i = 0; i < r * c; ++i) od[i] = src;
     return out;
 }
 
 void ss_argcheck(const Value &A, const Value &B, const Value &C, const Value &D,
                  Value &Av, Value &Bv, Value &Cv, Value &Dv,
-                 std::pmr::memory_resource *mr)
+                 keel::Allocator *mr)
 {
     Av = ssMatArg(A, "ss", "A", mr);
     Bv = ssMatArg(B, "ss", "B", mr);
@@ -263,9 +267,9 @@ void ss_argcheck(const Value &A, const Value &B, const Value &C, const Value &D,
     };
     if (Av.numel() > 1 && Av.dims().rows() != Av.dims().cols())
         blockErr("A", Av);
-    const size_t n = (Av.numel() == 0) ? 0 : Av.dims().rows();
-    const size_t m = (Bv.numel() == 0) ? 0 : ((Bv.numel() == 1) ? 1 : Bv.dims().cols());
-    const size_t p = (Cv.numel() == 0) ? 0 : ((Cv.numel() == 1) ? 1 : Cv.dims().rows());
+    const keel::usize n = (Av.numel() == 0) ? 0 : Av.dims().rows();
+    const keel::usize m = (Bv.numel() == 0) ? 0 : ((Bv.numel() == 1) ? 1 : Bv.dims().cols());
+    const keel::usize p = (Cv.numel() == 0) ? 0 : ((Cv.numel() == 1) ? 1 : Cv.dims().rows());
     if (Bv.numel() > 1 && Bv.dims().rows() != n) blockErr("B", Bv);
     if (Cv.numel() > 1 && Cv.dims().cols() != n) blockErr("C", Cv);
     if (Dv.numel() > 1
@@ -278,7 +282,7 @@ void ss_argcheck(const Value &A, const Value &B, const Value &C, const Value &D,
 
 } // anonymous
 
-Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double Ts, std::pmr::memory_resource *mr)
+Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double Ts, keel::Allocator *mr)
 {
     Value Av, Bv, Cv, Dv;
     ss_argcheck(A, B, C, D, Av, Bv, Cv, Dv, mr);
@@ -286,18 +290,18 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
     Value s = tagStruct("ss", Ts, mr);
     // Copy state-space matrices through the user resource.
     auto copyMat = [&](const Value &m) {
-        const size_t r = m.dims().rows();
-        const size_t c = m.dims().cols();
+        const keel::usize r = m.dims().rows();
+        const keel::usize c = m.dims().cols();
         if (m.type() == ValueType::COMPLEX) {
             Value out = Value::matrix(r, c, ValueType::COMPLEX, mr);
-            const std::complex<double> *src = m.complexData();
-            std::complex<double> *od = out.complexDataMut();
-            for (size_t i = 0; i < r * c; ++i) od[i] = src[i];
+            const keel::c64 *src = m.complexData();
+            keel::c64 *od = out.complexDataMut();
+            for (keel::usize i = 0; i < r * c; ++i) od[i] = src[i];
             return out;
         }
         Value out = Value::matrix(r, c, ValueType::DOUBLE, mr);
         double *od = out.doubleDataMut();
-        for (size_t i = 0; i < r * c; ++i) od[i] = m.elemAsDouble(i);
+        for (keel::usize i = 0; i < r * c; ++i) od[i] = m.elemAsDouble(i);
         return out;
     };
     s.field("A") = copyMat(Av);
@@ -307,7 +311,7 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
     return s;
 }
 
-Value filt(const Value &num, const Value &den, double Ts, std::pmr::memory_resource *mr)
+Value filt(const Value &num, const Value &den, double Ts, keel::Allocator *mr)
 {
     Value numC, denC;
     if (filt_argcheck(num, den, numC, denC, mr)) {
@@ -324,27 +328,27 @@ Value filt(const Value &num, const Value &den, double Ts, std::pmr::memory_resou
     return s;
 }
 
-Value frd(const Value &response, const Value &frequency, double Ts, std::pmr::memory_resource *mr)
+Value frd(const Value &response, const Value &frequency, double Ts, keel::Allocator *mr)
 {
     frd_argcheck(response, frequency);
     Value s = tagStruct("frd", Ts, mr);
-    const size_t N = frequency.numel();
+    const keel::usize N = frequency.numel();
     // resp may be complex; copy as column vector.
     if (response.type() == ValueType::COMPLEX) {
         Value rv = Value::matrix(N, 1, ValueType::COMPLEX, mr);
-        const std::complex<double> *src = response.complexData();
-        std::complex<double> *rd = rv.complexDataMut();
-        for (size_t i = 0; i < N; ++i) rd[i] = src[i];
+        const keel::c64 *src = response.complexData();
+        keel::c64 *rd = rv.complexDataMut();
+        for (keel::usize i = 0; i < N; ++i) rd[i] = src[i];
         s.field("resp") = std::move(rv);
     } else {
         Value rv = Value::matrix(N, 1, ValueType::DOUBLE, mr);
         double *rd = rv.doubleDataMut();
-        for (size_t i = 0; i < N; ++i) rd[i] = response.elemAsDouble(i);
+        for (keel::usize i = 0; i < N; ++i) rd[i] = response.elemAsDouble(i);
         s.field("resp") = std::move(rv);
     }
     Value fv = Value::matrix(N, 1, ValueType::DOUBLE, mr);
     double *fd = fv.doubleDataMut();
-    for (size_t i = 0; i < N; ++i) fd[i] = frequency.elemAsDouble(i);
+    for (keel::usize i = 0; i < N; ++i) fd[i] = frequency.elemAsDouble(i);
     s.field("freq") = std::move(fv);
     return s;
 }
@@ -356,25 +360,25 @@ Value frd(const Value &response, const Value &frequency, double Ts, std::pmr::me
 namespace {
 
 template <typename T>
-bool lu_decomp(T *A, int *perm, size_t n) {
-    for (size_t i = 0; i < n; ++i) perm[i] = static_cast<int>(i);
-    for (size_t k = 0; k < n; ++k) {
-        size_t piv = k;
-        double best = std::abs(A[k + k * n]);
-        for (size_t i = k + 1; i < n; ++i) {
-            const double v = std::abs(A[i + k * n]);
+bool lu_decomp(T *A, int *perm, keel::usize n) {
+    for (keel::usize i = 0; i < n; ++i) perm[i] = static_cast<int>(i);
+    for (keel::usize k = 0; k < n; ++k) {
+        keel::usize piv = k;
+        double best = keel::abs(A[k + k * n]);
+        for (keel::usize i = k + 1; i < n; ++i) {
+            const double v = keel::abs(A[i + k * n]);
             if (v > best) { best = v; piv = i; }
         }
         if (best == 0.0) return false;
         if (piv != k) {
-            for (size_t j = 0; j < n; ++j) std::swap(A[k + j * n], A[piv + j * n]);
+            for (keel::usize j = 0; j < n; ++j) std::swap(A[k + j * n], A[piv + j * n]);
             std::swap(perm[k], perm[piv]);
         }
         const T pivVal = A[k + k * n];
-        for (size_t i = k + 1; i < n; ++i) {
+        for (keel::usize i = k + 1; i < n; ++i) {
             const T m = A[i + k * n] / pivVal;
             A[i + k * n] = m;
-            for (size_t j = k + 1; j < n; ++j)
+            for (keel::usize j = k + 1; j < n; ++j)
                 A[i + j * n] -= m * A[k + j * n];
         }
     }
@@ -383,92 +387,92 @@ bool lu_decomp(T *A, int *perm, size_t n) {
 
 template <typename T>
 void lu_solve(const T *LU, const int *perm,
-              T *x, const T *b, size_t n) {
+              T *x, const T *b, keel::usize n) {
     std::vector<T> z(n);
-    for (size_t i = 0; i < n; ++i) z[i] = b[perm[i]];
-    for (size_t i = 0; i < n; ++i) {
+    for (keel::usize i = 0; i < n; ++i) z[i] = b[perm[i]];
+    for (keel::usize i = 0; i < n; ++i) {
         T s = z[i];
-        for (size_t j = 0; j < i; ++j) s -= LU[i + j * n] * z[j];
+        for (keel::usize j = 0; j < i; ++j) s -= LU[i + j * n] * z[j];
         z[i] = s;
     }
-    for (size_t i = n; i-- > 0;) {
+    for (keel::usize i = n; i-- > 0;) {
         T s = z[i];
-        for (size_t j = i + 1; j < n; ++j) s -= LU[i + j * n] * x[j];
+        for (keel::usize j = i + 1; j < n; ++j) s -= LU[i + j * n] * x[j];
         x[i] = s / LU[i + i * n];
     }
 }
 
-bool inverse_n(const Value &T, std::vector<double> &out, size_t n) {
+bool inverse_n(const Value &T, std::vector<double> &out, keel::usize n) {
     if (T.dims().rows() != n || T.dims().cols() != n) return false;
     std::vector<double> LU(n * n);
-    for (size_t i = 0; i < n * n; ++i) LU[i] = T.elemAsDouble(i);
+    for (keel::usize i = 0; i < n * n; ++i) LU[i] = T.elemAsDouble(i);
     std::vector<int> perm(n);
     if (!lu_decomp(LU.data(), perm.data(), n)) return false;
     out.assign(n * n, 0.0);
     std::vector<double> ej(n), x(n);
-    for (size_t k = 0; k < n; ++k) {
+    for (keel::usize k = 0; k < n; ++k) {
         std::fill(ej.begin(), ej.end(), 0.0);
         ej[k] = 1.0;
         lu_solve(LU.data(), perm.data(), x.data(), ej.data(), n);
-        for (size_t i = 0; i < n; ++i) out[i + k * n] = x[i];
+        for (keel::usize i = 0; i < n; ++i) out[i + k * n] = x[i];
     }
     return true;
 }
 
-bool inverse_n_cplx(const Value &T, std::vector<std::complex<double>> &out, size_t n) {
+bool inverse_n_cplx(const Value &T, std::vector<keel::c64> &out, keel::usize n) {
     if (T.dims().rows() != n || T.dims().cols() != n) return false;
-    std::vector<std::complex<double>> LU(n * n);
+    std::vector<keel::c64> LU(n * n);
     if (T.isComplex()) {
-        const std::complex<double> *cd = T.complexData();
-        for (size_t i = 0; i < n * n; ++i) LU[i] = cd[i];
+        const keel::c64 *cd = T.complexData();
+        for (keel::usize i = 0; i < n * n; ++i) LU[i] = cd[i];
     } else {
-        for (size_t i = 0; i < n * n; ++i) LU[i] = std::complex<double>(T.elemAsDouble(i), 0.0);
+        for (keel::usize i = 0; i < n * n; ++i) LU[i] = keel::c64(T.elemAsDouble(i), 0.0);
     }
     std::vector<int> perm(n);
     if (!lu_decomp(LU.data(), perm.data(), n)) return false;
-    out.assign(n * n, std::complex<double>(0.0, 0.0));
-    std::vector<std::complex<double>> ej(n), x(n);
-    for (size_t k = 0; k < n; ++k) {
-        std::fill(ej.begin(), ej.end(), std::complex<double>(0.0, 0.0));
-        ej[k] = std::complex<double>(1.0, 0.0);
+    out.assign(n * n, keel::c64(0.0, 0.0));
+    std::vector<keel::c64> ej(n), x(n);
+    for (keel::usize k = 0; k < n; ++k) {
+        std::fill(ej.begin(), ej.end(), keel::c64(0.0, 0.0));
+        ej[k] = keel::c64(1.0, 0.0);
         lu_solve(LU.data(), perm.data(), x.data(), ej.data(), n);
-        for (size_t i = 0; i < n; ++i) out[i + k * n] = x[i];
+        for (keel::usize i = 0; i < n; ++i) out[i + k * n] = x[i];
     }
     return true;
 }
 
 template <typename T>
-void matmul_n(const std::vector<T> &A, size_t aR, size_t aC,
-              const std::vector<T> &B, size_t bR, size_t bC,
+void matmul_n(const std::vector<T> &A, keel::usize aR, keel::usize aC,
+              const std::vector<T> &B, keel::usize bR, keel::usize bC,
               std::vector<T> &C)
 {
     (void)bR;
     C.assign(aR * bC, T(0));
-    for (size_t j = 0; j < bC; ++j)
-        for (size_t k = 0; k < aC; ++k) {
+    for (keel::usize j = 0; j < bC; ++j)
+        for (keel::usize k = 0; k < aC; ++k) {
             const T bjk = B[k + j * bR];
-            for (size_t i = 0; i < aR; ++i)
+            for (keel::usize i = 0; i < aR; ++i)
                 C[i + j * aR] += A[i + k * aR] * bjk;
         }
 }
 
 std::vector<double> readMat(const Value &v) {
-    const size_t r = v.dims().rows();
-    const size_t c = v.dims().cols();
+    const keel::usize r = v.dims().rows();
+    const keel::usize c = v.dims().cols();
     std::vector<double> out(r * c);
-    for (size_t i = 0; i < r * c; ++i) out[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < r * c; ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
-std::vector<std::complex<double>> readCMat(const Value &v) {
-    const size_t r = v.dims().rows();
-    const size_t c = v.dims().cols();
-    std::vector<std::complex<double>> out(r * c);
+std::vector<keel::c64> readCMat(const Value &v) {
+    const keel::usize r = v.dims().rows();
+    const keel::usize c = v.dims().cols();
+    std::vector<keel::c64> out(r * c);
     if (v.isComplex()) {
-        const std::complex<double> *cd = v.complexData();
-        for (size_t i = 0; i < r * c; ++i) out[i] = cd[i];
+        const keel::c64 *cd = v.complexData();
+        for (keel::usize i = 0; i < r * c; ++i) out[i] = cd[i];
     } else {
-        for (size_t i = 0; i < r * c; ++i) out[i] = std::complex<double>(v.elemAsDouble(i), 0.0);
+        for (keel::usize i = 0; i < r * c; ++i) out[i] = keel::c64(v.elemAsDouble(i), 0.0);
     }
     return out;
 }
@@ -490,37 +494,37 @@ const std::string &kindOf(const Value &sys) {
 }
 
 // Pad num with leading zeros to match den length (MATLAB tfdata convention).
-Value padToLen(const Value &row, size_t targetLen, std::pmr::memory_resource *mr) {
-    const size_t N = row.numel();
+Value padToLen(const Value &row, keel::usize targetLen, keel::Allocator *mr) {
+    const keel::usize N = row.numel();
     if (N >= targetLen) return rowVec(row, mr);
     Value out = Value::matrix(1, targetLen, ValueType::DOUBLE, mr);
     double *od = out.doubleDataMut();
-    const size_t pad = targetLen - N;
-    for (size_t i = 0; i < pad; ++i)     od[i] = 0.0;
-    for (size_t i = 0; i < N;   ++i)     od[pad + i] = row.elemAsDouble(i);
+    const keel::usize pad = targetLen - N;
+    for (keel::usize i = 0; i < pad; ++i)     od[i] = 0.0;
+    for (keel::usize i = 0; i < N;   ++i)     od[pad + i] = row.elemAsDouble(i);
     return out;
 }
 
 // Wrap a single value in a 1×1 cell.
-Value wrapCell(const Value &v, std::pmr::memory_resource *mr) {
+Value wrapCell(const Value &v, keel::Allocator *mr) {
     Value c = Value::cell(1, 1, mr);
     c.cellAt(0) = v;
     return c;
 }
 
 // Column-vector copy (used for zpkdata's z/p outputs).
-Value colVec(const Value &v, std::pmr::memory_resource *mr) {
-    const size_t N = v.numel();
+Value colVec(const Value &v, keel::Allocator *mr) {
+    const keel::usize N = v.numel();
     if (v.type() == ValueType::COMPLEX) {
         Value r = Value::matrix(N, 1, ValueType::COMPLEX, mr);
-        const std::complex<double> *src = v.complexData();
-        std::complex<double> *rd = r.complexDataMut();
-        for (size_t i = 0; i < N; ++i) rd[i] = src[i];
+        const keel::c64 *src = v.complexData();
+        keel::c64 *rd = r.complexDataMut();
+        for (keel::usize i = 0; i < N; ++i) rd[i] = src[i];
         return r;
     }
     Value r = Value::matrix(N, 1, ValueType::DOUBLE, mr);
     double *rd = r.doubleDataMut();
-    for (size_t i = 0; i < N; ++i) rd[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < N; ++i) rd[i] = v.elemAsDouble(i);
     return r;
 }
 
@@ -556,7 +560,7 @@ void frdata_argcheck(const Value &sys)
 }
 
 void ss2ss_argcheck(const Value &sys, const Value &T, Value &Tc,
-                    std::pmr::memory_resource *mr)
+                    keel::Allocator *mr)
 {
     if (kindOf(sys) != "ss")
         throw Error("ss2ss: input must be an ss model",
@@ -565,7 +569,7 @@ void ss2ss_argcheck(const Value &sys, const Value &T, Value &Tc,
     internal::requireNonIntegerMatrix(T, "ss2ss", "T", 2);
     Tc = internal::coerceToDoubleMatrix(T, mr);
     const Value &Av = sys.field("A");
-    const size_t n = Av.dims().rows();
+    const keel::usize n = Av.dims().rows();
     if (Av.dims().cols() != n || Tc.dims().rows() != n || Tc.dims().cols() != n)
         throw Error("ss2ss: T must be n×n with n = order(sys)",
                     0, 0, "ss2ss", "", "numkit:ss2ss:size");
@@ -574,7 +578,7 @@ void ss2ss_argcheck(const Value &sys, const Value &T, Value &Tc,
 } // anonymous
 
 std::tuple<Value, Value>
-tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
+tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
 {
     tfdata_argcheck(sys);
     Value num, den;
@@ -588,7 +592,7 @@ tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
         std::tie(num, den) = ss2tf(sys.field("A"), sys.field("B"),
                                     sys.field("C"), sys.field("D"), 1, mr);
     }
-    const size_t L = std::max(num.numel(), den.numel());
+    const keel::usize L = std::max(num.numel(), den.numel());
     Value np = padToLen(num, L, mr);
     Value dp = padToLen(den, L, mr);
     if (asVector) return {std::move(np), std::move(dp)};
@@ -596,7 +600,7 @@ tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
 }
 
 std::tuple<Value, Value, Value>
-zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
+zpkdata(const Value &sys, bool asVector, keel::Allocator *mr)
 {
     zpkdata_argcheck(sys);
     Value z, p, k;
@@ -623,7 +627,7 @@ zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr)
 }
 
 std::tuple<Value, Value, Value, Value>
-ssdata(const Value &sys, std::pmr::memory_resource *mr)
+ssdata(const Value &sys, keel::Allocator *mr)
 {
     ssdata_argcheck(sys);
     const std::string &kind = kindOf(sys);
@@ -647,7 +651,7 @@ ssdata(const Value &sys, std::pmr::memory_resource *mr)
 }
 
 std::tuple<Value, Value>
-frdata(const Value &sys, std::pmr::memory_resource *mr)
+frdata(const Value &sys, keel::Allocator *mr)
 {
     frdata_argcheck(sys);
     // Shallow copy through the user resource; resp / freq are already
@@ -656,23 +660,23 @@ frdata(const Value &sys, std::pmr::memory_resource *mr)
     Value freq = sys.field("freq");
     // Defensive copy so callers don't observe aliasing into the struct.
     auto copyV = [&](const Value &v) -> Value {
-        const size_t N = v.numel();
+        const keel::usize N = v.numel();
         if (v.type() == ValueType::COMPLEX) {
             Value out = Value::matrix(N, 1, ValueType::COMPLEX, mr);
-            const std::complex<double> *src = v.complexData();
-            std::complex<double> *od = out.complexDataMut();
-            for (size_t i = 0; i < N; ++i) od[i] = src[i];
+            const keel::c64 *src = v.complexData();
+            keel::c64 *od = out.complexDataMut();
+            for (keel::usize i = 0; i < N; ++i) od[i] = src[i];
             return out;
         }
         Value out = Value::matrix(N, 1, ValueType::DOUBLE, mr);
         double *od = out.doubleDataMut();
-        for (size_t i = 0; i < N; ++i) od[i] = v.elemAsDouble(i);
+        for (keel::usize i = 0; i < N; ++i) od[i] = v.elemAsDouble(i);
         return out;
     };
     return {copyV(resp), copyV(freq)};
 }
 
-Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
+Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
 {
     Value Tc;
     ss2ss_argcheck(sys, T, Tc, mr);
@@ -680,12 +684,12 @@ Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
     const Value &Bv = sys.field("B");
     const Value &Cv = sys.field("C");
     const Value &Dv = sys.field("D");
-    const size_t n = Av.dims().rows();
-    const size_t m = Bv.dims().cols();
-    const size_t p = Cv.dims().rows();
+    const keel::usize n = Av.dims().rows();
+    const keel::usize m = Bv.dims().cols();
+    const keel::usize p = Cv.dims().rows();
 
     if (Tc.isComplex() || Av.isComplex() || Bv.isComplex() || Cv.isComplex()) {
-        std::vector<std::complex<double>> Tinv;
+        std::vector<keel::c64> Tinv;
         if (!inverse_n_cplx(Tc, Tinv, n))
             throw Error("ss2ss: T is singular",
                         0, 0, "ss2ss", "", "numkit:ss2ss:singular");
@@ -693,15 +697,15 @@ Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
         auto Am = readCMat(Av);
         auto Bm = readCMat(Bv);
         auto Cm = readCMat(Cv);
-        std::vector<std::complex<double>> M, Anew, Bnew, Cnew;
+        std::vector<keel::c64> M, Anew, Bnew, Cnew;
         matmul_n(Am, n, n, Tinv, n, n, M);
         matmul_n(Tm, n, n, M, n, n, Anew);
         matmul_n(Tm, n, n, Bm, n, m, Bnew);
         matmul_n(Cm, p, n, Tinv, n, n, Cnew);
-        auto putCMat = [&](const std::vector<std::complex<double>> &v, size_t rr, size_t cc) {
+        auto putCMat = [&](const std::vector<keel::c64> &v, keel::usize rr, keel::usize cc) {
             Value out = Value::matrix(rr, cc, ValueType::COMPLEX, mr);
-            std::complex<double> *od = out.complexDataMut();
-            for (size_t i = 0; i < rr * cc; ++i) od[i] = v[i];
+            keel::c64 *od = out.complexDataMut();
+            for (keel::usize i = 0; i < rr * cc; ++i) od[i] = v[i];
             return out;
         };
         Value out = tagStruct("ss", sys.field("Ts").toScalar(), mr);
@@ -728,10 +732,10 @@ Value ss2ss(const Value &sys, const Value &T, std::pmr::memory_resource *mr)
     matmul_n(Tm, n, n, Bm, n, m, Bnew);
     matmul_n(Cm, p, n, Tinv, n, n, Cnew);
 
-    auto putMat = [&](const std::vector<double> &v, size_t rr, size_t cc) {
+    auto putMat = [&](const std::vector<double> &v, keel::usize rr, keel::usize cc) {
         Value out = Value::matrix(rr, cc, ValueType::DOUBLE, mr);
         double *od = out.doubleDataMut();
-        for (size_t i = 0; i < rr * cc; ++i) od[i] = v[i];
+        for (keel::usize i = 0; i < rr * cc; ++i) od[i] = v[i];
         return out;
     };
 

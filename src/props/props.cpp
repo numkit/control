@@ -13,6 +13,10 @@
 // works for SISO systems, which is what `zero(sys)` is most useful
 // for in a function-form environment.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
+#include <keel/math.h>
 #include <numkit/control/props/props.hpp>
 #include <numkit/control/internal/numerics.hpp>
 #include <numkit/control/internal/type_gates.hpp>
@@ -28,14 +32,11 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <vector>
 
 namespace numkit::control {
 
 namespace {
-
-using Cd = std::complex<double>;
 
 bool hasKind(const Value &sys, const char *want) {
     if (!sys.isStruct()) return false;
@@ -48,7 +49,7 @@ double sampleTime(const Value &sys) {
     return 0.0;
 }
 
-Value boolValue(bool b, std::pmr::memory_resource *mr) {
+Value boolValue(bool b, keel::Allocator *mr) {
     return Value::logicalScalar(b, mr);
 }
 
@@ -56,35 +57,35 @@ Value boolValue(bool b, std::pmr::memory_resource *mr) {
 // Pulls A out of the LTI struct as a plain column-major double buffer
 // and forwards.
 std::vector<double> charPoly(const Value &A) {
-    const size_t n = A.dims().rows();
+    const keel::usize n = A.dims().rows();
     std::vector<double> Av(n * n);
-    for (size_t i = 0; i < n * n; ++i) Av[i] = A.elemAsDouble(i);
+    for (keel::usize i = 0; i < n * n; ++i) Av[i] = A.elemAsDouble(i);
     return internal::charPoly(Av, n);
 }
 
 // Pull a Value (either real or complex) into a vector of complex
 // numbers. Convenient for stability checks where everything compares
 // uniformly.
-std::vector<Cd> toComplexVec(const Value &v) {
-    const size_t N = v.numel();
-    std::vector<Cd> out(N);
+std::vector<keel::c64> toComplexVec(const Value &v) {
+    const keel::usize N = v.numel();
+    std::vector<keel::c64> out(N);
     if (v.type() == ValueType::COMPLEX) {
-        const Cd *src = v.complexData();
-        for (size_t i = 0; i < N; ++i) out[i] = src[i];
+        const keel::c64 *src = v.complexData();
+        for (keel::usize i = 0; i < N; ++i) out[i] = src[i];
     } else {
-        for (size_t i = 0; i < N; ++i) out[i] = Cd(v.elemAsDouble(i), 0.0);
+        for (keel::usize i = 0; i < N; ++i) out[i] = keel::c64(v.elemAsDouble(i), 0.0);
     }
     return out;
 }
 
-Value rowFromCoeffs(const std::vector<double> &v, std::pmr::memory_resource *mr) {
+Value rowFromCoeffs(const std::vector<double> &v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
 // Helper: poles as a column Value, regardless of input form.
-Value polesOf(const Value &sys, std::pmr::memory_resource *mr) {
+Value polesOf(const Value &sys, keel::Allocator *mr) {
     if (hasKind(sys, "tf"))
         return numkit::builtin::roots(sys.field("den"), mr);
     if (hasKind(sys, "zpk"))
@@ -102,7 +103,7 @@ Value polesOf(const Value &sys, std::pmr::memory_resource *mr) {
                 0, 0, "lti", "", "numkit:lti:kind");
 }
 
-Value zerosOf(const Value &sys, std::pmr::memory_resource *mr) {
+Value zerosOf(const Value &sys, keel::Allocator *mr) {
     if (hasKind(sys, "tf"))
         return numkit::builtin::roots(sys.field("num"), mr);
     if (hasKind(sys, "zpk"))
@@ -187,18 +188,18 @@ void tzero_argcheck(const Value &sys) {
 
 } // anonymous
 
-Value isct(const Value &sys, std::pmr::memory_resource *mr) {
+Value isct(const Value &sys, keel::Allocator *mr) {
     isct_argcheck(sys);
     return boolValue(sampleTime(sys) == 0.0, mr);
 }
 
-Value isdt(const Value &sys, std::pmr::memory_resource *mr) {
+Value isdt(const Value &sys, keel::Allocator *mr) {
     isdt_argcheck(sys);
     const double Ts = sampleTime(sys);
     return boolValue(Ts > 0.0 || Ts == -1.0, mr);
 }
 
-Value issiso(const Value &sys, std::pmr::memory_resource *mr) {
+Value issiso(const Value &sys, keel::Allocator *mr) {
     // Un-typed arguments are rejected, mirroring the reference's
     // UndefinedFunction dispatch (probed R2025b); frd models are
     // always SISO here and answer true.
@@ -221,7 +222,7 @@ Value issiso(const Value &sys, std::pmr::memory_resource *mr) {
     return boolValue(false, mr);
 }
 
-Value isproper(const Value &sys, std::pmr::memory_resource *mr) {
+Value isproper(const Value &sys, keel::Allocator *mr) {
     isproper_argcheck(sys);
     if (hasKind(sys, "tf"))
         return boolValue(sys.field("num").numel() <= sys.field("den").numel(), mr);
@@ -232,14 +233,14 @@ Value isproper(const Value &sys, std::pmr::memory_resource *mr) {
     return boolValue(false, mr);
 }
 
-Value isstable(const Value &sys, std::pmr::memory_resource *mr) {
+Value isstable(const Value &sys, keel::Allocator *mr) {
     isstable_argcheck(sys);
     Value p = polesOf(sys, mr);
     auto pv = toComplexVec(p);
     const bool discrete = (sampleTime(sys) > 0.0);
     for (const auto &z : pv) {
         if (discrete) {
-            if (std::abs(z) >= 1.0)
+            if (keel::abs(z) >= 1.0)
                 return boolValue(false, mr);
         } else {
             if (z.real() >= 0.0)
@@ -249,21 +250,21 @@ Value isstable(const Value &sys, std::pmr::memory_resource *mr) {
     return boolValue(true, mr);
 }
 
-Value order(const Value &sys, std::pmr::memory_resource *mr) {
+Value order(const Value &sys, keel::Allocator *mr) {
     // frd models are REJECTED here — the reference answers
     // NotSupportedModelsofClass for order(frd) while issiso/isproper
     // accept it (probed R2025b).
     order_argcheck(sys);
     if (hasKind(sys, "tf")) {
         // order = max(deg num, deg den) = max(numel-1).
-        const size_t n = sys.field("num").numel();
-        const size_t d = sys.field("den").numel();
-        const size_t m = (n > d) ? n : d;
+        const keel::usize n = sys.field("num").numel();
+        const keel::usize d = sys.field("den").numel();
+        const keel::usize m = (n > d) ? n : d;
         return Value::scalar((m == 0) ? 0.0 : double(m - 1), mr);
     }
     if (hasKind(sys, "zpk")) {
-        const size_t z = sys.field("z").numel();
-        const size_t p = sys.field("p").numel();
+        const keel::usize z = sys.field("z").numel();
+        const keel::usize p = sys.field("p").numel();
         return Value::scalar(double((z > p) ? z : p), mr);
     }
     if (hasKind(sys, "ss"))
@@ -271,36 +272,36 @@ Value order(const Value &sys, std::pmr::memory_resource *mr) {
     return Value::scalar(0.0, mr);
 }
 
-Value pole(const Value &sys, std::pmr::memory_resource *mr) {
+Value pole(const Value &sys, keel::Allocator *mr) {
     pole_argcheck(sys);
     return polesOf(sys, mr);
 }
 
-Value zero(const Value &sys, std::pmr::memory_resource *mr) {
+Value zero(const Value &sys, keel::Allocator *mr) {
     zero_argcheck(sys);
     return zerosOf(sys, mr);
 }
 
-DampResult damp(const Value &sys, std::pmr::memory_resource *mr)
+DampResult damp(const Value &sys, keel::Allocator *mr)
 {
     damp_argcheck(sys);
     Value p = polesOf(sys, mr);
     auto pv = toComplexVec(p);
     const bool discrete = (sampleTime(sys) > 0.0);
     const double Ts = sampleTime(sys);
-    const size_t N = pv.size();
+    const keel::usize N = pv.size();
 
     Value wn = Value::matrix(N, 1, ValueType::DOUBLE, mr);
     Value zeta = Value::matrix(N, 1, ValueType::DOUBLE, mr);
     double *wd = wn.doubleDataMut();
     double *zd = zeta.doubleDataMut();
-    for (size_t i = 0; i < N; ++i) {
-        Cd s = pv[i];
+    for (keel::usize i = 0; i < N; ++i) {
+        keel::c64 s = pv[i];
         if (discrete) {
             // s-plane equivalent: s = ln(z) / Ts.
-            s = std::log(s) / Ts;
+            s = keel::log(s) / Ts;
         }
-        const double wn_i = std::abs(s);
+        const double wn_i = keel::abs(s);
         const double zeta_i = (wn_i == 0.0) ? 0.0 : -s.real() / wn_i;
         wd[i] = wn_i;
         zd[i] = zeta_i;
@@ -310,20 +311,20 @@ DampResult damp(const Value &sys, std::pmr::memory_resource *mr)
 }
 
 std::pair<Value, Value>
-pzmap(const Value &sys, std::pmr::memory_resource *mr)
+pzmap(const Value &sys, keel::Allocator *mr)
 {
     pzmap_argcheck(sys);
     return {polesOf(sys, mr), zerosOf(sys, mr)};
 }
 
-Value isstatic(const Value &sys, std::pmr::memory_resource *mr)
+Value isstatic(const Value &sys, keel::Allocator *mr)
 {
     isstatic_argcheck(sys);
     Value ord = order(sys, mr);
     return Value::logicalScalar(ord.toScalar() == 0.0, mr);
 }
 
-Value tzero(const Value &sys, std::pmr::memory_resource *mr)
+Value tzero(const Value &sys, keel::Allocator *mr)
 {
     tzero_argcheck(sys);
     // SISO build: transmission zeros == ordinary zeros.

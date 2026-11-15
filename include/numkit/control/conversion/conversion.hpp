@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/core.h>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 #include <utility>
 
@@ -54,7 +55,7 @@ struct StateSpace {
 ///
 /// @see zp2tf, tf2ss
 Tf2ZpResult tf2zp(const Value &num, const Value &den,
-                  std::pmr::memory_resource *mr = nullptr);
+                  keel::Allocator *mr = nullptr);
 
 /// Convert zero-pole-gain form to tf coefficients.
 ///
@@ -71,7 +72,7 @@ Tf2ZpResult tf2zp(const Value &num, const Value &den,
 /// @see tf2zp, tf2ss
 std::pair<Value, Value>
 zp2tf(const Value &z, const Value &p, const Value &k,
-      std::pmr::memory_resource *mr = nullptr);
+      keel::Allocator *mr = nullptr);
 
 /// Convert tf coefficients to controllable canonical state-space.
 ///
@@ -97,7 +98,7 @@ zp2tf(const Value &z, const Value &p, const Value &k,
 ///
 /// @see ss2tf, tf2zp
 StateSpace tf2ss(const Value &num, const Value &den,
-                 std::pmr::memory_resource *mr = nullptr);
+                 keel::Allocator *mr = nullptr);
 
 /// Convert state-space to tf coefficients.
 ///
@@ -125,7 +126,7 @@ StateSpace tf2ss(const Value &num, const Value &den,
 std::pair<Value, Value>
 ss2tf(const Value &A, const Value &B,
       const Value &C, const Value &D, int iu,
-      std::pmr::memory_resource *mr = nullptr);
+      keel::Allocator *mr = nullptr);
 
 /// Minimal realization — cancel pole/zero pairs (`sysr = minreal(sys, tol)`).
 ///
@@ -145,8 +146,8 @@ ss2tf(const Value &A, const Value &B,
 /// @return     Reduced LTI struct (tf for tf/zpk input, ss for ss input).
 /// @throws     Error on a non-LTI input or a MIMO state-space.
 /// @see tf2ss, ss2tf, tf2zp
-Value minreal(const Value &sys, double tol = 0.0,
-              std::pmr::memory_resource *mr = nullptr);
+Value minreal(const Value &sys, keel::f64 tol = 0.0,
+              keel::Allocator *mr = nullptr);
 
 
 /// @}

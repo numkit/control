@@ -6,6 +6,8 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/core.h>
+#include <keel/ref.h>
 #include <numkit/control/discretize/discretize.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -25,14 +27,14 @@ static std::string argString(const Value &v) {
     return v.toString();
 }
 
-void c2d_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void c2d_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 3, "c2d");
-    auto *mr = c.engine->resource();
+    auto *mr = c.engine->allocator();
     if (a.size() == 3 && !a[0].isStruct() && !a[0].isObject()
         && a[0].isNumeric() && a[1].isNumeric() && a[2].isNumeric()) {
-        const size_t n = a[0].dims().rows();
-        const size_t m = a[1].dims().cols();
+        const keel::usize n = a[0].dims().rows();
+        const keel::usize m = a[1].dims().cols();
         Value C = Value::matrix(1, n, ValueType::DOUBLE, mr);
         Value D = Value::matrix(1, m, ValueType::DOUBLE, mr);
         Value sysc = ss(a[0], a[1], C, D, 0.0, mr);
@@ -53,12 +55,12 @@ void c2d_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
     o[0] = std::move(sysd);
 }
 
-void d2c_reg(Span<const Value> a, size_t, Span<Value> o, CallContext &c)
+void d2c_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, 3, "d2c");
     std::string method;
     if (a.size() >= 2 && !a[1].isEmpty()) method = argString(a[1]);
-    o[0] = d2c(a[0], method, c.engine->resource());
+    o[0] = d2c(a[0], method, c.engine->allocator());
 }
 
 } // namespace detail

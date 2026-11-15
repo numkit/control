@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 
 namespace numkit::control {
@@ -32,7 +32,7 @@ namespace numkit::control {
 ///
 /// @see ctrb_sys, obsv_AC
 Value ctrb_AB(const Value &A, const Value &B,
-              std::pmr::memory_resource *mr = nullptr);
+              keel::Allocator *mr = nullptr);
 
 /// Controllability matrix from a system struct (`Co = ctrb(sys)`).
 ///
@@ -45,7 +45,7 @@ Value ctrb_AB(const Value &A, const Value &B,
 /// @return     Controllability matrix.
 ///
 /// @see ctrb_AB
-Value ctrb_sys(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value ctrb_sys(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// Observability matrix from raw (A, C) (`O = obsv(A, C)`).
 ///
@@ -61,7 +61,7 @@ Value ctrb_sys(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 ///
 /// @see obsv_sys, ctrb_AB
 Value obsv_AC(const Value &A, const Value &C,
-              std::pmr::memory_resource *mr = nullptr);
+              keel::Allocator *mr = nullptr);
 
 /// @brief Observability matrix from a system struct
 /// (`O = obsv(sys)`).
@@ -72,7 +72,7 @@ Value obsv_AC(const Value &A, const Value &C,
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     Observability matrix.
 /// @see obsv_AC
-Value obsv_sys(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+Value obsv_sys(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// Controllability / observability gramian (`W = gram(sys, type)`).
 ///
@@ -94,7 +94,7 @@ Value obsv_sys(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @throws      Error on a non-LTI input or an unknown `type`.
 /// @see lyap, dlyap, ctrb_sys, obsv_sys
 Value gram(const Value &sys, const Value &type,
-           std::pmr::memory_resource *mr = nullptr);
+           keel::Allocator *mr = nullptr);
 
 /// Output and state covariance of an LTI system driven by white noise.
 struct CovarResult {
@@ -119,7 +119,7 @@ struct CovarResult {
 /// @throws     Error on a non-LTI input or a shape mismatch.
 /// @see gram, lyap, dlyap
 CovarResult covar(const Value &sys, const Value &W,
-                  std::pmr::memory_resource *mr = nullptr);
+                  keel::Allocator *mr = nullptr);
 
 
 /// @}

@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 
 namespace numkit::control {
@@ -55,7 +55,7 @@ struct RiccatiResult {
 /// @throws    Error on shape mismatch or a singular Hamiltonian embedding.
 /// @see dare, lyap
 RiccatiResult care(const Value &A, const Value &B, const Value &Q,
-                   const Value &R, std::pmr::memory_resource *mr = nullptr);
+                   const Value &R, keel::Allocator *mr = nullptr);
 
 /// Discrete-time algebraic Riccati equation (`[X, L, G] = dare(A, B, Q, R)`).
 ///
@@ -75,7 +75,7 @@ RiccatiResult care(const Value &A, const Value &B, const Value &Q,
 /// @throws    Error on shape mismatch, singular A, or a singular embedding.
 /// @see care, dlyap
 RiccatiResult dare(const Value &A, const Value &B, const Value &Q,
-                   const Value &R, std::pmr::memory_resource *mr = nullptr);
+                   const Value &R, keel::Allocator *mr = nullptr);
 
 
 /// @}

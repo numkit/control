@@ -4,6 +4,10 @@
 // numkit::builtin::roots / numkit::builtin::poly polynomial primitives, plus a local
 // Faddeev–LeVerrier expansion for ss2tf.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
+#include <keel/math.h>
 #include <numkit/control/conversion/conversion.hpp>
 
 #include <numkit/builtin/polyfun.hpp>
@@ -17,7 +21,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <limits>
 #include <vector>
 
@@ -25,36 +28,34 @@ namespace numkit::control {
 
 namespace {
 
-using Cd = std::complex<double>;
-
 // Read a row/column polynomial coefficient vector into a vector of
 // doubles. Complex coefficients are reduced to their real parts (the
 // caller verifies the inputs are real for the SS path).
 std::vector<double> coeffsReal(const Value &v) {
     std::vector<double> out(v.numel());
     if (v.type() == ValueType::COMPLEX) {
-        const Cd *c = v.complexData();
-        for (size_t i = 0; i < v.numel(); ++i) out[i] = c[i].real();
+        const keel::c64 *c = v.complexData();
+        for (keel::usize i = 0; i < v.numel(); ++i) out[i] = c[i].real();
     } else {
-        for (size_t i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
+        for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     }
     return out;
 }
 
 // Strip leading zeros (preserve at least 1 entry).
 std::vector<double> stripLeading(const std::vector<double> &v) {
-    size_t i = 0;
+    keel::usize i = 0;
     while (i + 1 < v.size() && v[i] == 0.0) ++i;
     return std::vector<double>(v.begin() + i, v.end());
 }
 
-Value rowOfDoubles(const std::vector<double> &v, std::pmr::memory_resource *mr) {
+Value rowOfDoubles(const std::vector<double> &v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
-Value matrixFromVec(size_t rows, size_t cols, const std::vector<double> &v, std::pmr::memory_resource *mr) {
+Value matrixFromVec(keel::usize rows, keel::usize cols, const std::vector<double> &v, keel::Allocator *mr) {
     Value m = Value::matrix(rows, cols, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
@@ -92,12 +93,12 @@ void tf2ss_argcheck(const Value &num, const Value &den,
 
 void ss2tf_argcheck(const Value &A, const Value &B, const Value &C, int iu)
 {
-    const size_t n = A.dims().rows();
+    const keel::usize n = A.dims().rows();
     if (A.dims().cols() != n)
         throw Error("ss2tf: A must be square",
                     0, 0, "ss2tf", "", "numkit:ss2tf:A");
-    const size_t nin = (B.dims().cols() == 0) ? 1 : B.dims().cols();
-    if (iu < 1 || static_cast<size_t>(iu) > nin)
+    const keel::usize nin = (B.dims().cols() == 0) ? 1 : B.dims().cols();
+    if (iu < 1 || static_cast<keel::usize>(iu) > nin)
         throw Error("ss2tf: iu out of range",
                     0, 0, "ss2tf", "", "numkit:ss2tf:iu");
     if (C.dims().rows() != 1)
@@ -109,7 +110,7 @@ void ss2tf_argcheck(const Value &A, const Value &B, const Value &C, int iu)
 } // anonymous
 
 Tf2ZpResult tf2zp(const Value &num, const Value &den,
-                  std::pmr::memory_resource *mr)
+                  keel::Allocator *mr)
 {
     std::vector<double> numV, denV;
     tf2zp_argcheck(num, den, numV, denV);
@@ -128,7 +129,7 @@ Tf2ZpResult tf2zp(const Value &num, const Value &den,
 
 std::pair<Value, Value>
 zp2tf(const Value &z, const Value &p, const Value &k,
-      std::pmr::memory_resource *mr)
+      keel::Allocator *mr)
 {
     zp2tf_argcheck(z, p, k);
     // num = k * poly(z), den = poly(p). numkit::builtin::poly takes a column
@@ -150,17 +151,17 @@ zp2tf(const Value &z, const Value &p, const Value &k,
     // complex-product case by promoting num if k or num is complex).
     const double kVal = k.toScalar();
     if (num.type() == ValueType::COMPLEX) {
-        const size_t N = num.numel();
+        const keel::usize N = num.numel();
         Value scaled = Value::matrix(1, N, ValueType::COMPLEX, mr);
-        const Cd *src = num.complexData();
-        Cd *dst = scaled.complexDataMut();
-        for (size_t i = 0; i < N; ++i) dst[i] = src[i] * kVal;
+        const keel::c64 *src = num.complexData();
+        keel::c64 *dst = scaled.complexDataMut();
+        for (keel::usize i = 0; i < N; ++i) dst[i] = src[i] * kVal;
         num = scaled;
     } else {
-        const size_t N = num.numel();
+        const keel::usize N = num.numel();
         Value scaled = Value::matrix(1, N, ValueType::DOUBLE, mr);
         double *dst = scaled.doubleDataMut();
-        for (size_t i = 0; i < N; ++i) dst[i] = num.elemAsDouble(i) * kVal;
+        for (keel::usize i = 0; i < N; ++i) dst[i] = num.elemAsDouble(i) * kVal;
         num = scaled;
     }
 
@@ -168,21 +169,21 @@ zp2tf(const Value &z, const Value &p, const Value &k,
 }
 
 StateSpace tf2ss(const Value &num, const Value &den,
-                 std::pmr::memory_resource *mr)
+                 keel::Allocator *mr)
 {
     std::vector<double> numV, denV;
     tf2ss_argcheck(num, den, numV, denV);
     const double a0 = denV[0];
     // Normalise so leading coefficient of den is 1.
     std::vector<double> a(denV.size());
-    for (size_t i = 0; i < denV.size(); ++i) a[i] = denV[i] / a0;
+    for (keel::usize i = 0; i < denV.size(); ++i) a[i] = denV[i] / a0;
 
     // Left-pad numerator with zeros so it has the same length as `a`.
     std::vector<double> b(a.size(), 0.0);
-    const size_t pad = a.size() - numV.size();
-    for (size_t i = 0; i < numV.size(); ++i) b[pad + i] = numV[i] / a0;
+    const keel::usize pad = a.size() - numV.size();
+    for (keel::usize i = 0; i < numV.size(); ++i) b[pad + i] = numV[i] / a0;
 
-    const size_t n = a.size() - 1;  // state-space order
+    const keel::usize n = a.size() - 1;  // state-space order
     if (n == 0) {
         // Pure feedthrough: A=0×0, B=0×1, C=1×0, D=b[0].
         return {Value::matrix(0, 0, ValueType::DOUBLE, mr),
@@ -198,13 +199,13 @@ StateSpace tf2ss(const Value &num, const Value &den,
     //      0 0 0 ... 1;
     //      -a_n -a_{n-1} ... -a_1]
     std::vector<double> Avec(n * n, 0.0);
-    for (size_t i = 0; i + 1 < n; ++i) {
+    for (keel::usize i = 0; i + 1 < n; ++i) {
         // column j = i+1, row i.
         Avec[(i + 1) * n + i] = 1.0;
     }
     // Last row: -a_n .. -a_1 (a[1..n] are the non-leading coeffs;
     // we want them reversed because A(n-1, j) = -a[n-j]).
-    for (size_t j = 0; j < n; ++j) {
+    for (keel::usize j = 0; j < n; ++j) {
         Avec[j * n + (n - 1)] = -a[n - j];
     }
 
@@ -217,7 +218,7 @@ StateSpace tf2ss(const Value &num, const Value &den,
     // G(s) = b[0] + (b[1] - b[0]·a[1]) s^{n-1}/a(s) + ... + (b[n] - b[0]·a[n])/a(s).
     // C[k] = b[n - k] - b[0] · a[n - k]   for k = 0..n-1
     std::vector<double> Cvec(n, 0.0);
-    for (size_t k = 0; k < n; ++k) {
+    for (keel::usize k = 0; k < n; ++k) {
         Cvec[k] = b[n - k] - b[0] * a[n - k];
     }
 
@@ -230,37 +231,37 @@ StateSpace tf2ss(const Value &num, const Value &den,
 std::pair<Value, Value>
 ss2tf(const Value &A, const Value &B,
       const Value &C, const Value &D, int iu,
-      std::pmr::memory_resource *mr)
+      keel::Allocator *mr)
 {
     ss2tf_argcheck(A, B, C, iu);
-    const size_t n = A.dims().rows();
-    const size_t inIdx = static_cast<size_t>(iu - 1);
+    const keel::usize n = A.dims().rows();
+    const keel::usize inIdx = static_cast<keel::usize>(iu - 1);
 
     // Read matrices into flat column-major double buffers.
-    auto readMat = [&](const Value &v, size_t r, size_t c) {
+    auto readMat = [&](const Value &v, keel::usize r, keel::usize c) {
         std::vector<double> M(r * c, 0.0);
-        for (size_t i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
+        for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
         return M;
     };
     auto Av = readMat(A, n, n);
     // B column iu.
     std::vector<double> Bv(n, 0.0);
-    for (size_t i = 0; i < n; ++i) Bv[i] = B.elemAsDouble(inIdx * n + i);
+    for (keel::usize i = 0; i < n; ++i) Bv[i] = B.elemAsDouble(inIdx * n + i);
     // C row 0 (single-output).
     std::vector<double> Cv(n, 0.0);
-    for (size_t i = 0; i < n; ++i) Cv[i] = C.elemAsDouble(i * 1 + 0);
+    for (keel::usize i = 0; i < n; ++i) Cv[i] = C.elemAsDouble(i * 1 + 0);
     // D scalar at (0, iu-1).
     double Dscalar = 0.0;
     if (D.numel() > 0) {
         // D is ny × nin; we read element (0, inIdx).
-        const size_t Drows = (D.dims().rows() == 0) ? 1 : D.dims().rows();
+        const keel::usize Drows = (D.dims().rows() == 0) ? 1 : D.dims().rows();
         Dscalar = D.elemAsDouble(inIdx * Drows + 0);
     }
 
     // Faddeev–LeVerrier.  M_0 = I,  c_k = -(1/k) trace(A·M_{k-1}),
     // M_k = A·M_{k-1} + c_k I.  char poly = s^n + c_1 s^{n-1} + ... + c_n.
     std::vector<double> M(n * n, 0.0); // current M_{k-1}
-    for (size_t i = 0; i < n; ++i) M[i * n + i] = 1.0; // I
+    for (keel::usize i = 0; i < n; ++i) M[i * n + i] = 1.0; // I
     std::vector<double> coeff(n + 1, 0.0);
     coeff[0] = 1.0;
 
@@ -270,10 +271,10 @@ ss2tf(const Value &A, const Value &B,
     auto matMul = [&](const std::vector<double> &X,
                       const std::vector<double> &Y) {
         std::vector<double> Z(n * n, 0.0);
-        for (size_t j = 0; j < n; ++j)
-            for (size_t i = 0; i < n; ++i) {
+        for (keel::usize j = 0; j < n; ++j)
+            for (keel::usize i = 0; i < n; ++i) {
                 double s = 0.0;
-                for (size_t l = 0; l < n; ++l)
+                for (keel::usize l = 0; l < n; ++l)
                     s += X[l * n + i] * Y[j * n + l];
                 Z[j * n + i] = s;
             }
@@ -282,9 +283,9 @@ ss2tf(const Value &A, const Value &B,
     auto matVec = [&](const std::vector<double> &X,
                       const std::vector<double> &y) {
         std::vector<double> z(n, 0.0);
-        for (size_t i = 0; i < n; ++i) {
+        for (keel::usize i = 0; i < n; ++i) {
             double s = 0.0;
-            for (size_t j = 0; j < n; ++j) s += X[j * n + i] * y[j];
+            for (keel::usize j = 0; j < n; ++j) s += X[j * n + i] * y[j];
             z[i] = s;
         }
         return z;
@@ -294,28 +295,28 @@ ss2tf(const Value &A, const Value &B,
     {
         // k = 0: M_0 = I → C·I·B = C·B.
         double cb = 0.0;
-        for (size_t i = 0; i < n; ++i) cb += Cv[i] * Bv[i];
+        for (keel::usize i = 0; i < n; ++i) cb += Cv[i] * Bv[i];
         numAcc[0] = cb;
     }
 
-    for (size_t k = 1; k <= n; ++k) {
+    for (keel::usize k = 1; k <= n; ++k) {
         // A·M_{k-1}
         auto AM = matMul(Av, M);
         // trace(A·M_{k-1})
         double tr = 0.0;
-        for (size_t i = 0; i < n; ++i) tr += AM[i * n + i];
+        for (keel::usize i = 0; i < n; ++i) tr += AM[i * n + i];
         const double ck = -tr / static_cast<double>(k);
         coeff[k] = ck;
         // M_k = A·M_{k-1} + ck · I
         std::vector<double> Mk(n * n, 0.0);
-        for (size_t i = 0; i < n * n; ++i) Mk[i] = AM[i];
-        for (size_t i = 0; i < n; ++i) Mk[i * n + i] += ck;
+        for (keel::usize i = 0; i < n * n; ++i) Mk[i] = AM[i];
+        for (keel::usize i = 0; i < n; ++i) Mk[i * n + i] += ck;
         M = std::move(Mk);
 
         if (k < n) {
             auto MB = matVec(M, Bv);
             double cmb = 0.0;
-            for (size_t i = 0; i < n; ++i) cmb += Cv[i] * MB[i];
+            for (keel::usize i = 0; i < n; ++i) cmb += Cv[i] * MB[i];
             numAcc[k] = cmb;
         }
     }
@@ -325,9 +326,9 @@ ss2tf(const Value &A, const Value &B,
     std::vector<double> numOutVec;
     if (Dscalar != 0.0) {
         numOutVec.assign(n + 1, 0.0);
-        for (size_t i = 0; i <= n; ++i) numOutVec[i] = Dscalar * coeff[i];
+        for (keel::usize i = 0; i <= n; ++i) numOutVec[i] = Dscalar * coeff[i];
         // Add C·M_k·B contributions (degree n-1 .. 0) into positions 1..n.
-        for (size_t k = 0; k < n; ++k) numOutVec[k + 1] += numAcc[k];
+        for (keel::usize k = 0; k < n; ++k) numOutVec[k + 1] += numAcc[k];
     } else {
         numOutVec = numAcc; // length n
     }
@@ -351,16 +352,16 @@ double sampleTimeOf(const Value &sys) {
     return (sys.isStruct() && sys.hasField("Ts")) ? sys.field("Ts").toScalar() : 0.0;
 }
 
-std::vector<std::complex<double>>
-rootsComplex(const Value &polyV, std::pmr::memory_resource *mr) {
+std::vector<keel::c64>
+rootsComplex(const Value &polyV, keel::Allocator *mr) {
     Value r = numkit::builtin::roots(polyV, mr);
-    const size_t n = r.numel();
-    std::vector<std::complex<double>> out(n);
+    const keel::usize n = r.numel();
+    std::vector<keel::c64> out(n);
     if (r.type() == ValueType::COMPLEX) {
-        const std::complex<double> *s = r.complexData();
-        for (size_t i = 0; i < n; ++i) out[i] = s[i];
+        const keel::c64 *s = r.complexData();
+        for (keel::usize i = 0; i < n; ++i) out[i] = s[i];
     } else {
-        for (size_t i = 0; i < n; ++i) out[i] = {r.elemAsDouble(i), 0.0};
+        for (keel::usize i = 0; i < n; ++i) out[i] = {r.elemAsDouble(i), 0.0};
     }
     return out;
 }
@@ -368,19 +369,19 @@ rootsComplex(const Value &polyV, std::pmr::memory_resource *mr) {
 // Monic polynomial whose roots are `rts`, expanded as ∏(s − r_i) in complex
 // arithmetic; the real part is returned (conjugate pairs cancel the imaginary
 // part exactly, up to round-off noise).
-std::vector<double> polyFromRoots(const std::vector<std::complex<double>> &rts) {
-    std::vector<std::complex<double>> c{{1.0, 0.0}};
+std::vector<double> polyFromRoots(const std::vector<keel::c64> &rts) {
+    std::vector<keel::c64> c{{1.0, 0.0}};
     for (const auto &r : rts) {
-        std::vector<std::complex<double>> nc(c.size() + 1, {0.0, 0.0});
-        for (size_t i = 0; i < c.size(); ++i) { nc[i] += c[i]; nc[i + 1] -= c[i] * r; }
+        std::vector<keel::c64> nc(c.size() + 1, {0.0, 0.0});
+        for (keel::usize i = 0; i < c.size(); ++i) { nc[i] += c[i]; nc[i + 1] -= c[i] * r; }
         c.swap(nc);
     }
     std::vector<double> out(c.size());
-    for (size_t i = 0; i < c.size(); ++i) out[i] = c[i].real();
+    for (keel::usize i = 0; i < c.size(); ++i) out[i] = c[i].real();
     return out;
 }
 
-Value taggedStruct(const char *kind, double Ts, std::pmr::memory_resource *mr) {
+Value taggedStruct(const char *kind, double Ts, keel::Allocator *mr) {
     Value s = Value::structure(mr);
     s.field("kind") = Value::fromString(kind, mr);
     s.field("Ts") = Value::scalar(Ts, mr);
@@ -393,7 +394,7 @@ Value taggedStruct(const char *kind, double Ts, std::pmr::memory_resource *mr) {
 // together and the rebuilt polynomials stay real.
 std::pair<Value, Value>
 cancelTf(const Value &numV, const Value &denV, double tol,
-         std::pmr::memory_resource *mr) {
+         keel::Allocator *mr) {
     auto numS = stripLeading(coeffsReal(numV));
     auto denS = stripLeading(coeffsReal(denV));
     if (denS.empty())
@@ -406,19 +407,19 @@ cancelTf(const Value &numV, const Value &denV, double tol,
     auto p = rootsComplex(denV, mr);
 
     std::vector<char> zused(z.size(), 0);
-    std::vector<std::complex<double>> remP, remZ;
+    std::vector<keel::c64> remP, remZ;
     for (const auto &pj : p) {
         int best = -1;
         double bd = std::numeric_limits<double>::max();
-        for (size_t i = 0; i < z.size(); ++i)
+        for (keel::usize i = 0; i < z.size(); ++i)
             if (!zused[i]) {
-                const double d = std::abs(z[i] - pj);
+                const double d = keel::abs(z[i] - pj);
                 if (d < bd) { bd = d; best = static_cast<int>(i); }
             }
-        if (best >= 0 && bd <= tol * std::max(1.0, std::abs(pj))) zused[best] = 1;
+        if (best >= 0 && bd <= tol * std::max(1.0, keel::abs(pj))) zused[best] = 1;
         else remP.push_back(pj);
     }
-    for (size_t i = 0; i < z.size(); ++i) if (!zused[i]) remZ.push_back(z[i]);
+    for (keel::usize i = 0; i < z.size(); ++i) if (!zused[i]) remZ.push_back(z[i]);
 
     auto nn = polyFromRoots(remZ);
     for (auto &c : nn) c *= numLead;
@@ -443,7 +444,7 @@ void minreal_argcheck(const Value &sys)
 
 } // anonymous
 
-Value minreal(const Value &sys, double tol, std::pmr::memory_resource *mr) {
+Value minreal(const Value &sys, double tol, keel::Allocator *mr) {
     minreal_argcheck(sys);
     if (tol <= 0.0) tol = std::sqrt(std::numeric_limits<double>::epsilon());
 

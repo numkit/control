@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 
 namespace numkit::control {
@@ -42,7 +42,7 @@ namespace numkit::control {
 ///
 /// @see dlyap
 Value lyap(const Value &A, const Value &Q,
-           std::pmr::memory_resource *mr = nullptr);
+           keel::Allocator *mr = nullptr);
 
 /// Discrete-time Lyapunov (Stein) equation solver (`X = dlyap(A, Q)`).
 ///
@@ -58,7 +58,7 @@ Value lyap(const Value &A, const Value &Q,
 ///
 /// @see lyap
 Value dlyap(const Value &A, const Value &Q,
-            std::pmr::memory_resource *mr = nullptr);
+            keel::Allocator *mr = nullptr);
 
 
 /// @}

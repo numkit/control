@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 
 namespace numkit::control {
@@ -41,7 +41,7 @@ namespace numkit::control {
 ///
 /// @see parallel, feedback
 Value series(const Value &sys1, const Value &sys2,
-             std::pmr::memory_resource *mr = nullptr);
+             keel::Allocator *mr = nullptr);
 
 /// Parallel connection of two LTI blocks (`parallel(sys1, sys2)`).
 ///
@@ -57,7 +57,7 @@ Value series(const Value &sys1, const Value &sys2,
 ///
 /// @see series, feedback
 Value parallel(const Value &sys1, const Value &sys2,
-               std::pmr::memory_resource *mr = nullptr);
+               keel::Allocator *mr = nullptr);
 
 /// Closed-loop transfer function under feedback (`feedback(G, H, sign)`).
 ///
@@ -81,7 +81,7 @@ Value parallel(const Value &sys1, const Value &sys2,
 ///
 /// @see series, parallel
 Value feedback(const Value &G, const Value &H, int sign,
-               std::pmr::memory_resource *mr = nullptr);
+               keel::Allocator *mr = nullptr);
 
 
 /// @}

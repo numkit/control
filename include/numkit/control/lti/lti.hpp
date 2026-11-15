@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/core.h>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 #include <tuple>
 
@@ -40,8 +41,8 @@ namespace numkit::control {
 /// @endcode
 ///
 /// @see zpk, ss, filt, frd
-Value tf(const Value &num, const Value &den, double Ts,
-         std::pmr::memory_resource *mr = nullptr);
+Value tf(const Value &num, const Value &den, keel::f64 Ts,
+         keel::Allocator *mr = nullptr);
 
 /// Zero-pole-gain LTI constructor (`zpk(z, p, k, Ts)`).
 ///
@@ -57,8 +58,8 @@ Value tf(const Value &num, const Value &den, double Ts,
 /// @return    Struct Value tagged `kind="zpk"`.
 ///
 /// @see tf, ss
-Value zpk(const Value &z, const Value &p, double k, double Ts,
-          std::pmr::memory_resource *mr = nullptr);
+Value zpk(const Value &z, const Value &p, keel::f64 k, keel::f64 Ts,
+          keel::Allocator *mr = nullptr);
 
 /// State-space LTI constructor (`ss(A, B, C, D, Ts)`).
 ///
@@ -79,7 +80,7 @@ Value zpk(const Value &z, const Value &p, double k, double Ts,
 ///
 /// @see tf, zpk
 Value ss(const Value &A, const Value &B, const Value &C, const Value &D,
-        double Ts, std::pmr::memory_resource *mr = nullptr);
+        keel::f64 Ts, keel::Allocator *mr = nullptr);
 
 /// Discrete tf with `z^-1` variable convention (`filt(num, den, Ts)`).
 ///
@@ -96,8 +97,8 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D,
 /// @return     Struct Value tagged `kind="tf"` with variable = "z^-1".
 ///
 /// @see tf
-Value filt(const Value &num, const Value &den, double Ts,
-           std::pmr::memory_resource *mr = nullptr);
+Value filt(const Value &num, const Value &den, keel::f64 Ts,
+           keel::Allocator *mr = nullptr);
 
 /// Frequency-response data model (`frd(response, frequency, Ts)`).
 ///
@@ -112,8 +113,8 @@ Value filt(const Value &num, const Value &den, double Ts,
 /// @return           Struct Value tagged `kind="frd"`.
 ///
 /// @see frdata
-Value frd(const Value &response, const Value &frequency, double Ts,
-          std::pmr::memory_resource *mr = nullptr);
+Value frd(const Value &response, const Value &frequency, keel::f64 Ts,
+          keel::Allocator *mr = nullptr);
 
 /// Extract `(resp, freq)` from an frd model.
 ///
@@ -124,7 +125,7 @@ Value frd(const Value &response, const Value &frequency, double Ts,
 ///
 /// @see frd
 std::tuple<Value, Value>
-frdata(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+frdata(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// Extract numerator / denominator from any LTI form (`tfdata`).
 ///
@@ -144,7 +145,7 @@ frdata(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 ///
 /// @see zpkdata, ssdata
 std::tuple<Value, Value>
-tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr = nullptr);
+tfdata(const Value &sys, bool asVector, keel::Allocator *mr = nullptr);
 
 /// Extract zeros, poles, and gain (`zpkdata`).
 ///
@@ -158,7 +159,7 @@ tfdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr = nullptr)
 ///
 /// @see tfdata, ssdata
 std::tuple<Value, Value, Value>
-zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr = nullptr);
+zpkdata(const Value &sys, bool asVector, keel::Allocator *mr = nullptr);
 
 /// Extract A, B, C, D from any LTI form (`ssdata`).
 ///
@@ -170,7 +171,7 @@ zpkdata(const Value &sys, bool asVector, std::pmr::memory_resource *mr = nullptr
 ///
 /// @see tfdata, zpkdata
 std::tuple<Value, Value, Value, Value>
-ssdata(const Value &sys, std::pmr::memory_resource *mr = nullptr);
+ssdata(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// Similarity transform of a state-space model (`ss2ss(sys, T)`).
 ///
@@ -184,7 +185,7 @@ ssdata(const Value &sys, std::pmr::memory_resource *mr = nullptr);
 /// @return     New ss-tagged struct with transformed (A,B,C,D).
 /// @throws     Error if T is singular.
 Value ss2ss(const Value &sys, const Value &T,
-            std::pmr::memory_resource *mr = nullptr);
+            keel::Allocator *mr = nullptr);
 
 
 /// @}

@@ -6,6 +6,10 @@
 // stepinfo — rise/settling/peak metrics computed off the existing
 //           step response.
 
+#include <keel/core.h>
+#include <keel/memory.h>
+#include <keel/complex.h>
+#include <keel/math.h>
 #include <numkit/control/analyze/analyze.hpp>
 #include <numkit/control/freq/freq.hpp>
 #include <numkit/control/response/response.hpp>
@@ -20,7 +24,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <limits>
 #include <string>
 #include <vector>
@@ -41,7 +44,7 @@ double sampleTime(const Value &sys) {
 
 std::vector<double> readCol(const Value &v) {
     std::vector<double> out(v.numel());
-    for (size_t i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
+    for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
@@ -53,7 +56,7 @@ CrossResult crossAt(const std::vector<double> &x,
                     const std::vector<double> &y,
                     double lvl)
 {
-    for (size_t i = 1; i < y.size(); ++i) {
+    for (keel::usize i = 1; i < y.size(); ++i) {
         const double a = y[i - 1] - lvl;
         const double b = y[i] - lvl;
         if (a == 0.0)
@@ -77,7 +80,7 @@ double interpAt(const std::vector<double> &x,
     if (x0 <= x.front()) return y.front();
     if (x0 >= x.back()) return y.back();
     auto it = std::upper_bound(x.begin(), x.end(), x0);
-    const size_t j = it - x.begin();
+    const keel::usize j = it - x.begin();
     const double t = (x0 - x[j - 1]) / (x[j] - x[j - 1]);
     return y[j - 1] + t * (y[j] - y[j - 1]);
 }
@@ -117,7 +120,7 @@ void stepinfo_argcheck(const Value &sys) {
 
 } // anonymous
 
-Value dcgain(const Value &sys, std::pmr::memory_resource *mr)
+Value dcgain(const Value &sys, keel::Allocator *mr)
 {
     dcgain_argcheck(sys);
     // evalfr already does the right thing: at f=0 it evaluates s = j0
@@ -125,7 +128,7 @@ Value dcgain(const Value &sys, std::pmr::memory_resource *mr)
     return evalfr(sys, 0.0, mr);
 }
 
-MarginResult margin(const Value &sys, std::pmr::memory_resource *mr)
+MarginResult margin(const Value &sys, keel::Allocator *mr)
 {
     margin_argcheck(sys);
     // Build a dense default Bode grid (the auto-pick chooses ~200
@@ -143,7 +146,7 @@ MarginResult margin(const Value &sys, std::pmr::memory_resource *mr)
     // Gain crossover (where |H| = 1, equivalently 0 dB). We scan the
     // *log* magnitude so a linear interpolation matches the bode plot.
     std::vector<double> magLog(mag.size());
-    for (size_t i = 0; i < mag.size(); ++i)
+    for (keel::usize i = 0; i < mag.size(); ++i)
         magLog[i] = (mag[i] > 0.0) ? 20.0 * std::log10(mag[i])
                                    : -300.0;
     auto gc = crossAt(w, magLog, 0.0);
@@ -171,10 +174,10 @@ namespace {
 
 // Open-loop (num, den) of an LTI struct as descending-power coefficient rows.
 std::pair<std::vector<double>, std::vector<double>>
-openLoopNumDen(const Value &sys, std::pmr::memory_resource *mr) {
+openLoopNumDen(const Value &sys, keel::Allocator *mr) {
     auto coeffs = [](const Value &v) {
         std::vector<double> c(v.numel());
-        for (size_t i = 0; i < v.numel(); ++i) c[i] = v.elemAsDouble(i);
+        for (keel::usize i = 0; i < v.numel(); ++i) c[i] = v.elemAsDouble(i);
         return c;
     };
     if (sys.isStruct() && sys.hasField("kind")) {
@@ -195,25 +198,25 @@ openLoopNumDen(const Value &sys, std::pmr::memory_resource *mr) {
                 0, 0, "allmargin", "", "numkit:allmargin:kind");
 }
 
-Value rowFrom(const std::vector<double> &v, std::pmr::memory_resource *mr) {
+Value rowFrom(const std::vector<double> &v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
-    for (size_t i = 0; i < v.size(); ++i) r.doubleDataMut()[i] = v[i];
+    for (keel::usize i = 0; i < v.size(); ++i) r.doubleDataMut()[i] = v[i];
     return r;
 }
 
 // Horner evaluation of a descending-power real polynomial at a complex point.
-std::complex<double> polyvalC(const std::vector<double> &c, std::complex<double> x) {
-    std::complex<double> r(0.0, 0.0);
+keel::c64 polyvalC(const std::vector<double> &c, keel::c64 x) {
+    keel::c64 r(0.0, 0.0);
     for (double a : c) r = r * x + a;
     return r;
 }
 
 // Exact open-loop frequency response G(jω) = num(jω) / den(jω).
-std::complex<double> evalG(const std::vector<double> &num,
+keel::c64 evalG(const std::vector<double> &num,
                            const std::vector<double> &den, double w) {
-    const std::complex<double> jw(0.0, w);
-    const std::complex<double> d = polyvalC(den, jw);
-    if (d == std::complex<double>(0.0, 0.0))
+    const keel::c64 jw(0.0, w);
+    const keel::c64 d = polyvalC(den, jw);
+    if (d == keel::c64(0.0, 0.0))
         return {std::numeric_limits<double>::infinity(), 0.0};
     return polyvalC(num, jw) / d;
 }
@@ -234,7 +237,7 @@ double bisectRoot(F f, double a, double b) {
 
 } // anonymous
 
-Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
+Value allmargin(const Value &sys, keel::Allocator *mr)
 {
     allmargin_argcheck(sys);
     // Exact open-loop response G(jω) = num(jω)/den(jω) (no bode-grid
@@ -253,12 +256,12 @@ Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
         auto addRoots = [&](const std::vector<double> &c) {
             if (c.size() < 2) return;
             Value rts = numkit::builtin::roots(rowFrom(c, mr), mr);
-            const size_t n = rts.numel();
+            const keel::usize n = rts.numel();
             if (rts.type() == ValueType::COMPLEX) {
-                const std::complex<double> *p = rts.complexData();
-                for (size_t i = 0; i < n; ++i) { double m = std::abs(p[i]); if (m > 1e-9) mags.push_back(m); }
+                const keel::c64 *p = rts.complexData();
+                for (keel::usize i = 0; i < n; ++i) { double m = keel::abs(p[i]); if (m > 1e-9) mags.push_back(m); }
             } else {
-                for (size_t i = 0; i < n; ++i) { double m = std::abs(rts.elemAsDouble(i)); if (m > 1e-9) mags.push_back(m); }
+                for (keel::usize i = 0; i < n; ++i) { double m = keel::abs(rts.elemAsDouble(i)); if (m > 1e-9) mags.push_back(m); }
             }
         };
         addRoots(num);
@@ -273,18 +276,18 @@ Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
     const int N = 4000;
     const double llo = std::log10(wlo), lhi = std::log10(whi);
     double wPrev = wlo;
-    std::complex<double> gPrev = evalG(num, den, wPrev);
+    keel::c64 gPrev = evalG(num, den, wPrev);
     for (int i = 1; i <= N; ++i) {
         const double w = std::pow(10.0, llo + (lhi - llo) * (double)i / N);
-        const std::complex<double> g = evalG(num, den, w);
+        const keel::c64 g = evalG(num, den, w);
 
         // Gain crossover: |G| − 1 changes sign → phase + delay margin.
-        const double a = std::abs(gPrev) - 1.0, b = std::abs(g) - 1.0;
+        const double a = keel::abs(gPrev) - 1.0, b = keel::abs(g) - 1.0;
         if (std::isfinite(a) && std::isfinite(b) && a != 0.0 && (a < 0.0) != (b < 0.0)) {
             const double wc = bisectRoot(
-                [&](double x) { return std::abs(evalG(num, den, x)) - 1.0; }, wPrev, w);
-            const std::complex<double> gc = evalG(num, den, wc);
-            double PM = std::arg(gc) * 180.0 / PI + 180.0;
+                [&](double x) { return keel::abs(evalG(num, den, x)) - 1.0; }, wPrev, w);
+            const keel::c64 gc = evalG(num, den, wc);
+            double PM = keel::arg(gc) * 180.0 / PI + 180.0;
             while (PM > 180.0) PM -= 360.0;
             while (PM <= -180.0) PM += 360.0;
             pmVal.push_back(PM);
@@ -300,9 +303,9 @@ Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
         if (std::isfinite(ia) && std::isfinite(ib) && ia != 0.0 && (ia < 0.0) != (ib < 0.0)) {
             const double wc = bisectRoot(
                 [&](double x) { return evalG(num, den, x).imag(); }, wPrev, w);
-            const std::complex<double> gc = evalG(num, den, wc);
+            const keel::c64 gc = evalG(num, den, wc);
             if (gc.real() < 0.0) {
-                const double m = std::abs(gc);
+                const double m = keel::abs(gc);
                 gmVal.push_back(m > 0.0 ? 1.0 / m : inf);
                 gmFreq.push_back(wc);
             }
@@ -314,22 +317,22 @@ Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
     // Closed-loop (negative unity feedback) stability: roots(den + num).
     bool stable = true;
     {
-        const size_t L = std::max(num.size(), den.size());
+        const keel::usize L = std::max(num.size(), den.size());
         std::vector<double> cl(L, 0.0);
-        for (size_t i = 0; i < den.size(); ++i) cl[L - den.size() + i] += den[i];
-        for (size_t i = 0; i < num.size(); ++i) cl[L - num.size() + i] += num[i];
-        size_t s0 = 0;
+        for (keel::usize i = 0; i < den.size(); ++i) cl[L - den.size() + i] += den[i];
+        for (keel::usize i = 0; i < num.size(); ++i) cl[L - num.size() + i] += num[i];
+        keel::usize s0 = 0;
         while (s0 + 1 < cl.size() && cl[s0] == 0.0) ++s0;
         cl.erase(cl.begin(), cl.begin() + s0);
         if (cl.size() >= 2) {
             Value rts = numkit::builtin::roots(rowFrom(cl, mr), mr);
-            const size_t n = rts.numel();
+            const keel::usize n = rts.numel();
             if (rts.type() == ValueType::COMPLEX) {
-                const std::complex<double> *p = rts.complexData();
-                for (size_t i = 0; i < n; ++i)
+                const keel::c64 *p = rts.complexData();
+                for (keel::usize i = 0; i < n; ++i)
                     if (p[i].real() >= -1e-9) { stable = false; break; }
             } else {
-                for (size_t i = 0; i < n; ++i)
+                for (keel::usize i = 0; i < n; ++i)
                     if (rts.elemAsDouble(i) >= -1e-9) { stable = false; break; }
             }
         }
@@ -346,7 +349,7 @@ Value allmargin(const Value &sys, std::pmr::memory_resource *mr)
     return s;
 }
 
-Value stepinfo(const Value &sys, std::pmr::memory_resource *mr)
+Value stepinfo(const Value &sys, keel::Allocator *mr)
 {
     stepinfo_argcheck(sys);
     // Use a deliberately long horizon (multiplier on top of the
@@ -369,14 +372,14 @@ Value stepinfo(const Value &sys, std::pmr::memory_resource *mr)
     y = readCol(y1);
 
     const double yfinal = y.back();
-    const double absYf = std::abs(yfinal);
+    const double absYf = keel::abs(yfinal);
     const double band = 0.02 * absYf;        // 2% settling band
 
     // Peak / peak time.
-    double peak = std::abs(y[0]);
+    double peak = keel::abs(y[0]);
     double peakTime = t[0];
-    for (size_t i = 0; i < y.size(); ++i) {
-        const double a = std::abs(y[i]);
+    for (keel::usize i = 0; i < y.size(); ++i) {
+        const double a = keel::abs(y[i]);
         if (a > peak) { peak = a; peakTime = t[i]; }
     }
 
@@ -406,7 +409,7 @@ Value stepinfo(const Value &sys, std::pmr::memory_resource *mr)
         // Find first sample crossing y10, then first subsequent crossing y90.
         double t10 = std::numeric_limits<double>::quiet_NaN();
         double t90 = std::numeric_limits<double>::quiet_NaN();
-        for (size_t i = 1; i < y.size(); ++i) {
+        for (keel::usize i = 1; i < y.size(); ++i) {
             const double a = y[i - 1] - y10;
             const double b = y[i] - y10;
             if ((a < 0.0) != (b < 0.0) && std::isnan(t10)) {
@@ -427,8 +430,8 @@ Value stepinfo(const Value &sys, std::pmr::memory_resource *mr)
 
     // Settling time: last index where |y - yfinal| > band.
     double settlingTime = 0.0;
-    for (size_t i = 0; i < y.size(); ++i) {
-        if (std::abs(y[i] - yfinal) > band)
+    for (keel::usize i = 0; i < y.size(); ++i) {
+        if (keel::abs(y[i] - yfinal) > band)
             settlingTime = t[i];
     }
 
@@ -438,17 +441,17 @@ Value stepinfo(const Value &sys, std::pmr::memory_resource *mr)
     // equals |yfinal| (yinit=0), so TransientTime == SettlingTime; it can be
     // smaller when |y-yfinal| overshoots past |yfinal|.
     double peakDev = 0.0;
-    for (size_t i = 0; i < y.size(); ++i)
-        peakDev = std::max(peakDev, std::abs(y[i] - yfinal));
+    for (keel::usize i = 0; i < y.size(); ++i)
+        peakDev = std::max(peakDev, keel::abs(y[i] - yfinal));
     const double transBand = 0.02 * peakDev;
     double transientTime = 0.0;
-    for (size_t i = 0; i < y.size(); ++i) {
-        if (std::abs(y[i] - yfinal) > transBand)
+    for (keel::usize i = 0; i < y.size(); ++i) {
+        if (keel::abs(y[i] - yfinal) > transBand)
             transientTime = t[i];
     }
     // Min/max within the settling band (after settling).
     double sMin = yfinal, sMax = yfinal;
-    for (size_t i = 0; i < y.size(); ++i) {
+    for (keel::usize i = 0; i < y.size(); ++i) {
         if (t[i] >= settlingTime) {
             sMin = std::min(sMin, y[i]);
             sMax = std::max(sMax, y[i]);

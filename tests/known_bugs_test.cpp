@@ -169,7 +169,7 @@ TEST_F(ControlKnownBug, FeedbackSignCppPathUnified)
     // Direct C++ public-API path (the compute does not validate yet).
     try {
         control::feedback(*engine.getVariable("G"), *engine.getVariable("H"),
-                          2, engine.resource());
+                          2, engine.allocator());
         FAIL() << "C++ path should reject sign=2";
     } catch (const numkit::Error &e) {
         EXPECT_EQ(e.identifier(), "numkit:feedback:signNotChoice") << e.what();

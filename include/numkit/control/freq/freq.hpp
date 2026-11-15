@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include <memory_resource>
+#include <keel/core.h>
+#include <keel/memory.h>
 #include <numkit/value/value.hpp>
 #include <utility>
 
@@ -32,8 +33,8 @@ namespace numkit::control {
 /// @return     1×1 complex Value.
 ///
 /// @see freqresp, bode
-Value evalfr(const Value &sys, double f,
-             std::pmr::memory_resource *mr = nullptr);
+Value evalfr(const Value &sys, keel::f64 f,
+             keel::Allocator *mr = nullptr);
 
 /// Frequency response on a user-supplied grid (`H = freqresp(sys, w)`).
 ///
@@ -44,7 +45,7 @@ Value evalfr(const Value &sys, double f,
 ///
 /// @see evalfr, bode, nyquist
 Value freqresp(const Value &sys, const Value &w,
-               std::pmr::memory_resource *mr = nullptr);
+               keel::Allocator *mr = nullptr);
 
 /// Result of @ref bode "bode(sys, w)".
 struct BodeResult {
@@ -71,7 +72,7 @@ struct BodeResult {
 ///
 /// @see margin, nyquist, freqresp
 BodeResult bode(const Value &sys, const Value &wArg,
-                std::pmr::memory_resource *mr = nullptr);
+                keel::Allocator *mr = nullptr);
 
 /// Result of @ref nyquist "nyquist(sys, w)".
 struct NyquistResult {
@@ -92,7 +93,7 @@ struct NyquistResult {
 ///
 /// @see bode, freqresp
 NyquistResult nyquist(const Value &sys, const Value &wArg,
-                      std::pmr::memory_resource *mr = nullptr);
+                      keel::Allocator *mr = nullptr);
 
 /// Root locus (`[r, k] = rlocus(sys, k)`).
 ///
@@ -114,7 +115,7 @@ NyquistResult nyquist(const Value &sys, const Value &wArg,
 /// @see margin, bode
 std::pair<Value, Value>
 rlocus(const Value &sys, const Value &kVec,
-       std::pmr::memory_resource *mr = nullptr);
+       keel::Allocator *mr = nullptr);
 
 
 /// @}
