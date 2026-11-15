@@ -113,7 +113,7 @@ char gram_argcheck(const Value &type)
                     + internal::shapeOf(type) + " "
                     + mtypeName(type.type()) + " array).",
                     0, 0, "gram", "", "numkit:gram:type");
-    const std::string ts = type.toString();
+    const std::string ts(type.toString().as_ref());
     const char t = ts.empty()
                  ? 'c'
                  : static_cast<char>(std::tolower(static_cast<unsigned char>(ts[0])));

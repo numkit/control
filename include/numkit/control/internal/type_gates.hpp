@@ -154,7 +154,7 @@ inline void requireLtiModel(const Value &sys, std::string_view fn,
                             bool acceptFrD = false)
 {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k = sys.field("kind").toString();
+        const auto k = sys.field("kind").toString();
         if (k == "tf" || k == "zpk" || k == "ss" || (acceptFrD && k == "frd"))
             return;
     }
@@ -186,11 +186,11 @@ inline Value coerceToDoubleMatrix(const Value &v,
         return v;
     if (t == ValueType::STRING) {
         // String scalars coerce like char rows (filt's numerator).
-        const std::string sv = v.toString();
+        const auto sv = v.toString();
         Value out = Value::matrix(1, sv.size(), ValueType::DOUBLE, mr);
         keel::f64 *od = out.doubleDataMut();
         for (keel::usize i = 0; i < sv.size(); ++i)
-            od[i] = static_cast<keel::f64>(static_cast<unsigned char>(sv[i]));
+            od[i] = static_cast<keel::f64>(static_cast<unsigned char>(sv.data()[i]));
         return out;
     }
     if (t == ValueType::SINGLE || t == ValueType::LOGICAL

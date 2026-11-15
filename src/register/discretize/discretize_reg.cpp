@@ -24,7 +24,7 @@ static std::string argString(const Value &v) {
     if (!v.isChar() && !v.isString())
         throw Error("control discretize: expected a string method",
                     0, 0, "discretize", "", "numkit:discretize:type");
-    return v.toString();
+    return std::string(v.toString().as_ref());
 }
 
 void c2d_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)

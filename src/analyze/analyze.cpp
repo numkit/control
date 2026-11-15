@@ -87,7 +87,7 @@ double interpAt(const std::vector<double> &x,
 
 void dcgain_argcheck(const Value &sys) {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k = sys.field("kind").toString();
+        const auto k = sys.field("kind").toString();
         if (k == "tf" || k == "zpk" || k == "ss") return;
     }
     throw Error("control freq: expected an LTI struct (tf/zpk/ss)",
@@ -100,7 +100,7 @@ void margin_argcheck(const Value &sys) {
 
 void allmargin_argcheck(const Value &sys) {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k = sys.field("kind").toString();
+        const auto k = sys.field("kind").toString();
         if (k == "tf" || k == "zpk" || k == "ss") return;
     }
     throw Error("allmargin: expected an LTI struct (tf/zpk/ss)",
@@ -109,7 +109,7 @@ void allmargin_argcheck(const Value &sys) {
 
 void stepinfo_argcheck(const Value &sys) {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k = sys.field("kind").toString();
+        const std::string k(sys.field("kind").toString().as_ref());
         if (k == "tf" || k == "zpk" || k == "ss") return;
         throw Error("step: input 1 (sys) has unknown LTI kind '" + k + "'",
                     0, 0, "step", "", "numkit:step:kind");
@@ -181,7 +181,7 @@ openLoopNumDen(const Value &sys, keel::Allocator *mr) {
         return c;
     };
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k = sys.field("kind").toString();
+        const auto k = sys.field("kind").toString();
         if (k == "tf")
             return {coeffs(sys.field("num")), coeffs(sys.field("den"))};
         if (k == "zpk") {

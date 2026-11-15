@@ -68,7 +68,7 @@ SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
     double Ts = 0.0;
     if (sys.isStruct() && sys.hasField("kind")) {
         Ts = sys.field("Ts").toScalar();
-        const std::string k = sys.field("kind").toString();
+        const std::string k(sys.field("kind").toString().as_ref());
         if (k == "ss") {
             Av = sys.field("A"); Bv = sys.field("B");
             Cv = sys.field("C"); Dv = sys.field("D");
@@ -300,7 +300,7 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
 void response_sys_argcheck(const Value &sys, const char *fn)
 {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k = sys.field("kind").toString();
+        const std::string k(sys.field("kind").toString().as_ref());
         if (k == "ss" || k == "tf" || k == "zpk") return;
         throw Error(std::string(fn) + ": input 1 (sys) has unknown LTI "
                     "kind '" + k + "'",

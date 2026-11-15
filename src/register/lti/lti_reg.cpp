@@ -20,6 +20,7 @@
 #include <cctype>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace numkit::control {
 namespace detail {
@@ -45,7 +46,7 @@ void tf_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
     }
     if (args.size() == 1 || (args.size() == 2 && (args[0].isChar() || args[0].isString()))) {
         if (args[0].isChar() || args[0].isString()) {
-            std::string v = args[0].toString();
+            const auto v = args[0].toString();
             if (v == "s" || v == "p" || v == "z" || v == "q" || v == "z^-1" || v == "q^-1") {
                 const double Ts = (v == "s" || v == "p")
                     ? 0.0
@@ -98,7 +99,7 @@ void zpk_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
     }
     if (args.size() == 1 || (args.size() == 2 && (args[0].isChar() || args[0].isString()))) {
         if (args[0].isChar() || args[0].isString()) {
-            std::string v = args[0].toString();
+            const auto v = args[0].toString();
             if (v == "s" || v == "p" || v == "z" || v == "q") {
                 const double Ts = (v == "s" || v == "p")
                     ? 0.0
@@ -205,7 +206,7 @@ void frd_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
 static bool wantVector(keel::ArrayRef<Value> args, keel::usize pos) {
     if (args.size() <= pos) return false;
     if (!args[pos].isChar() && !args[pos].isString()) return false;
-    std::string s = args[pos].toString();
+    std::string s(args[pos].toString().as_ref());
     for (auto &c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return s == "v" || s == "vector";
 }
@@ -268,7 +269,7 @@ void minreal_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutA
         if (!numericScalar)
             throw Error(std::string("minreal: input 2 (tol) must be a ")
                         + "numeric scalar tolerance (got a "
-                        + argcheck::detail::dimsStr(tv) + " "
+                        + argcheck::detail::dimsStr(tv).c_str() + " "
                         + mtypeName(t) + " array).",
                         0, 0, "minreal", "", "numkit:minreal:tol");
         tol = tv.isComplex() ? tv.complexData()[0].real()

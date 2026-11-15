@@ -401,7 +401,7 @@ Value c2d(const Value &sys, double Ts, const std::string &method, keel::Allocato
     }
 
     const std::string origKind = sys.isStruct() && sys.hasField("kind")
-                                 ? sys.field("kind").toString()
+                                 ? std::string(sys.field("kind").toString().as_ref())
                                  : std::string("ss");
     return packResult(Ad, Bd, Cd, Dd, s.n, Ts, origKind, mr);
 }
@@ -413,7 +413,7 @@ Value d2c(const Value &sys, const std::string &method, keel::Allocator *mr)
     const bool isZoh = method.empty() || method == "zoh";
     const double Ts = s.Ts;
     const std::string origKind = sys.isStruct() && sys.hasField("kind")
-                                 ? sys.field("kind").toString()
+                                 ? std::string(sys.field("kind").toString().as_ref())
                                  : std::string("ss");
 
     if (isZoh) {
