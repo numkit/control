@@ -11,6 +11,7 @@
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <keel/string.h>
+#include <keel/utf8.h>
 #include <numkit/control/state/state.hpp>
 #include <numkit/control/conversion/conversion.hpp>
 #include <numkit/control/lyapunov/lyapunov.hpp>   // gram delegates to lyap / dlyap
@@ -23,7 +24,6 @@
 #include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <limits>
 
@@ -114,7 +114,7 @@ char gram_argcheck(const Value &type)
     const keel::String ts = type.toString();
     const char t = ts.empty()
                  ? 'c'
-                 : static_cast<char>(std::tolower(static_cast<unsigned char>(ts[0])));
+                 : keel::to_ascii_lower(ts[0]);
     if (t != 'c' && t != 'o')
         throw Error(keel::format("gram: input 2 (type) must be 'c' (controllability) or 'o' (observability), as char or string (got '{}').", ts),
                     0, 0, "gram", "", "numkit:gram:type");

@@ -12,6 +12,7 @@
 #include <keel/format.h>
 #include <keel/ref.h>
 #include <keel/string.h>
+#include <keel/utf8.h>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>   // minreal
 
@@ -19,8 +20,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 #include <numkit/value/value_type.hpp>   // ValueType, mtypeName (tol class gate)
-
-#include <cctype>
 #include <utility>
 
 namespace numkit::control {
@@ -208,7 +207,7 @@ static bool wantVector(keel::ArrayRef<Value> args, keel::usize pos) {
     if (args.size() <= pos) return false;
     if (!args[pos].isChar() && !args[pos].isString()) return false;
     keel::String s = args[pos].toString();
-    for (auto &c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (auto &c : s) c = keel::to_ascii_lower(c);
     return s == "v" || s == "vector";
 }
 
@@ -398,7 +397,7 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     keel::String method = keel::String::from("matchdc");
     if (args.size() >= 3 && (args[2].isChar() || args[2].isString())) {
         method = args[2].toString();
-        for (char &ch : method) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        for (char &ch : method) ch = keel::to_ascii_lower(ch);
     }
 
     const keel::usize nk = keep.size();
