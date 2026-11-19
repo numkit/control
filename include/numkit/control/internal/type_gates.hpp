@@ -19,9 +19,10 @@
 #pragma once
 
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
-#include <string>
-#include <string_view>
+#include <keel/ref.h>
+#include <keel/string.h>
 
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
@@ -33,13 +34,12 @@ namespace numkit::control::internal {
 /// @{
 
 /// Render "2x3x4" for got-clauses.
-inline std::string shapeOf(const Value &v)
+inline keel::String shapeOf(const Value &v)
 {
     const Dims &d = v.dims();
-    std::string s = std::to_string(d.dim(0));
+    keel::String s = keel::format("{}", d.dim(0));
     for (int k = 1; k < d.ndim(); ++k) {
-        s += "x";
-        s += std::to_string(d.dim(k));
+        keel::format_into(s, "x{}", d.dim(k));
     }
     return s;
 }
@@ -52,58 +52,55 @@ inline std::string shapeOf(const Value &v)
 /// Used by the lyap/dlyap family where the reference accepts every
 /// numeric class plus char (probed: lyap(int8 A), lyap('12' A) both
 /// compute).
-inline void requireCoercibleMatrix(const Value &v, std::string_view fn,
-                                   std::string_view argName, int argNum)
+inline void requireCoercibleMatrix(const Value &v, keel::StringRef fn,
+                                   keel::StringRef argName, int argNum)
 {
     const ValueType t = v.type();
     if (t == ValueType::DOUBLE || t == ValueType::COMPLEX
         || t == ValueType::SINGLE || t == ValueType::LOGICAL
         || t == ValueType::CHAR || isIntegerType(t))
         return;
-    throw Error(std::string(fn) + ": input " + std::to_string(argNum)
-                    + " (" + std::string(argName) + ") must be a numeric "
-                    + "or char matrix (got a " + shapeOf(v) + " "
-                    + mtypeName(t) + " array).",
-                0, 0, std::string(fn), "",
-                "numkit:" + std::string(fn) + ":inputType");
+    throw Error(keel::format("{}: input {} ({}) must be a numeric "
+                             "or char matrix (got a {} {} array).",
+                             fn, argNum, argName, shapeOf(v), mtypeName(t)),
+                0, 0, fn, "",
+                keel::format("numkit:{}:inputType", fn));
 }
 
 /// @brief Numeric-only gate (no char): for entries whose reference
 /// rejects char/code-value coercion on a given argument (acker's pole
 /// vector — MATLAB:zeros:invalidStringInput) while still coercing
 /// single/logical/integer.
-inline void requireNumericInput(const Value &v, std::string_view fn,
-                                std::string_view argName, int argNum)
+inline void requireNumericInput(const Value &v, keel::StringRef fn,
+                                keel::StringRef argName, int argNum)
 {
     const ValueType t = v.type();
     if (t == ValueType::DOUBLE || t == ValueType::COMPLEX
         || t == ValueType::SINGLE || t == ValueType::LOGICAL
         || isIntegerType(t))
         return;
-    throw Error(std::string(fn) + ": input " + std::to_string(argNum)
-                    + " (" + std::string(argName) + ") must be a numeric "
-                    + "vector (got a " + shapeOf(v) + " " + mtypeName(t)
-                    + " array).",
-                0, 0, std::string(fn), "",
-                "numkit:" + std::string(fn) + ":inputType");
+    throw Error(keel::format("{}: input {} ({}) must be a numeric "
+                             "vector (got a {} {} array).",
+                             fn, argNum, argName, shapeOf(v), mtypeName(t)),
+                0, 0, fn, "",
+                keel::format("numkit:{}:inputType", fn));
 }
 
 /// @brief Integer-matrix rejection for the ctrb/obsv/acker/ss2ss
 /// family: the reference fails on integer operands inside its matmul
 /// (MATLAB:mtimes:integerNotSupported / mrdivide:integerLinearAlgebra),
 /// while double/single/logical/char coerce fine.
-inline void requireNonIntegerMatrix(const Value &v, std::string_view fn,
-                                    std::string_view argName, int argNum)
+inline void requireNonIntegerMatrix(const Value &v, keel::StringRef fn,
+                                    keel::StringRef argName, int argNum)
 {
     if (!isIntegerType(v.type()))
         return;
-    throw Error(std::string(fn) + ": input " + std::to_string(argNum)
-                    + " (" + std::string(argName) + ") must not be an "
-                    + "integer matrix — integer matrix products are "
-                    + "unsupported; convert with double() (got a "
-                    + shapeOf(v) + " " + mtypeName(v.type()) + " array).",
-                0, 0, std::string(fn), "",
-                "numkit:" + std::string(fn) + ":integerUnsupported");
+    throw Error(keel::format("{}: input {} ({}) must not be an "
+                             "integer matrix — integer matrix products are "
+                             "unsupported; convert with double() (got a {} {} array).",
+                             fn, argNum, argName, shapeOf(v), mtypeName(v.type())),
+                0, 0, fn, "",
+                keel::format("numkit:{}:integerUnsupported", fn));
 }
 
 /// @brief Real-kernel stub for entries whose reference computes
@@ -111,37 +108,35 @@ inline void requireNonIntegerMatrix(const Value &v, std::string_view fn,
 /// (lyap/dlyap A,Q; ctrb/obsv A,B,C; acker A; ss2ss T; lsim u,x0).
 /// Rejecting honestly beats the silent imaginary-part drop the raw
 /// elemAsDouble reads used to perform (bugs/opened/control/complex-kernels.md).
-inline void requireRealKernelInput(const Value &v, std::string_view fn,
-                                   std::string_view argName, int argNum)
+inline void requireRealKernelInput(const Value &v, keel::StringRef fn,
+                                   keel::StringRef argName, int argNum)
 {
     if (!v.isComplex())
         return;
-    throw Error(std::string(fn) + ": input " + std::to_string(argNum)
-                    + " (" + std::string(argName) + ") is complex — complex "
-                    + "kernels are not supported yet; the reference "
-                    + "computes a complex result here, so refusing beats "
-                    + "returning a wrong real one (got a " + shapeOf(v)
-                    + " complex array).",
-                0, 0, std::string(fn), "",
-                "numkit:" + std::string(fn) + ":complexUnsupported");
+    throw Error(keel::format("{}: input {} ({}) is complex — complex "
+                             "kernels are not supported yet; the reference "
+                             "computes a complex result here, so refusing beats "
+                             "returning a wrong real one (got a {} complex array).",
+                             fn, argNum, argName, shapeOf(v)),
+                0, 0, fn, "",
+                keel::format("numkit:{}:complexUnsupported", fn));
 }
 
 /// @brief Single-result stub: acker with any single input returns a
 /// single-class result in the reference; the kernel is double-only, so
 /// single is rejected with its own identifier instead of a wrong-class
 /// answer (bugs/opened/control/single-float-inputs.md).
-inline void requireDoubleOnlyInput(const Value &v, std::string_view fn,
-                                   std::string_view argName, int argNum)
+inline void requireDoubleOnlyInput(const Value &v, keel::StringRef fn,
+                                   keel::StringRef argName, int argNum)
 {
     if (v.type() != ValueType::SINGLE)
         return;
-    throw Error(std::string(fn) + ": input " + std::to_string(argNum)
-                    + " (" + std::string(argName) + ") is single — single "
-                    + "inputs produce a single result in the reference "
-                    + "engine; convert with double() (got a " + shapeOf(v)
-                    + " single array).",
-                0, 0, std::string(fn), "",
-                "numkit:" + std::string(fn) + ":singleUnsupported");
+    throw Error(keel::format("{}: input {} ({}) is single — single "
+                             "inputs produce a single result in the reference "
+                             "engine; convert with double() (got a {} single array).",
+                             fn, argNum, argName, shapeOf(v)),
+                0, 0, fn, "",
+                keel::format("numkit:{}:singleUnsupported", fn));
 }
 
 /// @brief LTI-model gate for sys-args (predicates, gramians,
@@ -150,25 +145,27 @@ inline void requireDoubleOnlyInput(const Value &v, std::string_view fn,
 /// (issiso/isproper do; order/gram reject it — probed R2025b).
 /// Everything else is the inputType rejection class (the reference
 /// answers MATLAB:UndefinedFunction on untyped args).
-inline void requireLtiModel(const Value &sys, std::string_view fn,
+inline void requireLtiModel(const Value &sys, keel::StringRef fn,
                             bool acceptFrD = false)
 {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const auto k = sys.field("kind").toString();
+        const keel::String k = sys.field("kind").toString();
         if (k == "tf" || k == "zpk" || k == "ss" || (acceptFrD && k == "frd"))
             return;
     }
-    std::string msg = std::string(fn) + ": input 1 (sys) must be an LTI "
-                    + "model struct (tf/zpk/ss";
-    if (acceptFrD) msg += "/frd";
-    msg += ") — built by tf/zpk/ss";
-    if (acceptFrD) msg += "/frd";
-    msg += " (got ";
-    msg += sys.isStruct() ? std::string("an untagged struct")
-                          : ("a " + std::string(mtypeName(sys.type())));
-    msg += " array).";
-    throw Error(std::move(msg), 0, 0, std::string(fn), "",
-                "numkit:" + std::string(fn) + ":inputType");
+    keel::String msg = keel::format("{}: input 1 (sys) must be an LTI model struct (tf/zpk/ss", fn);
+    if (acceptFrD) msg.append("/frd");
+    msg.append(") — built by tf/zpk/ss");
+    if (acceptFrD) msg.append("/frd");
+    msg.append(" (got ");
+    if (sys.isStruct()) {
+        msg.append("an untagged struct");
+    } else {
+        keel::format_into(msg, "a {}", mtypeName(sys.type()));
+    }
+    msg.append(" array).");
+    throw Error(msg.as_ref(), 0, 0, fn, "",
+                keel::format("numkit:{}:inputType", fn));
 }
 
 /// @brief Coerce a coercible operand (single / logical / char /

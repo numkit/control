@@ -13,10 +13,10 @@
 
 #pragma once
 
+#include <keel/array.h>
 #include <keel/core.h>
 #include <keel/complex.h>
 #include <cstddef>
-#include <vector>
 
 namespace numkit::control::internal {
 
@@ -24,10 +24,10 @@ namespace numkit::control::internal {
 /// @{
 
 
-using Mat = std::vector<keel::f64>;
-using Vec = std::vector<keel::f64>;
-using CMat = std::vector<keel::c64>;
-using CVec = std::vector<keel::c64>;
+using Mat = keel::Array<keel::f64>;
+using Vec = keel::Array<keel::f64>;
+using CMat = keel::Array<keel::c64>;
+using CVec = keel::Array<keel::c64>;
 
 /// @brief In-place partial-pivot LU decomposition + back-substitution.
 ///

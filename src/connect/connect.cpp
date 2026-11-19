@@ -9,7 +9,9 @@
 // Polynomial multiplication uses signal::conv. Polynomial addition
 // is done locally (right-aligned, longer length wins).
 
+#include <keel/array.h>
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <numkit/control/connect/connect.hpp>
 #include <numkit/control/lti/lti.hpp>
@@ -26,7 +28,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 namespace numkit::control {
 
@@ -46,13 +47,13 @@ double sampleTime(const Value &sys) {
     return 0.0;
 }
 
-std::vector<double> coeffsReal(const Value &v) {
-    std::vector<double> out(v.numel());
+keel::Array<double> coeffsReal(const Value &v) {
+    keel::Array<double> out(v.numel());
     for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
-Value rowOf(const std::vector<double> &v, keel::Allocator *mr) {
+Value rowOf(keel::ArrayRef<double> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
@@ -61,7 +62,7 @@ Value rowOf(const std::vector<double> &v, keel::Allocator *mr) {
 // Bring an LTI struct (or a raw 2-arg call: (num, den) split across two
 // args via `series(num1, den1, num2, den2)` — not yet supported) into
 // a (num, den) coefficient pair.
-struct NumDen { std::vector<double> num, den; };
+struct NumDen { keel::Array<double> num, den; };
 
 NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
     // A plain numeric scalar is a STATIC gain system K = K/1, i.e.
@@ -69,7 +70,7 @@ NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
     // (e.g. feedback(sys, 1) for unity feedback, series(sys, 2), ...).
     if (!sys.isStruct()) {
         if (sys.numel() == 1)
-            return {{sys.toScalar()}, {1.0}};
+            return {keel::Array<double>{sys.toScalar()}, keel::Array<double>{1.0}};
         throw Error("control connect: a numeric system must be a scalar gain",
                     0, 0, "control", "", "numkit:control:kind");
     }
@@ -90,14 +91,14 @@ NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
 }
 
 // Polynomial addition right-aligned (highest order first, MATLAB style).
-std::vector<double> polyAdd(const std::vector<double> &a,
-                            const std::vector<double> &b,
+keel::Array<double> polyAdd(keel::ArrayRef<double> a,
+                            keel::ArrayRef<double> b,
                             double bScale = 1.0)
 {
     const keel::usize na = a.size();
     const keel::usize nb = b.size();
     const keel::usize n = std::max(na, nb);
-    std::vector<double> y(n, 0.0);
+    keel::Array<double> y(n, 0.0);
     // Right-align: a[na-1] aligns with y[n-1], same for b.
     for (keel::usize i = 0; i < na; ++i) y[n - na + i] += a[i];
     for (keel::usize i = 0; i < nb; ++i) y[n - nb + i] += bScale * b[i];
@@ -105,7 +106,7 @@ std::vector<double> polyAdd(const std::vector<double> &a,
 }
 
 // Polynomial multiplication via signal::conv.
-std::vector<double> polyMul(const std::vector<double> &a, const std::vector<double> &b, keel::Allocator *mr)
+keel::Array<double> polyMul(keel::ArrayRef<double> a, keel::ArrayRef<double> b, keel::Allocator *mr)
 {
     if (a.empty() || b.empty()) return {};
     Value av = rowOf(a, mr);
@@ -122,8 +123,7 @@ double Ts_combine(double Ts1, double Ts2, const char *op) {
     // Allow mixing only when one side is "unspecified" (Ts == -1).
     if (Ts1 == -1.0) return Ts2;
     if (Ts2 == -1.0) return Ts1;
-    throw Error(std::string("control ") + op +
-                ": sample times must match (Ts mismatch)",
+    throw Error(keel::format("control {}: sample times must match (Ts mismatch)", op),
                 0, 0, op, "", "numkit:control:Ts");
 }
 

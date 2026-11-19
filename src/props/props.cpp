@@ -13,6 +13,7 @@
 // works for SISO systems, which is what `zero(sys)` is most useful
 // for in a function-form environment.
 
+#include <keel/array.h>
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
@@ -32,7 +33,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 namespace numkit::control {
 
@@ -56,9 +56,9 @@ Value boolValue(bool b, keel::Allocator *mr) {
 // Char poly thin wrapper around the shared Faddeev–LeVerrier kernel.
 // Pulls A out of the LTI struct as a plain column-major double buffer
 // and forwards.
-std::vector<double> charPoly(const Value &A) {
+keel::Array<double> charPoly(const Value &A) {
     const keel::usize n = A.dims().rows();
-    std::vector<double> Av(n * n);
+    keel::Array<double> Av(n * n);
     for (keel::usize i = 0; i < n * n; ++i) Av[i] = A.elemAsDouble(i);
     return internal::charPoly(Av, n);
 }
@@ -66,9 +66,9 @@ std::vector<double> charPoly(const Value &A) {
 // Pull a Value (either real or complex) into a vector of complex
 // numbers. Convenient for stability checks where everything compares
 // uniformly.
-std::vector<keel::c64> toComplexVec(const Value &v) {
+keel::Array<keel::c64> toComplexVec(const Value &v) {
     const keel::usize N = v.numel();
-    std::vector<keel::c64> out(N);
+    keel::Array<keel::c64> out(N);
     if (v.type() == ValueType::COMPLEX) {
         const keel::c64 *src = v.complexData();
         for (keel::usize i = 0; i < N; ++i) out[i] = src[i];
@@ -78,7 +78,7 @@ std::vector<keel::c64> toComplexVec(const Value &v) {
     return out;
 }
 
-Value rowFromCoeffs(const std::vector<double> &v, keel::Allocator *mr) {
+Value rowFromCoeffs(keel::ArrayRef<double> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;

@@ -6,10 +6,13 @@
 // proper rational form) — that's left to the user / converters which
 // check on-demand.
 
+#include <keel/array.h>
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <keel/math.h>
+#include <keel/string.h>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>
 #include <numkit/control/internal/type_gates.hpp>
@@ -22,7 +25,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 namespace numkit::control {
 
@@ -76,17 +78,15 @@ Value tfCoeffArg(const Value &v, const char *fn, const char *argName,
         u = std::move(inner);
     }
     const ValueType t = u.type();
-    const std::string tag = std::string("numkit:") + fn + ":" + argName;
+    const keel::String tag = keel::format("numkit:{}:{}", fn, argName);
     if (u.isCell())
-        throw Error(std::string(fn) + ": input (" + argName + ") uses the "
-                    "cell (MIMO) coefficient form — only SISO models are "
-                    "supported in this build.",
-                    0, 0, fn, "", "numkit:" + std::string(fn) + ":mimoUnsupported");
+        throw Error(keel::format("{}: input ({}) uses the cell (MIMO) coefficient form — only SISO models are supported in this build.",
+                                 fn, argName),
+                    0, 0, fn, "", keel::format("numkit:{}:mimoUnsupported", fn));
     if (u.numel() == 0)
-        throw Error(std::string(fn) + ": input (" + argName + ") must not "
-                    "be empty (got a " + shapeOf(u) + " "
-                    + mtypeName(t) + " array).",
-                    0, 0, fn, "", tag);
+        throw Error(keel::format("{}: input ({}) must not be empty (got a {} {} array).",
+                                 fn, argName, shapeOf(u), mtypeName(t)),
+                    0, 0, fn, "", tag.as_ref());
     if (t == ValueType::DOUBLE || t == ValueType::COMPLEX)
         return u;
     const bool numericCoercible = (t == ValueType::SINGLE || isIntegerType(t));
@@ -94,10 +94,9 @@ Value tfCoeffArg(const Value &v, const char *fn, const char *argName,
                                           || t == ValueType::CHAR
                                           || t == ValueType::STRING)))
         return internal::coerceToDoubleMatrix(u, mr);
-    throw Error(std::string(fn) + ": input (" + argName + ") must be a "
-                + "numeric or complex coefficient vector (got a "
-                + shapeOf(u) + " " + mtypeName(t) + " array).",
-                0, 0, fn, "", "numkit:" + std::string(fn) + ":inputType");
+    throw Error(keel::format("{}: input ({}) must be a numeric or complex coefficient vector (got a {} {} array).",
+                             fn, argName, shapeOf(u), mtypeName(t)),
+                0, 0, fn, "", keel::format("numkit:{}:inputType", fn));
 }
 
 // Build a MIMO cell grid when either num or den is a multi-element cell.
@@ -121,8 +120,8 @@ bool buildMimoCellTf(const Value &num, const Value &den, const char *fn,
     if (uNum.isCell() && uDen.isCell()) {
         if (uNum.dims().rows() != uDen.dims().rows() ||
             uNum.dims().cols() != uDen.dims().cols())
-            throw Error(std::string(fn) + ": cell arrays num and den must have matching dimensions",
-                        0, 0, fn, "", std::string("numkit:") + fn + ":mimoSize");
+            throw Error(keel::format("{}: cell arrays num and den must have matching dimensions", fn),
+                        0, 0, fn, "", keel::format("numkit:{}:mimoSize", fn));
         r = uNum.dims().rows();
         c = uNum.dims().cols();
     } else if (uNum.isCell()) {
@@ -222,10 +221,9 @@ Value ssMatArg(const Value &m, const char *fn, const char *argName,
         return m;
     if (t == ValueType::SINGLE || isIntegerType(t))
         return internal::coerceToDoubleMatrix(m, mr);
-    throw Error(std::string(fn) + ": input (" + argName + ") must be a "
-                + "numeric or complex matrix (got a " + shapeOf(m) + " "
-                + mtypeName(t) + " array).",
-                0, 0, fn, "", std::string("numkit:") + fn + ":inputType");
+    throw Error(keel::format("{}: input ({}) must be a numeric or complex matrix (got a {} {} array).",
+                             fn, argName, shapeOf(m), mtypeName(t)),
+                0, 0, fn, "", keel::format("numkit:{}:inputType", fn));
 }
 
 // Expand a scalar block to r×c; pass everything else through. Scalars
@@ -260,10 +258,9 @@ void ss_argcheck(const Value &A, const Value &B, const Value &C, const Value &D,
 
     using internal::shapeOf;
     const auto blockErr = [&](const char *arg, const Value &v) {
-        throw Error(std::string("ss: input (") + arg + ") has shape "
-                    + shapeOf(v) + ", which is inconsistent with the other "
-                    + "A/B/C/D blocks.",
-                    0, 0, "ss", "", std::string("numkit:ss:") + arg);
+        throw Error(keel::format("ss: input ({}) has shape {}, which is inconsistent with the other A/B/C/D blocks.",
+                                 arg, shapeOf(v)),
+                    0, 0, "ss", "", keel::format("numkit:ss:{}", arg));
     };
     if (Av.numel() > 1 && Av.dims().rows() != Av.dims().cols())
         blockErr("A", Av);
@@ -388,7 +385,7 @@ bool lu_decomp(T *A, int *perm, keel::usize n) {
 template <typename T>
 void lu_solve(const T *LU, const int *perm,
               T *x, const T *b, keel::usize n) {
-    std::vector<T> z(n);
+    keel::Array<T> z(n);
     for (keel::usize i = 0; i < n; ++i) z[i] = b[perm[i]];
     for (keel::usize i = 0; i < n; ++i) {
         T s = z[i];
@@ -402,14 +399,14 @@ void lu_solve(const T *LU, const int *perm,
     }
 }
 
-bool inverse_n(const Value &T, std::vector<double> &out, keel::usize n) {
+bool inverse_n(const Value &T, keel::Array<double> &out, keel::usize n) {
     if (T.dims().rows() != n || T.dims().cols() != n) return false;
-    std::vector<double> LU(n * n);
+    keel::Array<double> LU(n * n);
     for (keel::usize i = 0; i < n * n; ++i) LU[i] = T.elemAsDouble(i);
-    std::vector<int> perm(n);
+    keel::Array<int> perm(n);
     if (!lu_decomp(LU.data(), perm.data(), n)) return false;
     out.assign(n * n, 0.0);
-    std::vector<double> ej(n), x(n);
+    keel::Array<double> ej(n), x(n);
     for (keel::usize k = 0; k < n; ++k) {
         std::fill(ej.begin(), ej.end(), 0.0);
         ej[k] = 1.0;
@@ -419,19 +416,19 @@ bool inverse_n(const Value &T, std::vector<double> &out, keel::usize n) {
     return true;
 }
 
-bool inverse_n_cplx(const Value &T, std::vector<keel::c64> &out, keel::usize n) {
+bool inverse_n_cplx(const Value &T, keel::Array<keel::c64> &out, keel::usize n) {
     if (T.dims().rows() != n || T.dims().cols() != n) return false;
-    std::vector<keel::c64> LU(n * n);
+    keel::Array<keel::c64> LU(n * n);
     if (T.isComplex()) {
         const keel::c64 *cd = T.complexData();
         for (keel::usize i = 0; i < n * n; ++i) LU[i] = cd[i];
     } else {
         for (keel::usize i = 0; i < n * n; ++i) LU[i] = keel::c64(T.elemAsDouble(i), 0.0);
     }
-    std::vector<int> perm(n);
+    keel::Array<int> perm(n);
     if (!lu_decomp(LU.data(), perm.data(), n)) return false;
     out.assign(n * n, keel::c64(0.0, 0.0));
-    std::vector<keel::c64> ej(n), x(n);
+    keel::Array<keel::c64> ej(n), x(n);
     for (keel::usize k = 0; k < n; ++k) {
         std::fill(ej.begin(), ej.end(), keel::c64(0.0, 0.0));
         ej[k] = keel::c64(1.0, 0.0);
@@ -442,9 +439,9 @@ bool inverse_n_cplx(const Value &T, std::vector<keel::c64> &out, keel::usize n) 
 }
 
 template <typename T>
-void matmul_n(const std::vector<T> &A, keel::usize aR, keel::usize aC,
-              const std::vector<T> &B, keel::usize bR, keel::usize bC,
-              std::vector<T> &C)
+void matmul_n(const keel::Array<T> &A, keel::usize aR, keel::usize aC,
+              const keel::Array<T> &B, keel::usize bR, keel::usize bC,
+              keel::Array<T> &C)
 {
     (void)bR;
     C.assign(aR * bC, T(0));
@@ -456,18 +453,18 @@ void matmul_n(const std::vector<T> &A, keel::usize aR, keel::usize aC,
         }
 }
 
-std::vector<double> readMat(const Value &v) {
+keel::Array<double> readMat(const Value &v) {
     const keel::usize r = v.dims().rows();
     const keel::usize c = v.dims().cols();
-    std::vector<double> out(r * c);
+    keel::Array<double> out(r * c);
     for (keel::usize i = 0; i < r * c; ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
-std::vector<keel::c64> readCMat(const Value &v) {
+keel::Array<keel::c64> readCMat(const Value &v) {
     const keel::usize r = v.dims().rows();
     const keel::usize c = v.dims().cols();
-    std::vector<keel::c64> out(r * c);
+    keel::Array<keel::c64> out(r * c);
     if (v.isComplex()) {
         const keel::c64 *cd = v.complexData();
         for (keel::usize i = 0; i < r * c; ++i) out[i] = cd[i];
@@ -485,12 +482,9 @@ std::vector<keel::c64> readCMat(const Value &v) {
 
 namespace {
 
-const std::string &kindOf(const Value &sys) {
-    static const std::string empty;
-    if (!sys.isStruct() || !sys.hasField("kind")) return empty;
-    static thread_local std::string s;
-    s = sys.field("kind").toString();
-    return s;
+keel::String kindOf(const Value &sys) {
+    if (!sys.isStruct() || !sys.hasField("kind")) return keel::String{};
+    return sys.field("kind").toString();
 }
 
 // Pad num with leading zeros to match den length (MATLAB tfdata convention).
@@ -530,7 +524,7 @@ Value colVec(const Value &v, keel::Allocator *mr) {
 
 void tfdata_argcheck(const Value &sys)
 {
-    const std::string &k = kindOf(sys);
+    const keel::String k = kindOf(sys);
     if (k != "tf" && k != "zpk" && k != "ss")
         throw Error("tfdata: input must be tf / zpk / ss",
                     0, 0, "tfdata", "", "numkit:tfdata:kind");
@@ -538,7 +532,7 @@ void tfdata_argcheck(const Value &sys)
 
 void zpkdata_argcheck(const Value &sys)
 {
-    const std::string &kind = kindOf(sys);
+    const keel::String kind = kindOf(sys);
     if (kind != "zpk" && kind != "tf" && kind != "ss")
         throw Error("zpkdata: input must be tf / zpk / ss",
                     0, 0, "zpkdata", "", "numkit:zpkdata:kind");
@@ -546,7 +540,7 @@ void zpkdata_argcheck(const Value &sys)
 
 void ssdata_argcheck(const Value &sys)
 {
-    const std::string &kind = kindOf(sys);
+    const keel::String kind = kindOf(sys);
     if (kind != "ss" && kind != "tf" && kind != "zpk")
         throw Error("ssdata: input must be tf / zpk / ss",
                     0, 0, "ssdata", "", "numkit:ssdata:kind");
@@ -582,7 +576,7 @@ tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
 {
     tfdata_argcheck(sys);
     Value num, den;
-    const std::string &k = kindOf(sys);
+    const keel::String k = kindOf(sys);
     if (k == "tf") {
         num = sys.field("num");
         den = sys.field("den");
@@ -604,7 +598,7 @@ zpkdata(const Value &sys, bool asVector, keel::Allocator *mr)
 {
     zpkdata_argcheck(sys);
     Value z, p, k;
-    const std::string &kind = kindOf(sys);
+    const keel::String kind = kindOf(sys);
     if (kind == "zpk") {
         z = colVec(sys.field("z"), mr);
         p = colVec(sys.field("p"), mr);
@@ -630,7 +624,7 @@ std::tuple<Value, Value, Value, Value>
 ssdata(const Value &sys, keel::Allocator *mr)
 {
     ssdata_argcheck(sys);
-    const std::string &kind = kindOf(sys);
+    const keel::String kind = kindOf(sys);
     Value A, B, C, D;
     if (kind == "ss") {
         A = sys.field("A");
@@ -689,7 +683,7 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
     const keel::usize p = Cv.dims().rows();
 
     if (Tc.isComplex() || Av.isComplex() || Bv.isComplex() || Cv.isComplex()) {
-        std::vector<keel::c64> Tinv;
+        keel::Array<keel::c64> Tinv;
         if (!inverse_n_cplx(Tc, Tinv, n))
             throw Error("ss2ss: T is singular",
                         0, 0, "ss2ss", "", "numkit:ss2ss:singular");
@@ -697,12 +691,12 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
         auto Am = readCMat(Av);
         auto Bm = readCMat(Bv);
         auto Cm = readCMat(Cv);
-        std::vector<keel::c64> M, Anew, Bnew, Cnew;
+        keel::Array<keel::c64> M, Anew, Bnew, Cnew;
         matmul_n(Am, n, n, Tinv, n, n, M);
         matmul_n(Tm, n, n, M, n, n, Anew);
         matmul_n(Tm, n, n, Bm, n, m, Bnew);
         matmul_n(Cm, p, n, Tinv, n, n, Cnew);
-        auto putCMat = [&](const std::vector<keel::c64> &v, keel::usize rr, keel::usize cc) {
+        auto putCMat = [&](keel::ArrayRef<keel::c64> v, keel::usize rr, keel::usize cc) {
             Value out = Value::matrix(rr, cc, ValueType::COMPLEX, mr);
             keel::c64 *od = out.complexDataMut();
             for (keel::usize i = 0; i < rr * cc; ++i) od[i] = v[i];
@@ -716,23 +710,23 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
         return out;
     }
 
-    std::vector<double> Tinv;
+    keel::Array<double> Tinv;
     if (!inverse_n(Tc, Tinv, n))
         throw Error("ss2ss: T is singular",
                     0, 0, "ss2ss", "", "numkit:ss2ss:singular");
 
-    std::vector<double> Tm = readMat(Tc);
-    std::vector<double> Am = readMat(Av);
-    std::vector<double> Bm = readMat(Bv);
-    std::vector<double> Cm = readMat(Cv);
+    keel::Array<double> Tm = readMat(Tc);
+    keel::Array<double> Am = readMat(Av);
+    keel::Array<double> Bm = readMat(Bv);
+    keel::Array<double> Cm = readMat(Cv);
 
-    std::vector<double> M, Anew, Bnew, Cnew;
+    keel::Array<double> M, Anew, Bnew, Cnew;
     matmul_n(Am, n, n, Tinv, n, n, M);
     matmul_n(Tm, n, n, M, n, n, Anew);
     matmul_n(Tm, n, n, Bm, n, m, Bnew);
     matmul_n(Cm, p, n, Tinv, n, n, Cnew);
 
-    auto putMat = [&](const std::vector<double> &v, keel::usize rr, keel::usize cc) {
+    auto putMat = [&](keel::ArrayRef<double> v, keel::usize rr, keel::usize cc) {
         Value out = Value::matrix(rr, cc, ValueType::DOUBLE, mr);
         double *od = out.doubleDataMut();
         for (keel::usize i = 0; i < rr * cc; ++i) od[i] = v[i];

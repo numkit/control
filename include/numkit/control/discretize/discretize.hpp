@@ -10,8 +10,8 @@
 
 #include <keel/core.h>
 #include <keel/memory.h>
+#include <keel/ref.h>
 #include <numkit/value/value.hpp>
-#include <string>
 
 namespace numkit::control {
 
@@ -45,7 +45,7 @@ namespace numkit::control {
 /// @endcode
 ///
 /// @see d2c
-Value c2d(const Value &sys, keel::f64 Ts, const std::string &method,
+Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method,
           keel::Allocator *mr = nullptr);
 
 /// Discrete-to-continuous conversion (`d2c(sys, method)`).
@@ -61,7 +61,7 @@ Value c2d(const Value &sys, keel::f64 Ts, const std::string &method,
 /// @throws        Error on unknown method or non-discrete input.
 ///
 /// @see c2d
-Value d2c(const Value &sys, const std::string &method,
+Value d2c(const Value &sys, keel::StringRef method,
           keel::Allocator *mr = nullptr);
 
 

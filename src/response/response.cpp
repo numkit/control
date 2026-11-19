@@ -16,10 +16,13 @@
 // when the user passes no time argument; otherwise t is interpreted
 // as either tFinal (scalar) or the explicit grid (vector).
 
+#include <keel/array.h>
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <keel/math.h>
+#include <keel/string.h>
 #include <numkit/control/response/response.hpp>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>
@@ -38,7 +41,6 @@
 #include <algorithm>
 #include <cmath>
 #include <utility>
-#include <vector>
 
 namespace numkit::control {
 
@@ -68,7 +70,7 @@ SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
     double Ts = 0.0;
     if (sys.isStruct() && sys.hasField("kind")) {
         Ts = sys.field("Ts").toScalar();
-        const std::string k(sys.field("kind").toString().as_ref());
+        const keel::String k = sys.field("kind").toString();
         if (k == "ss") {
             Av = sys.field("A"); Bv = sys.field("B");
             Cv = sys.field("C"); Dv = sys.field("D");
@@ -82,14 +84,12 @@ SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
             Av = std::move(ss.A); Bv = std::move(ss.B);
             Cv = std::move(ss.C); Dv = std::move(ss.D);
         } else {
-            throw Error(std::string(fn) + ": input 1 (sys) has unknown LTI "
-                        "kind '" + k + "'",
-                        0, 0, fn, "", std::string("numkit:") + fn + ":kind");
+            throw Error(keel::format("{}: input 1 (sys) has unknown LTI kind '{}'", fn, k),
+                        0, 0, fn, "", keel::format("numkit:{}:kind", fn));
         }
     } else {
-        throw Error(std::string(fn) + ": input 1 (sys) must be an LTI struct "
-                    "(tf/zpk/ss)",
-                    0, 0, fn, "", std::string("numkit:") + fn + ":kind");
+        throw Error(keel::format("{}: input 1 (sys) must be an LTI struct (tf/zpk/ss)", fn),
+                    0, 0, fn, "", keel::format("numkit:{}:kind", fn));
     }
 
     SS s;
@@ -138,7 +138,7 @@ Grid pickGrid(const Value &sys, keel::Allocator *mr) {
     double minAbsReal = 1.0;
     double maxAbsReal = 1.0;
     if (np > 0) {
-        std::vector<keel::c64> ps(np);
+        keel::Array<keel::c64> ps(np);
         if (pV.type() == ValueType::COMPLEX) {
             const keel::c64 *src = pV.complexData();
             for (keel::usize i = 0; i < np; ++i) ps[i] = src[i];
@@ -170,7 +170,7 @@ Grid pickGrid(const Value &sys, keel::Allocator *mr) {
     const double dtFinal = Tfinal / static_cast<double>(N - 1);
     Vec t(N);
     for (keel::usize i = 0; i < N; ++i) t[i] = i * dtFinal;
-    return {t, dtFinal};
+    return {keel::move(t), dtFinal};
 }
 
 Vec readTimeArg(const Value &sys, const Value &tArg, keel::Allocator *mr)
@@ -216,7 +216,7 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
 {
     const keel::usize N = t.size();
     const keel::usize n = sys.n;
-    Vec x = x0;
+    Vec x = x0.clone();
     if (x.size() != n) x.assign(n, 0.0);
     Vec y(N, 0.0);
     if (xTraj) xTraj->assign(N * n, 0.0);
@@ -300,15 +300,13 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
 void response_sys_argcheck(const Value &sys, const char *fn)
 {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k(sys.field("kind").toString().as_ref());
+        const keel::String k = sys.field("kind").toString();
         if (k == "ss" || k == "tf" || k == "zpk") return;
-        throw Error(std::string(fn) + ": input 1 (sys) has unknown LTI "
-                    "kind '" + k + "'",
-                    0, 0, fn, "", std::string("numkit:") + fn + ":kind");
+        throw Error(keel::format("{}: input 1 (sys) has unknown LTI kind '{}'", fn, k),
+                    0, 0, fn, "", keel::format("numkit:{}:kind", fn));
     }
-    throw Error(std::string(fn) + ": input 1 (sys) must be an LTI struct "
-                "(tf/zpk/ss)",
-                0, 0, fn, "", std::string("numkit:") + fn + ":kind");
+    throw Error(keel::format("{}: input 1 (sys) must be an LTI struct (tf/zpk/ss)", fn),
+                0, 0, fn, "", keel::format("numkit:{}:kind", fn));
 }
 
 void step_response_argcheck(const Value &sys, const Value &tArg)
@@ -330,10 +328,8 @@ void lsim_argcheck(const Value &sys, const Value &uIn, const Value &tIn,
     internal::requireNumericInput(uIn, "lsim", "u", 2);
     const ValueType tt = tIn.type();
     if (tt != ValueType::DOUBLE && tt != ValueType::SINGLE)
-        throw Error(std::string("lsim: input 3 (t) must be a real ")
-                    + "double or single time vector (got a "
-                    + internal::shapeOf(tIn) + " " + mtypeName(tt)
-                    + " array).",
+        throw Error(keel::format("lsim: input 3 (t) must be a real double or single time vector (got a {} {} array).",
+                                 internal::shapeOf(tIn), mtypeName(tt)),
                     0, 0, "lsim", "", "numkit:lsim:t");
     internal::requireNumericInput(x0In, "lsim", "x0", 4);
     if (tIn.numel() < 2)
@@ -382,7 +378,7 @@ impulse_response(const Value &sys, const Value &tArg,
     } else {
         // Continuous: impulse ⇒ x(0+) = B (after differentiating
         // through the delta in u(t)). Simulate with u ≡ 0 and IC = B.
-        x0 = s.B;
+        x0 = s.B.clone();
     }
     Vec xTraj;
     Vec y = simulate(s, t, u, x0, xOut ? &xTraj : nullptr);
@@ -419,9 +415,8 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                             0, 0, "lsim", "", "numkit:lsim:size");
             }
             if (x0In.numel() != 0 && x0In.numel() != n)
-                throw Error("lsim: input 4 (x0) must have one entry per state "
-                            "(got " + std::to_string(x0In.numel())
-                            + " entries for " + std::to_string(n) + " states).",
+                throw Error(keel::format("lsim: input 4 (x0) must have one entry per state (got {} entries for {} states).",
+                                         x0In.numel(), n),
                             0, 0, "lsim", "", "numkit:lsim:x0");
 
             auto uAt = [&](keel::usize k, keel::usize j) -> double {
@@ -528,9 +523,8 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
         throw Error("lsim: u and t must be the same length",
                     0, 0, "lsim", "", "numkit:lsim:size");
     if (x0In.numel() != 0 && x0In.numel() != s.n)
-        throw Error("lsim: input 4 (x0) must have one entry per state "
-                    "(got " + std::to_string(x0In.numel())
-                    + " entries for " + std::to_string(s.n) + " states).",
+        throw Error(keel::format("lsim: input 4 (x0) must have one entry per state (got {} entries for {} states).",
+                                 x0In.numel(), s.n),
                     0, 0, "lsim", "", "numkit:lsim:x0");
 
     if (uIn.isComplex() || x0In.isComplex()) {

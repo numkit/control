@@ -6,10 +6,13 @@
 // stepinfo — rise/settling/peak metrics computed off the existing
 //           step response.
 
+#include <keel/array.h>
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <keel/math.h>
+#include <keel/string.h>
 #include <numkit/control/analyze/analyze.hpp>
 #include <numkit/control/freq/freq.hpp>
 #include <numkit/control/response/response.hpp>
@@ -25,8 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <string>
-#include <vector>
+#include <utility>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -42,8 +44,8 @@ double sampleTime(const Value &sys) {
     return 0.0;
 }
 
-std::vector<double> readCol(const Value &v) {
-    std::vector<double> out(v.numel());
+keel::Array<double> readCol(const Value &v) {
+    keel::Array<double> out(v.numel());
     for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
@@ -52,8 +54,8 @@ std::vector<double> readCol(const Value &v) {
 // (linear interpolation between samples). Returns -1 if no crossing.
 struct CrossResult { bool found; double w; double yAtCross; };
 
-CrossResult crossAt(const std::vector<double> &x,
-                    const std::vector<double> &y,
+CrossResult crossAt(keel::ArrayRef<double> x,
+                    keel::ArrayRef<double> y,
                     double lvl)
 {
     for (keel::usize i = 1; i < y.size(); ++i) {
@@ -72,8 +74,8 @@ CrossResult crossAt(const std::vector<double> &x,
 }
 
 // Interpolate y at x = x0 (assumes x sorted ascending).
-double interpAt(const std::vector<double> &x,
-                const std::vector<double> &y,
+double interpAt(keel::ArrayRef<double> x,
+                keel::ArrayRef<double> y,
                 double x0)
 {
     if (x.empty()) return 0.0;
@@ -87,7 +89,7 @@ double interpAt(const std::vector<double> &x,
 
 void dcgain_argcheck(const Value &sys) {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const auto k = sys.field("kind").toString();
+        const keel::String k = sys.field("kind").toString();
         if (k == "tf" || k == "zpk" || k == "ss") return;
     }
     throw Error("control freq: expected an LTI struct (tf/zpk/ss)",
@@ -100,7 +102,7 @@ void margin_argcheck(const Value &sys) {
 
 void allmargin_argcheck(const Value &sys) {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const auto k = sys.field("kind").toString();
+        const keel::String k = sys.field("kind").toString();
         if (k == "tf" || k == "zpk" || k == "ss") return;
     }
     throw Error("allmargin: expected an LTI struct (tf/zpk/ss)",
@@ -109,9 +111,9 @@ void allmargin_argcheck(const Value &sys) {
 
 void stepinfo_argcheck(const Value &sys) {
     if (sys.isStruct() && sys.hasField("kind")) {
-        const std::string k(sys.field("kind").toString().as_ref());
+        const keel::String k = sys.field("kind").toString();
         if (k == "tf" || k == "zpk" || k == "ss") return;
-        throw Error("step: input 1 (sys) has unknown LTI kind '" + k + "'",
+        throw Error(keel::format("step: input 1 (sys) has unknown LTI kind '{}'", k),
                     0, 0, "step", "", "numkit:step:kind");
     }
     throw Error("step: input 1 (sys) must be an LTI struct (tf/zpk/ss)",
@@ -145,7 +147,7 @@ MarginResult margin(const Value &sys, keel::Allocator *mr)
     auto pc = crossAt(w, phase, -180.0);
     // Gain crossover (where |H| = 1, equivalently 0 dB). We scan the
     // *log* magnitude so a linear interpolation matches the bode plot.
-    std::vector<double> magLog(mag.size());
+    keel::Array<double> magLog(mag.size());
     for (keel::usize i = 0; i < mag.size(); ++i)
         magLog[i] = (mag[i] > 0.0) ? 20.0 * std::log10(mag[i])
                                    : -300.0;
@@ -173,15 +175,15 @@ MarginResult margin(const Value &sys, keel::Allocator *mr)
 namespace {
 
 // Open-loop (num, den) of an LTI struct as descending-power coefficient rows.
-std::pair<std::vector<double>, std::vector<double>>
+std::pair<keel::Array<double>, keel::Array<double>>
 openLoopNumDen(const Value &sys, keel::Allocator *mr) {
     auto coeffs = [](const Value &v) {
-        std::vector<double> c(v.numel());
+        keel::Array<double> c(v.numel());
         for (keel::usize i = 0; i < v.numel(); ++i) c[i] = v.elemAsDouble(i);
         return c;
     };
     if (sys.isStruct() && sys.hasField("kind")) {
-        const auto k = sys.field("kind").toString();
+        const keel::String k = sys.field("kind").toString();
         if (k == "tf")
             return {coeffs(sys.field("num")), coeffs(sys.field("den"))};
         if (k == "zpk") {
@@ -198,22 +200,22 @@ openLoopNumDen(const Value &sys, keel::Allocator *mr) {
                 0, 0, "allmargin", "", "numkit:allmargin:kind");
 }
 
-Value rowFrom(const std::vector<double> &v, keel::Allocator *mr) {
+Value rowFrom(keel::ArrayRef<double> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     for (keel::usize i = 0; i < v.size(); ++i) r.doubleDataMut()[i] = v[i];
     return r;
 }
 
 // Horner evaluation of a descending-power real polynomial at a complex point.
-keel::c64 polyvalC(const std::vector<double> &c, keel::c64 x) {
+keel::c64 polyvalC(keel::ArrayRef<double> c, keel::c64 x) {
     keel::c64 r(0.0, 0.0);
     for (double a : c) r = r * x + a;
     return r;
 }
 
 // Exact open-loop frequency response G(jω) = num(jω) / den(jω).
-keel::c64 evalG(const std::vector<double> &num,
-                           const std::vector<double> &den, double w) {
+keel::c64 evalG(keel::ArrayRef<double> num,
+                keel::ArrayRef<double> den, double w) {
     const keel::c64 jw(0.0, w);
     const keel::c64 d = polyvalC(den, jw);
     if (d == keel::c64(0.0, 0.0))
@@ -252,8 +254,8 @@ Value allmargin(const Value &sys, keel::Allocator *mr)
     // Frequency span from the pole/zero magnitudes (±3 decades).
     double wlo = 1e-3, whi = 1e3;
     {
-        std::vector<double> mags;
-        auto addRoots = [&](const std::vector<double> &c) {
+        keel::Array<double> mags;
+        auto addRoots = [&](keel::ArrayRef<double> c) {
             if (c.size() < 2) return;
             Value rts = numkit::builtin::roots(rowFrom(c, mr), mr);
             const keel::usize n = rts.numel();
@@ -272,7 +274,7 @@ Value allmargin(const Value &sys, keel::Allocator *mr)
         }
     }
 
-    std::vector<double> gmVal, gmFreq, pmVal, pmFreq, dmVal, dmFreq;
+    keel::Array<double> gmVal, gmFreq, pmVal, pmFreq, dmVal, dmFreq;
     const int N = 4000;
     const double llo = std::log10(wlo), lhi = std::log10(whi);
     double wPrev = wlo;
@@ -318,14 +320,14 @@ Value allmargin(const Value &sys, keel::Allocator *mr)
     bool stable = true;
     {
         const keel::usize L = std::max(num.size(), den.size());
-        std::vector<double> cl(L, 0.0);
+        keel::Array<double> cl(L, 0.0);
         for (keel::usize i = 0; i < den.size(); ++i) cl[L - den.size() + i] += den[i];
         for (keel::usize i = 0; i < num.size(); ++i) cl[L - num.size() + i] += num[i];
         keel::usize s0 = 0;
         while (s0 + 1 < cl.size() && cl[s0] == 0.0) ++s0;
-        cl.erase(cl.begin(), cl.begin() + s0);
-        if (cl.size() >= 2) {
-            Value rts = numkit::builtin::roots(rowFrom(cl, mr), mr);
+        keel::ArrayRef<double> clTrim = cl.slice(s0);
+        if (clTrim.size() >= 2) {
+            Value rts = numkit::builtin::roots(rowFrom(clTrim, mr), mr);
             const keel::usize n = rts.numel();
             if (rts.type() == ValueType::COMPLEX) {
                 const keel::c64 *p = rts.complexData();

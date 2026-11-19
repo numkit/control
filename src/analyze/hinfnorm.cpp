@@ -20,7 +20,9 @@
 // Engine-free compute TU. The hinfnorm builtin (CallContext wrapper)
 // lives in analyze_reg.cpp.
 
+#include <keel/array.h>
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <keel/math.h>
@@ -37,7 +39,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <vector>
 
 namespace numkit::control {
 
@@ -103,7 +104,7 @@ Mat transpose(const Mat &A, keel::usize r, keel::usize c) {
 }
 
 bool inverse(const Mat &A, keel::usize n, Mat &out) {
-    Mat lu = A;
+    Mat lu = A.clone();
     out.assign(n * n, 0.0);
     for (keel::usize i = 0; i < n; ++i) out[i * n + i] = 1.0;
     return solveInPlace(lu, out, n, n);
@@ -132,7 +133,7 @@ double sigmaMax(const Mat &M, keel::usize r, keel::usize c) {
                 G[b * r + a] = s;   // (MMᵀ)[a,b]
             }
     }
-    std::vector<double> x(g, 1.0), y(g, 0.0);
+    keel::Array<double> x(g, 1.0), y(g, 0.0);
     double lambda = 0.0;
     for (int it = 0; it < 200; ++it) {
         for (keel::usize i = 0; i < g; ++i) {
@@ -153,13 +154,13 @@ double sigmaMax(const Mat &M, keel::usize r, keel::usize c) {
     return std::sqrt(std::max(lambda, 0.0));
 }
 
-std::vector<keel::c64> eigOf(const Mat &M, keel::usize n, keel::Allocator *mr) {
+keel::Array<keel::c64> eigOf(const Mat &M, keel::usize n, keel::Allocator *mr) {
     auto cp = charPoly(M, n);                    // [1, c1, …, cn]
     Value row = Value::matrix(1, cp.size(), ValueType::DOUBLE, mr);
     if (!cp.empty()) std::copy(cp.begin(), cp.end(), row.doubleDataMut());
     Value r = numkit::builtin::roots(row, mr);
     const keel::usize N = r.numel();
-    std::vector<keel::c64> out(N);
+    keel::Array<keel::c64> out(N);
     if (r.type() == ValueType::COMPLEX) {
         const keel::c64 *src = r.complexData();
         for (keel::usize i = 0; i < N; ++i) out[i] = src[i];
@@ -234,10 +235,10 @@ bool hinfnorm_argcheck(const Value &sys)
             || isIntegerType(t));
     if (numericScalar) return true;
     if (!sys.isStruct() || !sys.hasField("kind"))
-        throw Error(std::string("hinfnorm: input 1 (sys) must be an LTI ")
-                    + "model struct (tf/zpk/ss) or a static-gain scalar "
-                    + "(got a " + internal::shapeOf(sys) + " "
-                    + mtypeName(t) + " array).",
+        throw Error(keel::format("hinfnorm: input 1 (sys) must be an LTI "
+                                 "model struct (tf/zpk/ss) or a static-gain scalar "
+                                 "(got a {} {} array).",
+                                 internal::shapeOf(sys), mtypeName(t)),
                     0, 0, "hinfnorm", "", "numkit:hinfnorm:inputType");
     return false;
 }
@@ -296,8 +297,8 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
         //   Bc = sqrt(2) * M^-1 * B
         //   Cc = sqrt(2) * C * M^-1
         //   Dc = D - C * M^-1 * B
-        Mat M = A;
-        Mat AmI = A;
+        Mat M = A.clone();
+        Mat AmI = A.clone();
         for (keel::usize i = 0; i < n; ++i) {
             M[i + i * n] += 1.0;
             AmI[i + i * n] -= 1.0;

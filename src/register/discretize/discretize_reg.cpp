@@ -8,6 +8,7 @@
 
 #include <keel/core.h>
 #include <keel/ref.h>
+#include <keel/string.h>
 #include <numkit/control/discretize/discretize.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -15,16 +16,14 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <string>
-
 namespace numkit::control {
 namespace detail {
 
-static std::string argString(const Value &v) {
+static keel::String argString(const Value &v) {
     if (!v.isChar() && !v.isString())
         throw Error("control discretize: expected a string method",
                     0, 0, "discretize", "", "numkit:discretize:type");
-    return std::string(v.toString().as_ref());
+    return v.toString();
 }
 
 void c2d_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
@@ -43,9 +42,9 @@ void c2d_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, C
         if (o.size() >= 2) o[1] = sysd.field("B");
         return;
     }
-    std::string method;
+    keel::String method;
     if (a.size() >= 3 && !a[2].isEmpty()) method = argString(a[2]);
-    Value sysd = c2d(a[0], a[1].toScalar(), method, mr);
+    Value sysd = c2d(a[0], a[1].toScalar(), method.as_ref(), mr);
     if (o.size() >= 2) {
         if (sysd.isStruct() && sysd.hasField("G"))
             o[1] = sysd.field("G");
@@ -58,9 +57,9 @@ void c2d_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, C
 void d2c_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, 3, "d2c");
-    std::string method;
+    keel::String method;
     if (a.size() >= 2 && !a[1].isEmpty()) method = argString(a[1]);
-    o[0] = d2c(a[0], method, c.engine->allocator());
+    o[0] = d2c(a[0], method.as_ref(), c.engine->allocator());
 }
 
 } // namespace detail

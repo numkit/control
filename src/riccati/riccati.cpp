@@ -27,6 +27,7 @@
 // The care / dare builtins (CallContext wrappers) live in riccati_reg.cpp.
 
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <numkit/control/riccati/riccati.hpp>
 #include <numkit/control/internal/numerics.hpp>
@@ -38,7 +39,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 namespace numkit::control {
 
@@ -93,7 +93,7 @@ Mat identity(keel::usize n) {
 
 // Inverse of an n×n matrix via LU + identity RHS. Returns false if singular.
 bool inverse(const Mat &A, keel::usize n, Mat &out) {
-    Mat lu = A;            // solveInPlace overwrites
+    Mat lu = A.clone();    // solveInPlace overwrites
     out = identity(n);
     return solveInPlace(lu, out, n, n);
 }
@@ -121,10 +121,10 @@ bool matsign(Mat Z, keel::usize k, Mat &out) {
             diff += d * d;
             scale += Zn[i] * Zn[i];
         }
-        Z.swap(Zn);
+        Z = keel::move(Zn);
         if (std::sqrt(diff) <= tol * std::sqrt(std::max(scale, 1e-300))) break;
     }
-    out.swap(Z);
+    out = keel::move(Z);
     return true;
 }
 
@@ -177,18 +177,18 @@ void riccati_argcheck(const Value &A, const Value &B, const Value &Q,
                       const Value &R, const char *name,
                       keel::usize &n, keel::usize &m) {
     if (A.dims().rows() != A.dims().cols())
-        throw Error(std::string(name) + ": A must be square",
+        throw Error(keel::format("{}: A must be square", name),
                     0, 0, name, "", "numkit:care:A");
     n = A.dims().rows();
     m = B.dims().cols();
     if (B.dims().rows() != n)
-        throw Error(std::string(name) + ": B must have the same row count as A",
+        throw Error(keel::format("{}: B must have the same row count as A", name),
                     0, 0, name, "", "numkit:care:B");
     if (Q.dims().rows() != n || Q.dims().cols() != n)
-        throw Error(std::string(name) + ": Q must be n×n",
+        throw Error(keel::format("{}: Q must be n×n", name),
                     0, 0, name, "", "numkit:care:Q");
     if (R.dims().rows() != m || R.dims().cols() != m)
-        throw Error(std::string(name) + ": R must be m×m (m = columns of B)",
+        throw Error(keel::format("{}: R must be m×m (m = columns of B)", name),
                     0, 0, name, "", "numkit:care:R");
 }
 
@@ -238,7 +238,7 @@ RiccatiResult care(const Value &Av, const Value &Bv, const Value &Qv,
         }
 
     Mat S;
-    if (!matsign(H, k, S))
+    if (!matsign(keel::move(H), k, S))
         throw Error("care: Hamiltonian sign iteration failed (singular embedding)",
                     0, 0, "care", "", "numkit:care:sign");
 
@@ -303,7 +303,7 @@ RiccatiResult dare(const Value &Av, const Value &Bv, const Value &Qv,
         }
 
     // Cayley: C = (Sp − I)·(Sp + I)⁻¹   (unit disk → left half-plane)
-    Mat SmI = Sp, SpI = Sp;
+    Mat SmI = Sp.clone(), SpI = keel::move(Sp);
     for (keel::usize i = 0; i < k; ++i) { SmI[i * k + i] -= 1.0; SpI[i * k + i] += 1.0; }
     Mat SpIinv;
     if (!inverse(SpI, k, SpIinv))
@@ -312,7 +312,7 @@ RiccatiResult dare(const Value &Av, const Value &Bv, const Value &Qv,
     Mat C = matmul(SmI, k, k, SpIinv, k, k);
 
     Mat S;
-    if (!matsign(C, k, S))
+    if (!matsign(keel::move(C), k, S))
         throw Error("dare: symplectic sign iteration failed (singular embedding)",
                     0, 0, "dare", "", "numkit:dare:sign");
 

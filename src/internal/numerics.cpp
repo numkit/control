@@ -12,7 +12,7 @@
 namespace numkit::control::internal {
 
 template <typename T>
-bool solveInPlaceTpl(std::vector<T> &A, std::vector<T> &B, keel::usize n, keel::usize nrhs)
+bool solveInPlaceTpl(keel::Array<T> &A, keel::Array<T> &B, keel::usize n, keel::usize nrhs)
 {
     for (keel::usize k = 0; k < n; ++k) {
         keel::usize pk = k;
@@ -50,9 +50,9 @@ bool solveInPlaceTpl(std::vector<T> &A, std::vector<T> &B, keel::usize n, keel::
 }
 
 template <typename T>
-std::vector<T> matmulSqTpl(const std::vector<T> &A, const std::vector<T> &B, keel::usize n)
+keel::Array<T> matmulSqTpl(const keel::Array<T> &A, const keel::Array<T> &B, keel::usize n)
 {
-    std::vector<T> C(n * n, T(0));
+    keel::Array<T> C(n * n, T(0));
     for (keel::usize j = 0; j < n; ++j)
         for (keel::usize i = 0; i < n; ++i) {
             T s(0);
@@ -110,7 +110,7 @@ Mat zerosM(keel::usize r, keel::usize c) {
 Mat expm(const Mat &Ain, keel::usize n)
 {
     if (n == 0) return Mat{};
-    Mat A = Ain;
+    Mat A = Ain.clone();
     const double normA = matInfNorm(A, n);
     int s = 0;
     if (normA > 0.5) {
@@ -151,19 +151,19 @@ Mat expm(const Mat &Ain, keel::usize n)
     axpy(N, A5,  c[5]); axpy(D, A5, -c[5]);
     axpy(N, A6,  c[6]); axpy(D, A6,  c[6]);
 
-    Mat Dcopy = D;
-    Mat X     = N;
+    Mat Dcopy = D.clone();
+    Mat X     = keel::move(N);
     if (!solveInPlace(Dcopy, X, n, n)) {
         // Truncated power series fallback.
-        Mat E    = I;
-        Mat term = I;
+        Mat E    = I.clone();
+        Mat term = I.clone();
         for (int k = 1; k < 30; ++k) {
             term = matmulSq(term, A, n);
             const double inv = 1.0 / static_cast<double>(k);
             for (auto &v : term) v *= inv;
             for (keel::usize i = 0; i < n * n; ++i) E[i] += term[i];
         }
-        X = E;
+        X = keel::move(E);
     }
     for (int k = 0; k < s; ++k) X = matmulSq(X, X, n);
     return X;

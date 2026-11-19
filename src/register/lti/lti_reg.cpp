@@ -7,8 +7,11 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/array.h>
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/ref.h>
+#include <keel/string.h>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>   // minreal
 
@@ -18,9 +21,7 @@
 #include <numkit/value/value_type.hpp>   // ValueType, mtypeName (tol class gate)
 
 #include <cctype>
-#include <string>
 #include <utility>
-#include <vector>
 
 namespace numkit::control {
 namespace detail {
@@ -206,7 +207,7 @@ void frd_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
 static bool wantVector(keel::ArrayRef<Value> args, keel::usize pos) {
     if (args.size() <= pos) return false;
     if (!args[pos].isChar() && !args[pos].isString()) return false;
-    std::string s(args[pos].toString().as_ref());
+    keel::String s = args[pos].toString();
     for (auto &c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return s == "v" || s == "vector";
 }
@@ -267,10 +268,8 @@ void minreal_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutA
             && (t == ValueType::DOUBLE || t == ValueType::SINGLE
                 || t == ValueType::COMPLEX || isIntegerType(t));
         if (!numericScalar)
-            throw Error(std::string("minreal: input 2 (tol) must be a ")
-                        + "numeric scalar tolerance (got a "
-                        + argcheck::detail::dimsStr(tv).c_str() + " "
-                        + mtypeName(t) + " array).",
+            throw Error(keel::format("minreal: input 2 (tol) must be a numeric scalar tolerance (got a {} {} array).",
+                                     argcheck::detail::dimsStr(tv), mtypeName(t)),
                         0, 0, "minreal", "", "numkit:minreal:tol");
         tol = tv.isComplex() ? tv.complexData()[0].real()
                              : tv.elemAsDouble(0);
@@ -381,7 +380,7 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     const keel::usize nu = B.dims().cols();
     const keel::usize ny = C.dims().rows();
 
-    std::vector<bool> isElim(n, false);
+    keel::Array<bool> isElim(n, false);
     for (keel::usize i = 0; i < args[1].numel(); ++i) {
         const double v = args[1].elemAsDouble(i);
         const int idx = static_cast<int>(v) - 1;
@@ -390,13 +389,13 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
                         0, 0, "modred", "", "numkit:modred:elim");
         isElim[static_cast<keel::usize>(idx)] = true;
     }
-    std::vector<keel::usize> keep, elim;
+    keel::Array<keel::usize> keep, elim;
     for (keel::usize i = 0; i < n; ++i) {
         if (isElim[i]) elim.push_back(i);
         else keep.push_back(i);
     }
 
-    std::string method = "matchdc";
+    keel::String method = keel::String::from("matchdc");
     if (args.size() >= 3 && (args[2].isChar() || args[2].isString())) {
         method = args[2].toString();
         for (char &ch : method) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));

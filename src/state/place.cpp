@@ -11,6 +11,7 @@
 // the n×n linear system  ctrb(A, B)ᵀ · Kᵀ = (e_nᵀ · φ(A))ᵀ via the
 // partial-pivot LU kernel.
 
+#include <keel/array.h>
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
@@ -29,7 +30,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 namespace numkit::control {
 
@@ -83,8 +83,8 @@ Value crowFromVec(const CVec &v, keel::Allocator *mr) {
 // Implemented as Horner:
 //   φ(A) = ((( c[0]·I · A + c[1]·I ) · A + c[2]·I ) · A + … ) + c[n]·I
 template <typename T>
-std::vector<T> phiOfA(const std::vector<T> &A, keel::usize n, const Vec &c) {
-    std::vector<T> H(n * n, T(0));
+keel::Array<T> phiOfA(const keel::Array<T> &A, keel::usize n, const Vec &c) {
+    keel::Array<T> H(n * n, T(0));
     for (keel::usize i = 0; i < n; ++i) H[i * n + i] = T(c[0]);
 
     for (keel::usize k = 1; k <= n; ++k) {

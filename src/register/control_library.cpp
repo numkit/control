@@ -9,11 +9,11 @@
 // guard.
 
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/ref.h>
 #include <numkit/control/library.hpp>
 
 #include <numkit/sys/plugin.hpp>
-#include <string>
 #include <utility>
 
 namespace numkit::control::detail {
@@ -95,11 +95,13 @@ namespace numkit {
 void ControlLibrary::install(PluginContext &engine)
 {
     auto reg = [&](const char *sub, const char *name, ExternalFunc fn) {
-        engine.registerFunction(std::string("control.") + sub, name, std::move(fn));
+        keel::String ns = keel::format("control.{}", sub);
+        engine.registerFunction(ns.as_ref(), name, std::move(fn));
         // compat.* registration removed — bare-name resolver replaces it
     };
     auto regOnly = [&](const char *sub, const char *name, ExternalFunc fn) {
-        engine.registerFunction(std::string("control.") + sub, name, std::move(fn));
+        keel::String ns = keel::format("control.{}", sub);
+        engine.registerFunction(ns.as_ref(), name, std::move(fn));
     };
 
     reg("lti", "tf",      &control::detail::tf_reg);

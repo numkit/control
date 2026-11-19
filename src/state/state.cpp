@@ -5,9 +5,12 @@
 // they work without an LTI struct; the 1-arg forms peel A,B,C out
 // of the cycle-31 sys struct (going through ss form for tf/zpk).
 
+#include <keel/array.h>
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
+#include <keel/string.h>
 #include <numkit/control/state/state.hpp>
 #include <numkit/control/conversion/conversion.hpp>
 #include <numkit/control/lyapunov/lyapunov.hpp>   // gram delegates to lyap / dlyap
@@ -23,7 +26,6 @@
 #include <cctype>
 #include <cmath>
 #include <limits>
-#include <vector>
 
 namespace numkit::control {
 
@@ -53,22 +55,21 @@ ABC pullABC(const Value &sys, const char *fn, keel::Allocator *mr) {
         out.A = std::move(ss.A); out.B = std::move(ss.B);
         out.C = std::move(ss.C); out.D = std::move(ss.D);
     } else {
-        throw Error(std::string(fn) + ": input 1 (sys) must be an LTI "
-                    "struct (tf/zpk/ss)",
-                    0, 0, fn, "", std::string("numkit:") + fn + ":kind");
+        throw Error(keel::format("{}: input 1 (sys) must be an LTI struct (tf/zpk/ss)", fn),
+                    0, 0, fn, "", keel::format("numkit:{}:kind", fn));
     }
     return out;
 }
 
 // Read a matrix into a column-major double buffer.
-std::vector<double> readMat(const Value &v, keel::usize r, keel::usize c) {
-    std::vector<double> M(r * c, 0.0);
+keel::Array<double> readMat(const Value &v, keel::usize r, keel::usize c) {
+    keel::Array<double> M(r * c, 0.0);
     for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
     return M;
 }
 
-std::vector<keel::c64> readCMat(const Value &v, keel::usize r, keel::usize c) {
-    std::vector<keel::c64> M(r * c, keel::c64(0.0, 0.0));
+keel::Array<keel::c64> readCMat(const Value &v, keel::usize r, keel::usize c) {
+    keel::Array<keel::c64> M(r * c, keel::c64(0.0, 0.0));
     if (v.isComplex()) {
         const keel::c64 *cd = v.complexData();
         for (keel::usize i = 0; i < r * c; ++i) M[i] = cd[i];
@@ -78,13 +79,13 @@ std::vector<keel::c64> readCMat(const Value &v, keel::usize r, keel::usize c) {
     return M;
 }
 
-Value matFromVec(keel::usize r, keel::usize c, const std::vector<double> &v, keel::Allocator *mr) {
+Value matFromVec(keel::usize r, keel::usize c, keel::ArrayRef<double> v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
-Value cmatFromVec(keel::usize r, keel::usize c, const std::vector<keel::c64> &v, keel::Allocator *mr) {
+Value cmatFromVec(keel::usize r, keel::usize c, keel::ArrayRef<keel::c64> v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::COMPLEX, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.complexDataMut());
     return m;
@@ -107,19 +108,15 @@ void ctrb_obsv_argcheck(const Value &A, const Value &X, const char *fn,
 char gram_argcheck(const Value &type)
 {
     if (!type.isChar() && !type.isString())
-        throw Error(std::string("gram: input 2 (type) must be 'c' ")
-                    + "(controllability) or 'o' (observability), as char "
-                    + "or string (got a "
-                    + internal::shapeOf(type) + " "
-                    + mtypeName(type.type()) + " array).",
+        throw Error(keel::format("gram: input 2 (type) must be 'c' (controllability) or 'o' (observability), as char or string (got a {} {} array).",
+                                 internal::shapeOf(type), mtypeName(type.type())),
                     0, 0, "gram", "", "numkit:gram:type");
-    const std::string ts(type.toString().as_ref());
+    const keel::String ts = type.toString();
     const char t = ts.empty()
                  ? 'c'
                  : static_cast<char>(std::tolower(static_cast<unsigned char>(ts[0])));
     if (t != 'c' && t != 'o')
-        throw Error("gram: input 2 (type) must be 'c' (controllability) or "
-                    "'o' (observability), as char or string (got '" + ts + "').",
+        throw Error(keel::format("gram: input 2 (type) must be 'c' (controllability) or 'o' (observability), as char or string (got '{}').", ts),
                     0, 0, "gram", "", "numkit:gram:type");
     return t;
 }
@@ -147,13 +144,13 @@ Value ctrb_AB(const Value &Av, const Value &Bv, keel::Allocator *mr)
     if (Av.isComplex() || Bv.isComplex()) {
         auto A = readCMat(Av, n, n);
         auto B = readCMat(Bv, n, m);
-        std::vector<keel::c64> Co(n * (n * m), keel::c64(0.0, 0.0));
+        keel::Array<keel::c64> Co(n * (n * m), keel::c64(0.0, 0.0));
         for (keel::usize j = 0; j < m; ++j)
             for (keel::usize i = 0; i < n; ++i)
                 Co[j * n + i] = B[j * n + i];
-        auto prev = B;
+        auto prev = B.clone();
         for (keel::usize k = 1; k < n; ++k) {
-            std::vector<keel::c64> next(n * m, keel::c64(0.0, 0.0));
+            keel::Array<keel::c64> next(n * m, keel::c64(0.0, 0.0));
             for (keel::usize j = 0; j < m; ++j)
                 for (keel::usize i = 0; i < n; ++i) {
                     keel::c64 s(0.0, 0.0);
@@ -165,7 +162,7 @@ Value ctrb_AB(const Value &Av, const Value &Bv, keel::Allocator *mr)
             for (keel::usize j = 0; j < m; ++j)
                 for (keel::usize i = 0; i < n; ++i)
                     Co[(colOffset + j) * n + i] = next[j * n + i];
-            prev = std::move(next);
+            prev = keel::move(next);
         }
         return cmatFromVec(n, n * m, Co, mr);
     }
@@ -175,16 +172,16 @@ Value ctrb_AB(const Value &Av, const Value &Bv, keel::Allocator *mr)
 
     // Output Co is n × (n·m), column-major. Block k (k=0..n-1) holds
     // A^k · B at columns [k·m … k·m + m − 1].
-    std::vector<double> Co(n * (n * m), 0.0);
+    keel::Array<double> Co(n * (n * m), 0.0);
     // Block 0 = B.
     for (keel::usize j = 0; j < m; ++j)
         for (keel::usize i = 0; i < n; ++i)
             Co[j * n + i] = B[j * n + i];
     // Blocks 1..n-1 by repeated multiplication: prev = A^k · B,
     // next = A · prev.
-    std::vector<double> prev = B;
+    keel::Array<double> prev = B.clone();
     for (keel::usize k = 1; k < n; ++k) {
-        std::vector<double> next(n * m, 0.0);
+        keel::Array<double> next(n * m, 0.0);
         for (keel::usize j = 0; j < m; ++j)
             for (keel::usize i = 0; i < n; ++i) {
                 double s = 0.0;
@@ -197,7 +194,7 @@ Value ctrb_AB(const Value &Av, const Value &Bv, keel::Allocator *mr)
         for (keel::usize j = 0; j < m; ++j)
             for (keel::usize i = 0; i < n; ++i)
                 Co[(colOffset + j) * n + i] = next[j * n + i];
-        prev = std::move(next);
+        prev = keel::move(next);
     }
     return matFromVec(n, n * m, Co, mr);
 }
@@ -217,13 +214,13 @@ Value obsv_AC(const Value &Av, const Value &Cv, keel::Allocator *mr)
     if (Av.isComplex() || Cv.isComplex()) {
         auto A = readCMat(Av, n, n);
         auto C = readCMat(Cv, p, n);
-        std::vector<keel::c64> Ob((n * p) * n, keel::c64(0.0, 0.0));
+        keel::Array<keel::c64> Ob((n * p) * n, keel::c64(0.0, 0.0));
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < p; ++i)
                 Ob[j * (n * p) + i] = C[j * p + i];
-        auto prev = C;
+        auto prev = C.clone();
         for (keel::usize k = 1; k < n; ++k) {
-            std::vector<keel::c64> next(p * n, keel::c64(0.0, 0.0));
+            keel::Array<keel::c64> next(p * n, keel::c64(0.0, 0.0));
             for (keel::usize j = 0; j < n; ++j)
                 for (keel::usize i = 0; i < p; ++i) {
                     keel::c64 s(0.0, 0.0);
@@ -235,7 +232,7 @@ Value obsv_AC(const Value &Av, const Value &Cv, keel::Allocator *mr)
             for (keel::usize j = 0; j < n; ++j)
                 for (keel::usize i = 0; i < p; ++i)
                     Ob[j * (n * p) + (rowOffset + i)] = next[j * p + i];
-            prev = std::move(next);
+            prev = keel::move(next);
         }
         return cmatFromVec(n * p, n, Ob, mr);
     }
@@ -245,15 +242,15 @@ Value obsv_AC(const Value &Av, const Value &Cv, keel::Allocator *mr)
 
     // Output Ob is (n·p) × n, column-major. Block k (k=0..n-1) holds
     // C · A^k at rows [k·p … k·p + p − 1].
-    std::vector<double> Ob((n * p) * n, 0.0);
+    keel::Array<double> Ob((n * p) * n, 0.0);
     // Block 0 = C.
     for (keel::usize j = 0; j < n; ++j)
         for (keel::usize i = 0; i < p; ++i)
             Ob[j * (n * p) + i] = C[j * p + i];
     // Walk k = 1..n-1: next = prev · A.
-    std::vector<double> prev = C;
+    keel::Array<double> prev = C.clone();
     for (keel::usize k = 1; k < n; ++k) {
-        std::vector<double> next(p * n, 0.0);
+        keel::Array<double> next(p * n, 0.0);
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < p; ++i) {
                 double s = 0.0;
@@ -265,7 +262,7 @@ Value obsv_AC(const Value &Av, const Value &Cv, keel::Allocator *mr)
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < p; ++i)
                 Ob[j * (n * p) + (rowOffset + i)] = next[j * p + i];
-        prev = std::move(next);
+        prev = keel::move(next);
     }
     return matFromVec(n * p, n, Ob, mr);
 }
@@ -293,7 +290,7 @@ Value gram(const Value &sys, const Value &type, keel::Allocator *mr)
     //   'c': A·Wc + Wc·Aᵀ + B·Bᵀ = 0   → lyap(A,  B·Bᵀ)
     //   'o': Aᵀ·Wo + Wo·A + Cᵀ·C = 0   → lyap(Aᵀ, Cᵀ·C)
     auto A = readMat(abc.A, n, n);
-    std::vector<double> Q(n * n, 0.0);
+    keel::Array<double> Q(n * n, 0.0);
     Value Ause;
     if (t == 'c') {
         const keel::usize m = abc.B.dims().cols();
@@ -314,7 +311,7 @@ Value gram(const Value &sys, const Value &type, keel::Allocator *mr)
                 for (keel::usize k = 0; k < p; ++k) s += C[i * p + k] * C[j * p + k];  // (Cᵀ·C)[i,j]
                 Q[j * n + i] = s;
             }
-        std::vector<double> At(n * n, 0.0);
+        keel::Array<double> At(n * n, 0.0);
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < n; ++i) At[j * n + i] = A[i * n + j];   // Aᵀ
         Ause = matFromVec(n, n, At, mr);
@@ -339,14 +336,14 @@ CovarResult covar(const Value &sys, const Value &Wv, keel::Allocator *mr)
 
     // Noise intensity: scalar W → W·I_m, or a full m×m matrix.
     const bool wScalar = (Wv.numel() == 1);
-    const std::vector<double> W = wScalar ? std::vector<double>{} : readMat(Wv, m, m);
+    const keel::Array<double> W = wScalar ? keel::Array<double>{} : readMat(Wv, m, m);
     const double wval = wScalar ? Wv.toScalar() : 0.0;
     auto Wij = [&](keel::usize i, keel::usize j) -> double {
         return wScalar ? (i == j ? wval : 0.0) : W[j * m + i];
     };
 
     // State covariance Q solves the gramian Lyapunov equation with B·W·Bᵀ.
-    std::vector<double> BWBt(n * n, 0.0);
+    keel::Array<double> BWBt(n * n, 0.0);
     for (keel::usize a = 0; a < n; ++a)
         for (keel::usize b = 0; b < n; ++b) {
             double s = 0.0;
@@ -360,7 +357,7 @@ CovarResult covar(const Value &sys, const Value &Wv, keel::Allocator *mr)
 
     // Output covariance P = C·Q·Cᵀ (+ D·W·Dᵀ discrete; ∞ if continuous & D≠0).
     auto Qm = readMat(Q, n, n);
-    std::vector<double> P(p * p, 0.0);
+    keel::Array<double> P(p * p, 0.0);
     for (keel::usize a = 0; a < p; ++a)
         for (keel::usize b = 0; b < p; ++b) {
             double s = 0.0;

@@ -8,6 +8,7 @@
 // Continuous: H(jω) = num(jω) / den(jω)
 // Discrete  : H(e^{jωTs}) = num(z) / den(z) at z = exp(jωTs)
 
+#include <keel/array.h>
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
@@ -26,7 +27,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -47,13 +47,13 @@ double sampleTime(const Value &sys) {
     return 0.0;
 }
 
-std::vector<double> coeffsReal(const Value &v) {
-    std::vector<double> out(v.numel());
+keel::Array<double> coeffsReal(const Value &v) {
+    keel::Array<double> out(v.numel());
     for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
-struct NumDen { std::vector<double> num, den; };
+struct NumDen { keel::Array<double> num, den; };
 
 NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
     if (hasKind(sys, "tf"))
@@ -73,14 +73,14 @@ NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
 
 // Horner evaluation of a polynomial whose coefficients are stored in
 // MATLAB convention (highest power first).
-keel::c64 hornerCx(const std::vector<double> &p, keel::c64 x) {
+keel::c64 hornerCx(keel::ArrayRef<double> p, keel::c64 x) {
     keel::c64 y(0.0, 0.0);
     for (double c : p) y = y * x + c;
     return y;
 }
 
 // H(s) at s for the given (num, den).
-keel::c64 hAt(const std::vector<double> &num, const std::vector<double> &den, keel::c64 s) {
+keel::c64 hAt(keel::ArrayRef<double> num, keel::ArrayRef<double> den, keel::c64 s) {
     keel::c64 n = hornerCx(num, s);
     keel::c64 d = hornerCx(den, s);
     return n / d;
@@ -89,12 +89,12 @@ keel::c64 hAt(const std::vector<double> &num, const std::vector<double> &den, ke
 // Default log-spaced ω grid spanning ~ 2 decades around the
 // pole/zero magnitudes. For discrete systems the upper bound is the
 // Nyquist frequency π / Ts.
-std::vector<double> pickW(const Value &sys, keel::usize N, keel::Allocator *mr)
+keel::Array<double> pickW(const Value &sys, keel::usize N, keel::Allocator *mr)
 {
     Value pV = pole(sys, mr);
     Value zV = zero(sys, mr);
     auto magsOf = [](const Value &v) {
-        std::vector<double> mags;
+        keel::Array<double> mags;
         const keel::usize k = v.numel();
         if (v.type() == ValueType::COMPLEX) {
             const keel::c64 *src = v.complexData();
@@ -112,7 +112,7 @@ std::vector<double> pickW(const Value &sys, keel::usize N, keel::Allocator *mr)
     };
     auto pm = magsOf(pV);
     auto zm = magsOf(zV);
-    pm.insert(pm.end(), zm.begin(), zm.end());
+    pm.append(zm.as_ref());
 
     double lo = 1e-2, hi = 1e2;
     if (!pm.empty()) {
@@ -134,7 +134,7 @@ std::vector<double> pickW(const Value &sys, keel::usize N, keel::Allocator *mr)
     if (lo <= 0.0) lo = 1e-3;
     if (hi <= lo) hi = lo * 100.0;
 
-    std::vector<double> w(N);
+    keel::Array<double> w(N);
     const double a = std::log10(lo);
     const double b = std::log10(hi);
     for (keel::usize i = 0; i < N; ++i) {
@@ -144,21 +144,21 @@ std::vector<double> pickW(const Value &sys, keel::usize N, keel::Allocator *mr)
     return w;
 }
 
-std::vector<double> readW(const Value &sys, const Value &wArg, keel::Allocator *mr)
+keel::Array<double> readW(const Value &sys, const Value &wArg, keel::Allocator *mr)
 {
     if (wArg.numel() == 0) return pickW(sys, /*N=*/200, mr);
-    std::vector<double> w(wArg.numel());
+    keel::Array<double> w(wArg.numel());
     for (keel::usize i = 0; i < wArg.numel(); ++i) w[i] = wArg.elemAsDouble(i);
     return w;
 }
 
-Value colDouble(const std::vector<double> &v, keel::Allocator *mr) {
+Value colDouble(keel::ArrayRef<double> v, keel::Allocator *mr) {
     Value r = Value::matrix(v.size(), 1, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
-Value colComplex(const std::vector<keel::c64> &v, keel::Allocator *mr) {
+Value colComplex(keel::ArrayRef<keel::c64> v, keel::Allocator *mr) {
     Value r = Value::matrix(v.size(), 1, ValueType::COMPLEX, mr);
     if (!v.empty()) {
         keel::c64 *dst = r.complexDataMut();
@@ -229,7 +229,7 @@ Value freqresp(const Value &sys, const Value &w, keel::Allocator *mr)
     auto nd = toNumDen(sys, mr);
     const double Ts = sampleTime(sys);
     auto wv = readW(sys, w, mr);
-    std::vector<keel::c64> h(wv.size());
+    keel::Array<keel::c64> h(wv.size());
     for (keel::usize i = 0; i < wv.size(); ++i)
         h[i] = hAt(nd.num, nd.den, freqArg(wv[i], Ts));
     return colComplex(h, mr);
@@ -241,12 +241,12 @@ BodeResult bode(const Value &sys, const Value &wArg, keel::Allocator *mr)
     auto nd = toNumDen(sys, mr);
     const double Ts = sampleTime(sys);
     auto w = readW(sys, wArg, mr);
-    std::vector<double> mag(w.size()), phase(w.size());
+    keel::Array<double> mag(w.size()), phase(w.size());
 
     double phi0 = 0.0;
     bool hasPhi0 = false;
     if (Ts == 0.0 && !w.empty() && w[0] >= 0.0) {
-        auto firstNonZero = [](const std::vector<double> &v, keel::usize &idx) -> double {
+        auto firstNonZero = [](keel::ArrayRef<double> v, keel::usize &idx) -> double {
             for (keel::usize i = 0; i < v.size(); ++i) {
                 if (v[i] != 0.0) { idx = i; return v[i]; }
             }
@@ -257,7 +257,7 @@ BodeResult bode(const Value &sys, const Value &wArg, keel::Allocator *mr)
         const double b0 = firstNonZero(nd.num, in);
         const double a0 = firstNonZero(nd.den, id);
         if (b0 != 0.0 && a0 != 0.0) {
-            auto polyPhaseAt = [&](const std::vector<double> &c, keel::usize start, double w0) -> double {
+            auto polyPhaseAt = [&](keel::ArrayRef<double> c, keel::usize start, double w0) -> double {
                 keel::usize end = c.size();
                 keel::usize q = 0;
                 while (end > start + 1 && c[end - 1] == 0.0) {
@@ -319,7 +319,7 @@ NyquistResult nyquist(const Value &sys, const Value &wArg, keel::Allocator *mr)
     auto nd = toNumDen(sys, mr);
     const double Ts = sampleTime(sys);
     auto w = readW(sys, wArg, mr);
-    std::vector<double> re(w.size()), im(w.size());
+    keel::Array<double> re(w.size()), im(w.size());
     for (keel::usize i = 0; i < w.size(); ++i) {
         keel::c64 h = hAt(nd.num, nd.den, freqArg(w[i], Ts));
         re[i] = h.real();
@@ -335,10 +335,10 @@ rlocus(const Value &sys, const Value &kArg, keel::Allocator *mr)
     auto nd = toNumDen(sys, mr);
     // Strip any leading-zero padding so the polynomial sums align on
     // the trailing (constant) term.
-    auto strip = [](std::vector<double> v) {
+    auto strip = [](keel::ArrayRef<double> v) {
         keel::usize i = 0;
         while (i + 1 < v.size() && v[i] == 0.0) ++i;
-        return std::vector<double>(v.begin() + i, v.end());
+        return keel::Array<double>::from(v.slice(i));
     };
     auto num = strip(nd.num);
     auto den = strip(nd.den);
@@ -348,7 +348,7 @@ rlocus(const Value &sys, const Value &kArg, keel::Allocator *mr)
     const keel::usize n = den.size() - 1;   // closed-loop order
 
     // Build gain vector.
-    std::vector<double> ks;
+    keel::Array<double> ks;
     if (kArg.numel() == 0) {
         // 0 + 100 log-spaced points from 1e-2 to 1e3.
         ks.reserve(101);
@@ -371,12 +371,12 @@ rlocus(const Value &sys, const Value &kArg, keel::Allocator *mr)
 
         // Right-align num with den so adding den + k·num is a per-coefficient
         // sum. den has length n+1 (after strip), num has length numNumel ≤ n+1.
-        std::vector<double> numAligned(den.size(), 0.0);
+        keel::Array<double> numAligned(den.size(), 0.0);
         const keel::usize pad = den.size() - num.size();
         for (keel::usize i = 0; i < num.size(); ++i)
             numAligned[pad + i] = num[i];
 
-        std::vector<double> charPoly(den.size(), 0.0);
+        keel::Array<double> charPoly(den.size(), 0.0);
         for (keel::usize row = 0; row < K; ++row) {
             const double k = ks[row];
             for (keel::usize i = 0; i < den.size(); ++i)

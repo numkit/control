@@ -18,6 +18,7 @@
 // have yet.
 
 #include <keel/core.h>
+#include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <numkit/control/lyapunov/lyapunov.hpp>
@@ -32,7 +33,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 namespace numkit::control {
 
@@ -83,12 +83,12 @@ void lyap_argcheck(const Value &A, const Value &Q, const char *name)
     internal::requireCoercibleMatrix(A, name, "A", 1);
     internal::requireCoercibleMatrix(Q, name, "Q", 2);
     if (A.dims().rows() != A.dims().cols())
-        throw Error(std::string(name) + ": A must be square",
-                    0, 0, name, "", std::string("numkit:") + name + ":A");
+        throw Error(keel::format("{}: A must be square", name),
+                    0, 0, name, "", keel::format("numkit:{}:A", name));
     if (Q.dims().rows() != A.dims().rows() ||
         Q.dims().cols() != A.dims().cols())
-        throw Error(std::string(name) + ": Q must match A in shape",
-                    0, 0, name, "", std::string("numkit:") + name + ":Q");
+        throw Error(keel::format("{}: Q must match A in shape", name),
+                    0, 0, name, "", keel::format("numkit:{}:Q", name));
 }
 
 // Solve a Kronecker-form linear system M·x = b, where M is n²×n²
@@ -99,13 +99,11 @@ void lyap_argcheck(const Value &A, const Value &Q, const char *name)
 template <typename MatT>
 MatT solveKron(MatT &M, MatT &rhs, keel::usize n2, const char *fn)
 {
-    MatT rhsMat = rhs;  // single-rhs solveInPlace expects column-major
+    MatT rhsMat = rhs.clone();  // single-rhs solveInPlace expects column-major
     if (!solveInPlace(M, rhsMat, n2, 1))
-        throw Error(std::string(fn) + ": the Lyapunov equation is "
-                    "singular (check that A is stable / the equation "
-                    "is solvable)",
+        throw Error(keel::format("{}: the Lyapunov equation is singular (check that A is stable / the equation is solvable)", fn),
                     0, 0, fn, "",
-                    std::string("numkit:") + fn + ":singular");
+                    keel::format("numkit:{}:singular", fn));
     return rhsMat;
 }
 

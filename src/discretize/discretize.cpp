@@ -7,10 +7,12 @@
 // response already validated. (Cycle 44 DRY: this file used to
 // inline its own copies of expm + LU.)
 
+#include <keel/array.h>
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <keel/math.h>
+#include <keel/string.h>
 #include <numkit/control/discretize/discretize.hpp>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>
@@ -28,7 +30,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 namespace numkit::control {
 
@@ -151,15 +152,15 @@ void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
     for (keel::usize i = 0; i < n * n; ++i) Mplus[i]  += A[i] * (Ts / 2.0);
 
     // Solve M_minus · X = M_plus   ⇒  X = inv(M_minus)·M_plus.
-    Mat Mc = Mminus;
-    Mat X  = Mplus;
+    Mat Mc = Mminus.clone();
+    Mat X  = keel::move(Mplus);
     if (!solveInPlace(Mc, X, n, n))
         throw Error("c2d (tustin): I − A·Ts/2 is singular",
                     0, 0, "c2d", "", "numkit:c2d:singular");
-    Ad = X;
+    Ad = keel::move(X);
 
     // B_d = √Ts · inv(M_minus) · B.
-    Mat Mc2 = Mminus;
+    Mat Mc2 = Mminus.clone();
     Mat Bm(n, 0.0);
     for (keel::usize i = 0; i < n; ++i) Bm[i] = B[i];
     if (!solveInPlace(Mc2, Bm, n, 1))
@@ -185,7 +186,7 @@ void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
     // D_d = D + (Ts/2) · C · inv(M_minus) · B = D + (Ts/2) · Cm·B (with Cm
     // computed against the original B, not the scaled one).
     // Solve M_minus · y = B for y, then D_d = D + (Ts/2)·C·y.
-    Mat Mc3 = Mminus;
+    Mat Mc3 = Mminus.clone();
     Mat yvec(n, 0.0);
     for (keel::usize i = 0; i < n; ++i) yvec[i] = B[i];
     if (!solveInPlace(Mc3, yvec, n, 1))
@@ -228,14 +229,14 @@ void fohDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
         for (keel::usize k = 0; k < n; ++k) phiG2 += Ad[k * n + i] * G2[k];
         Bd[i] = G1[i] + phiG2 / Ts - G2[i] / Ts;
     }
-    Cd = C;
+    Cd = C.clone();
     double cg2 = 0.0;
     for (keel::usize i = 0; i < n; ++i) cg2 += C[i] * G2[i];
     Dd = D + cg2 / Ts;
 }
 
 // Build an output struct of the requested kind from (A, B, C, D, Ts).
-Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, double Dd, keel::usize n, double Ts, const std::string &origKind, keel::Allocator *mr)
+Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, double Dd, keel::usize n, double Ts, keel::StringRef origKind, keel::Allocator *mr)
 {
     Value Av = matFromVec(n, n, Ad, mr);
     Value Bv = matFromVec(n, 1, Bd, mr);
@@ -265,7 +266,7 @@ Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, double Dd, keel::u
     return ss(Av, Bv, Cv, Dv, Ts, mr);
 }
 
-void c2d_argcheck(const Value &sys, double Ts, const std::string &method)
+void c2d_argcheck(const Value &sys, double Ts, keel::StringRef method)
 {
     if (Ts <= 0.0)
         throw Error("c2d: Ts must be positive",
@@ -282,7 +283,7 @@ void c2d_argcheck(const Value &sys, double Ts, const std::string &method)
                     0, 0, "c2d", "", "numkit:c2d:method");
 }
 
-void d2c_argcheck(const Value &sys, const std::string &method)
+void d2c_argcheck(const Value &sys, keel::StringRef method)
 {
     if (!hasKind(sys, "ss") && !hasKind(sys, "tf") && !hasKind(sys, "zpk"))
         throw Error("c2d/d2c: expected an LTI struct (tf/zpk/ss)",
@@ -299,7 +300,7 @@ void d2c_argcheck(const Value &sys, const std::string &method)
 
 } // anonymous
 
-Value c2d(const Value &sys, double Ts, const std::string &method, keel::Allocator *mr)
+Value c2d(const Value &sys, double Ts, keel::StringRef method, keel::Allocator *mr)
 {
     c2d_argcheck(sys, Ts, method);
     if (hasKind(sys, "ss")) {
@@ -389,7 +390,7 @@ Value c2d(const Value &sys, double Ts, const std::string &method, keel::Allocato
     if (method.empty() || method == "zoh") {
         zohDiscretise(s.A, s.B, s.n, Ts, Ad, Bd);
         // ZOH leaves C and D untouched.
-        Cd = s.C;
+        Cd = s.C.clone();
         Dd = s.D;
     } else if (method == "tustin" || method == "tutsin" || method == "bilinear") {
         tustinDiscretise(s.A, s.B, s.C, s.D, s.n, Ts, Ad, Bd, Cd, Dd);
@@ -400,21 +401,21 @@ Value c2d(const Value &sys, double Ts, const std::string &method, keel::Allocato
                     0, 0, "c2d", "", "numkit:c2d:method");
     }
 
-    const std::string origKind = sys.isStruct() && sys.hasField("kind")
-                                 ? std::string(sys.field("kind").toString().as_ref())
-                                 : std::string("ss");
-    return packResult(Ad, Bd, Cd, Dd, s.n, Ts, origKind, mr);
+    const keel::String origKind = sys.isStruct() && sys.hasField("kind")
+                                  ? sys.field("kind").toString()
+                                  : keel::String::from("ss");
+    return packResult(Ad, Bd, Cd, Dd, s.n, Ts, origKind.as_ref(), mr);
 }
 
-Value d2c(const Value &sys, const std::string &method, keel::Allocator *mr)
+Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
 {
     d2c_argcheck(sys, method);
     SS s = toSSiso(sys, mr);
     const bool isZoh = method.empty() || method == "zoh";
     const double Ts = s.Ts;
-    const std::string origKind = sys.isStruct() && sys.hasField("kind")
-                                 ? std::string(sys.field("kind").toString().as_ref())
-                                 : std::string("ss");
+    const keel::String origKind = sys.isStruct() && sys.hasField("kind")
+                                  ? sys.field("kind").toString()
+                                  : keel::String::from("ss");
 
     if (isZoh) {
         if (s.n == 0)
@@ -497,7 +498,7 @@ Value d2c(const Value &sys, const std::string &method, keel::Allocator *mr)
     //   C_d = √Ts · C · (I − A·Ts/2)^-1,
     //   D_d = D + (Ts/2) · C · (I − A·Ts/2)^-1 · B.
     // We solve for A first:  A = (2/Ts)·(A_d + I)^-1 · (A_d − I).
-    Mat Ad = s.A;     // careful: SS struct used .A as the discrete A
+    const Mat &Ad = s.A;     // careful: SS struct used .A as the discrete A
     Mat Aplus(s.A.size(), 0.0);    // A_d + I
     Mat Aminus(s.A.size(), 0.0);   // A_d − I
     for (keel::usize i = 0; i < s.n * s.n; ++i) {
@@ -509,8 +510,8 @@ Value d2c(const Value &sys, const std::string &method, keel::Allocator *mr)
         Aminus[i * s.n + i] -= 1.0;
     }
     // Solve (A_d + I) · X = (A_d − I)  ⇒  X = (A_d + I)^-1 · (A_d − I).
-    Mat ApCopy = Aplus;
-    Mat X = Aminus;
+    Mat ApCopy = Aplus.clone();
+    Mat X = keel::move(Aminus);
     if (!solveInPlace(ApCopy, X, s.n, s.n))
         throw Error("d2c (tustin): A_d + I is singular",
                     0, 0, "d2c", "", "numkit:d2c:singular");
@@ -518,7 +519,7 @@ Value d2c(const Value &sys, const std::string &method, keel::Allocator *mr)
     Mat Ac(s.n * s.n, 0.0);
     for (keel::usize i = 0; i < s.n * s.n; ++i) Ac[i] = (2.0 / Ts) * X[i];
 
-    Mat ApCopy2 = Aplus;
+    Mat ApCopy2 = Aplus.clone();
     Vec Bvec(s.n);
     for (keel::usize i = 0; i < s.n; ++i) Bvec[i] = s.B[i];
     if (!solveInPlace(ApCopy2, Bvec, s.n, 1))
