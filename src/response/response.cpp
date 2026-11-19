@@ -52,7 +52,7 @@ using internal::expm;
 using internal::solveInPlace;
 
 Mat zeros(keel::usize r, keel::usize c) { return Mat(r * c, 0.0); }
-Mat eye(keel::usize n) { Mat I(n * n, 0.0); for (keel::usize i = 0; i < n; ++i) I[i * n + i] = 1.0; return I; }
+[[maybe_unused]] Mat eye(keel::usize n) { Mat I(n * n, 0.0); for (keel::usize i = 0; i < n; ++i) I[i * n + i] = 1.0; return I; }
 
 
 // Bring an LTI sys (any kind) into ss-form coefficient buffers.

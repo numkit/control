@@ -38,7 +38,7 @@ namespace numkit::control {
 
 namespace {
 
-double sampleTime(const Value &sys) {
+[[maybe_unused]] double sampleTime(const Value &sys) {
     if (sys.isStruct() && sys.hasField("Ts"))
         return sys.field("Ts").toScalar();
     return 0.0;
