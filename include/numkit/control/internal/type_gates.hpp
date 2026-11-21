@@ -38,7 +38,7 @@ inline keel::String shapeOf(const Value &v)
 {
     const Dims &d = v.dims();
     keel::String s = keel::format("{}", d.dim(0));
-    for (int k = 1; k < d.ndim(); ++k) {
+    for (keel::i32 k = 1; k < d.ndim(); ++k) {
         keel::format_into(s, "x{}", d.dim(k));
     }
     return s;
@@ -53,7 +53,7 @@ inline keel::String shapeOf(const Value &v)
 /// numeric class plus char (probed: lyap(int8 A), lyap('12' A) both
 /// compute).
 inline void requireCoercibleMatrix(const Value &v, keel::StringRef fn,
-                                   keel::StringRef argName, int argNum)
+                                   keel::StringRef argName, keel::i32 argNum)
 {
     const ValueType t = v.type();
     if (t == ValueType::DOUBLE || t == ValueType::COMPLEX
@@ -72,7 +72,7 @@ inline void requireCoercibleMatrix(const Value &v, keel::StringRef fn,
 /// vector — MATLAB:zeros:invalidStringInput) while still coercing
 /// single/logical/integer.
 inline void requireNumericInput(const Value &v, keel::StringRef fn,
-                                keel::StringRef argName, int argNum)
+                                keel::StringRef argName, keel::i32 argNum)
 {
     const ValueType t = v.type();
     if (t == ValueType::DOUBLE || t == ValueType::COMPLEX
@@ -91,7 +91,7 @@ inline void requireNumericInput(const Value &v, keel::StringRef fn,
 /// (MATLAB:mtimes:integerNotSupported / mrdivide:integerLinearAlgebra),
 /// while double/single/logical/char coerce fine.
 inline void requireNonIntegerMatrix(const Value &v, keel::StringRef fn,
-                                    keel::StringRef argName, int argNum)
+                                    keel::StringRef argName, keel::i32 argNum)
 {
     if (!isIntegerType(v.type()))
         return;
@@ -109,7 +109,7 @@ inline void requireNonIntegerMatrix(const Value &v, keel::StringRef fn,
 /// Rejecting honestly beats the silent imaginary-part drop the raw
 /// elemAsDouble reads used to perform (bugs/opened/control/complex-kernels.md).
 inline void requireRealKernelInput(const Value &v, keel::StringRef fn,
-                                   keel::StringRef argName, int argNum)
+                                   keel::StringRef argName, keel::i32 argNum)
 {
     if (!v.isComplex())
         return;
@@ -127,7 +127,7 @@ inline void requireRealKernelInput(const Value &v, keel::StringRef fn,
 /// single is rejected with its own identifier instead of a wrong-class
 /// answer (bugs/opened/control/single-float-inputs.md).
 inline void requireDoubleOnlyInput(const Value &v, keel::StringRef fn,
-                                   keel::StringRef argName, int argNum)
+                                   keel::StringRef argName, keel::i32 argNum)
 {
     if (v.type() != ValueType::SINGLE)
         return;
@@ -187,7 +187,7 @@ inline Value coerceToDoubleMatrix(const Value &v,
         Value out = Value::matrix(1, sv.size(), ValueType::DOUBLE, mr);
         keel::f64 *od = out.doubleDataMut();
         for (keel::usize i = 0; i < sv.size(); ++i)
-            od[i] = keel::as<keel::f64>(keel::as<unsigned char>(sv.data()[i]));
+            od[i] = keel::as<keel::f64>(keel::as<keel::u8>(sv.data()[i]));
         return out;
     }
     if (t == ValueType::SINGLE || t == ValueType::LOGICAL

@@ -357,8 +357,8 @@ Value frd(const Value &response, const Value &frequency, keel::f64 Ts, keel::All
 namespace {
 
 template <typename T>
-bool lu_decomp(T *A, int *perm, keel::usize n) {
-    for (keel::usize i = 0; i < n; ++i) perm[i] = keel::as<int>(i);
+bool lu_decomp(T *A, keel::i32 *perm, keel::usize n) {
+    for (keel::usize i = 0; i < n; ++i) perm[i] = keel::as<keel::i32>(i);
     for (keel::usize k = 0; k < n; ++k) {
         keel::usize piv = k;
         keel::f64 best = keel::abs(A[k + k * n]);
@@ -383,7 +383,7 @@ bool lu_decomp(T *A, int *perm, keel::usize n) {
 }
 
 template <typename T>
-void lu_solve(const T *LU, const int *perm,
+void lu_solve(const T *LU, const keel::i32 *perm,
               T *x, const T *b, keel::usize n) {
     keel::Array<T> z(n);
     for (keel::usize i = 0; i < n; ++i) z[i] = b[perm[i]];
@@ -403,7 +403,7 @@ bool inverse_n(const Value &T, keel::Array<keel::f64> &out, keel::usize n) {
     if (T.dims().rows() != n || T.dims().cols() != n) return false;
     keel::Array<keel::f64> LU(n * n);
     for (keel::usize i = 0; i < n * n; ++i) LU[i] = T.elemAsDouble(i);
-    keel::Array<int> perm(n);
+    keel::Array<keel::i32> perm(n);
     if (!lu_decomp(LU.data(), perm.data(), n)) return false;
     out.assign(n * n, 0.0);
     keel::Array<keel::f64> ej(n), x(n);
@@ -425,7 +425,7 @@ bool inverse_n_cplx(const Value &T, keel::Array<keel::c64> &out, keel::usize n) 
     } else {
         for (keel::usize i = 0; i < n * n; ++i) LU[i] = keel::c64(T.elemAsDouble(i), 0.0);
     }
-    keel::Array<int> perm(n);
+    keel::Array<keel::i32> perm(n);
     if (!lu_decomp(LU.data(), perm.data(), n)) return false;
     out.assign(n * n, keel::c64(0.0, 0.0));
     keel::Array<keel::c64> ej(n), x(n);

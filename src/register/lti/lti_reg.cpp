@@ -303,7 +303,7 @@ void ss2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRe
                CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 4, 5, "ss2tf");
-    int iu = 1;
+    keel::i32 iu = 1;
     if (args.size() >= 5 && !args[4].isEmpty()) {
         const keel::f64 iuVal = argcheck::expectedReal(args[4], 5, "iu", "ss2tf");
         iu = argcheck::expectedPositiveInteger(iuVal, 5, "iu", "ss2tf");
@@ -382,7 +382,7 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     keel::Array<bool> isElim(n, false);
     for (keel::usize i = 0; i < args[1].numel(); ++i) {
         const keel::f64 v = args[1].elemAsDouble(i);
-        const int idx = keel::as<int>(v) - 1;
+        const keel::i32 idx = keel::as<keel::i32>(v) - 1;
         if (idx < 0 || keel::as<keel::usize>(idx) >= n)
             throw Error("modred: state elimination index out of range.",
                         0, 0, "modred", "", "numkit:modred:elim");

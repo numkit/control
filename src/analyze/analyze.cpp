@@ -227,7 +227,7 @@ keel::c64 evalG(keel::ArrayRef<keel::f64> num,
 template <class F>
 keel::f64 bisectRoot(F f, keel::f64 a, keel::f64 b) {
     keel::f64 fa = f(a);
-    for (int it = 0; it < 80; ++it) {
+    for (keel::i32 it = 0; it < 80; ++it) {
         const keel::f64 m = 0.5 * (a + b);
         const keel::f64 fm = f(m);
         if (fm == 0.0 || (b - a) <= 1e-13 * (1.0 + b)) return m;
@@ -275,11 +275,11 @@ Value allmargin(const Value &sys, keel::Allocator *mr)
     }
 
     keel::Array<keel::f64> gmVal, gmFreq, pmVal, pmFreq, dmVal, dmFreq;
-    const int N = 4000;
+    const keel::i32 N = 4000;
     const keel::f64 llo = std::log10(wlo), lhi = std::log10(whi);
     keel::f64 wPrev = wlo;
     keel::c64 gPrev = evalG(num, den, wPrev);
-    for (int i = 1; i <= N; ++i) {
+    for (keel::i32 i = 1; i <= N; ++i) {
         const keel::f64 w = std::pow(10.0, llo + (lhi - llo) * (keel::f64)i / N);
         const keel::c64 g = evalG(num, den, w);
 

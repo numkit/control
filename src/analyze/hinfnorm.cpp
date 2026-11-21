@@ -135,7 +135,7 @@ keel::f64 sigmaMax(const Mat &M, keel::usize r, keel::usize c) {
     }
     keel::Array<keel::f64> x(g, 1.0), y(g, 0.0);
     keel::f64 lambda = 0.0;
-    for (int it = 0; it < 200; ++it) {
+    for (keel::i32 it = 0; it < 200; ++it) {
         for (keel::usize i = 0; i < g; ++i) {
             keel::f64 s = 0.0;
             for (keel::usize k = 0; k < g; ++k) s += G[k * g + i] * x[k];
@@ -345,12 +345,12 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
     // bound found by doubling.
     keel::f64 lo = lb;
     keel::f64 hi = (lb > 0.0 ? lb : 1.0) * (1.0 + 1e-6) + 1e-300;
-    int grow = 0;
+    keel::i32 grow = 0;
     while (hasImagEig(A, B, C, D, n, m, p, hi, sigD, mr)) {
         hi *= 2.0;
         if (++grow > 80) { g = Value::scalar(inf, mr); return g; }
     }
-    for (int it = 0; it < 200; ++it) {
+    for (keel::i32 it = 0; it < 200; ++it) {
         const keel::f64 mid = 0.5 * (lo + hi);
         if (mid <= lo || mid >= hi) break;       // converged to FP resolution
         if (hasImagEig(A, B, C, D, n, m, p, mid, sigD, mr)) lo = mid;

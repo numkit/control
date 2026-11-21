@@ -148,7 +148,7 @@ void parallel_argcheck(const Value &sys1, const Value &sys2) {
     connect_sys_argcheck(sys2);
 }
 
-void feedback_argcheck(const Value &G, const Value &H, int sign) {
+void feedback_argcheck(const Value &G, const Value &H, keel::i32 sign) {
     if (sign != 1 && sign != -1) {
         throw Error("feedback: sign must be 1 or -1", 0, 0, "feedback", "",
                     "numkit:feedback:signNotChoice");
@@ -185,7 +185,7 @@ Value parallel(const Value &sys1, const Value &sys2, keel::Allocator *mr)
     return tf(rowOf(num, mr), rowOf(den, mr), Ts, mr);
 }
 
-Value feedback(const Value &G, const Value &H, int sign, keel::Allocator *mr)
+Value feedback(const Value &G, const Value &H, keel::i32 sign, keel::Allocator *mr)
 {
     feedback_argcheck(G, H, sign);
     auto g = toNumDen(G, mr);

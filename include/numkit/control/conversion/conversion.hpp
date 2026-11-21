@@ -125,7 +125,7 @@ StateSpace tf2ss(const Value &num, const Value &den,
 /// @see tf2ss, tf2zp
 std::pair<Value, Value>
 ss2tf(const Value &A, const Value &B,
-      const Value &C, const Value &D, int iu,
+      const Value &C, const Value &D, keel::i32 iu,
       keel::Allocator *mr = nullptr);
 
 /// Minimal realization — cancel pole/zero pairs (`sysr = minreal(sys, tol)`).

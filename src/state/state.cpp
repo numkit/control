@@ -97,7 +97,7 @@ Value cmatFromVec(keel::usize r, keel::usize c, keel::ArrayRef<keel::c64> v, kee
 // identifier; complex operands produce a complex result; cell/string
 // are inputType.
 void ctrb_obsv_argcheck(const Value &A, const Value &X, const char *fn,
-                        const char *xName, int xNum)
+                        const char *xName, keel::i32 xNum)
 {
     internal::requireCoercibleMatrix(A, fn, "A", 1);
     internal::requireNonIntegerMatrix(A, fn, "A", 1);

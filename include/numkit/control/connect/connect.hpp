@@ -80,7 +80,7 @@ Value parallel(const Value &sys1, const Value &sys2,
 /// @endcode
 ///
 /// @see series, parallel
-Value feedback(const Value &G, const Value &H, int sign,
+Value feedback(const Value &G, const Value &H, keel::i32 sign,
                keel::Allocator *mr = nullptr);
 
 

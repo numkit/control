@@ -91,7 +91,7 @@ void tf2ss_argcheck(const Value &num, const Value &den,
                     0, 0, "tf2ss", "", "numkit:tf2ss:improper");
 }
 
-void ss2tf_argcheck(const Value &A, const Value &B, const Value &C, int iu)
+void ss2tf_argcheck(const Value &A, const Value &B, const Value &C, keel::i32 iu)
 {
     const keel::usize n = A.dims().rows();
     if (A.dims().cols() != n)
@@ -230,7 +230,7 @@ StateSpace tf2ss(const Value &num, const Value &den,
 
 std::pair<Value, Value>
 ss2tf(const Value &A, const Value &B,
-      const Value &C, const Value &D, int iu,
+      const Value &C, const Value &D, keel::i32 iu,
       keel::Allocator *mr)
 {
     ss2tf_argcheck(A, B, C, iu);
@@ -409,12 +409,12 @@ cancelTf(const Value &numV, const Value &denV, keel::f64 tol,
     keel::Array<char> zused(z.size(), 0);
     keel::Array<keel::c64> remP, remZ;
     for (const auto &pj : p) {
-        int best = -1;
+        keel::i32 best = -1;
         keel::f64 bd = std::numeric_limits<keel::f64>::max();
         for (keel::usize i = 0; i < z.size(); ++i)
             if (!zused[i]) {
                 const keel::f64 d = keel::abs(z[i] - pj);
-                if (d < bd) { bd = d; best = keel::as<int>(i); }
+                if (d < bd) { bd = d; best = keel::as<keel::i32>(i); }
             }
         if (best >= 0 && bd <= tol * std::max(1.0, keel::abs(pj))) zused[best] = 1;
         else remP.push_back(pj);

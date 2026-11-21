@@ -29,14 +29,14 @@ void parallel_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value>
 
 void feedback_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c) {
     argcheck::checkNargin(a.size(), 2, 10, "feedback");
-    int sign = -1;
+    keel::i32 sign = -1;
     if (a.size() >= 3 && !a[2].isEmpty()) {
         const keel::f64 sv = argcheck::expectedReal(a[2], 3, "sign", "feedback");
         argcheck::expectedInteger(sv, 3, "sign", "feedback");
         if (sv != 1.0 && sv != -1.0)
             throw Error("feedback: sign must be 1 or -1",
                         0, 0, "feedback", "", "numkit:feedback:signNotChoice");
-        sign = keel::as<int>(sv);
+        sign = keel::as<keel::i32>(sv);
     }
     o[0] = feedback(a[0], a[1], sign, c.engine->allocator());
 }
