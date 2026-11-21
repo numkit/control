@@ -98,7 +98,7 @@ void ss2tf_argcheck(const Value &A, const Value &B, const Value &C, int iu)
         throw Error("ss2tf: A must be square",
                     0, 0, "ss2tf", "", "numkit:ss2tf:A");
     const keel::usize nin = (B.dims().cols() == 0) ? 1 : B.dims().cols();
-    if (iu < 1 || static_cast<keel::usize>(iu) > nin)
+    if (iu < 1 || keel::as<keel::usize>(iu) > nin)
         throw Error("ss2tf: iu out of range",
                     0, 0, "ss2tf", "", "numkit:ss2tf:iu");
     if (C.dims().rows() != 1)
@@ -235,7 +235,7 @@ ss2tf(const Value &A, const Value &B,
 {
     ss2tf_argcheck(A, B, C, iu);
     const keel::usize n = A.dims().rows();
-    const keel::usize inIdx = static_cast<keel::usize>(iu - 1);
+    const keel::usize inIdx = keel::as<keel::usize>(iu - 1);
 
     // Read matrices into flat column-major double buffers.
     auto readMat = [&](const Value &v, keel::usize r, keel::usize c) {
@@ -305,7 +305,7 @@ ss2tf(const Value &A, const Value &B,
         // trace(A·M_{k-1})
         double tr = 0.0;
         for (keel::usize i = 0; i < n; ++i) tr += AM[i * n + i];
-        const double ck = -tr / static_cast<double>(k);
+        const double ck = -tr / keel::as<double>(k);
         coeff[k] = ck;
         // M_k = A·M_{k-1} + ck · I
         keel::Array<double> Mk(n * n, 0.0);
@@ -414,7 +414,7 @@ cancelTf(const Value &numV, const Value &denV, double tol,
         for (keel::usize i = 0; i < z.size(); ++i)
             if (!zused[i]) {
                 const double d = keel::abs(z[i] - pj);
-                if (d < bd) { bd = d; best = static_cast<int>(i); }
+                if (d < bd) { bd = d; best = keel::as<int>(i); }
             }
         if (best >= 0 && bd <= tol * std::max(1.0, keel::abs(pj))) zused[best] = 1;
         else remP.push_back(pj);

@@ -382,11 +382,11 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     keel::Array<bool> isElim(n, false);
     for (keel::usize i = 0; i < args[1].numel(); ++i) {
         const double v = args[1].elemAsDouble(i);
-        const int idx = static_cast<int>(v) - 1;
-        if (idx < 0 || static_cast<keel::usize>(idx) >= n)
+        const int idx = keel::as<int>(v) - 1;
+        if (idx < 0 || keel::as<keel::usize>(idx) >= n)
             throw Error("modred: state elimination index out of range.",
                         0, 0, "modred", "", "numkit:modred:elim");
-        isElim[static_cast<keel::usize>(idx)] = true;
+        isElim[keel::as<keel::usize>(idx)] = true;
     }
     keel::Array<keel::usize> keep, elim;
     for (keel::usize i = 0; i < n; ++i) {

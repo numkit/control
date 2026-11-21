@@ -144,7 +144,7 @@ void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRe
         const keel::usize N = a[1].numel();
         tIn = Value::matrix(N, 1, ValueType::DOUBLE, mr);
         for (keel::usize i = 0; i < N; ++i)
-            tIn.doubleDataMut()[i] = static_cast<double>(i) * dt;
+            tIn.doubleDataMut()[i] = keel::as<double>(i) * dt;
     }
     Value x0 = (a.size() >= 4 && !a[3].isChar() && !a[3].isString())
         ? a[3] : Value::matrix(0, 0, ValueType::DOUBLE, mr);

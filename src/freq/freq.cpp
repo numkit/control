@@ -264,7 +264,7 @@ BodeResult bode(const Value &sys, const Value &wArg, keel::Allocator *mr)
                     --end;
                     ++q;
                 }
-                double ang = static_cast<double>(q) * 90.0;
+                double ang = keel::as<double>(q) * 90.0;
                 const keel::usize len = end - start;
                 if (len <= 1) return ang;
                 Value pv = Value::matrix(1, len, ValueType::DOUBLE, mr);

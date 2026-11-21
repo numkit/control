@@ -36,7 +36,7 @@ void feedback_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value>
         if (sv != 1.0 && sv != -1.0)
             throw Error("feedback: sign must be 1 or -1",
                         0, 0, "feedback", "", "numkit:feedback:signNotChoice");
-        sign = static_cast<int>(sv);
+        sign = keel::as<int>(sv);
     }
     o[0] = feedback(a[0], a[1], sign, c.engine->allocator());
 }

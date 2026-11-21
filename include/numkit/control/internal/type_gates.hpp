@@ -187,7 +187,7 @@ inline Value coerceToDoubleMatrix(const Value &v,
         Value out = Value::matrix(1, sv.size(), ValueType::DOUBLE, mr);
         keel::f64 *od = out.doubleDataMut();
         for (keel::usize i = 0; i < sv.size(); ++i)
-            od[i] = static_cast<keel::f64>(static_cast<unsigned char>(sv.data()[i]));
+            od[i] = keel::as<keel::f64>(keel::as<unsigned char>(sv.data()[i]));
         return out;
     }
     if (t == ValueType::SINGLE || t == ValueType::LOGICAL

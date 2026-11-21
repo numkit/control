@@ -358,7 +358,7 @@ namespace {
 
 template <typename T>
 bool lu_decomp(T *A, int *perm, keel::usize n) {
-    for (keel::usize i = 0; i < n; ++i) perm[i] = static_cast<int>(i);
+    for (keel::usize i = 0; i < n; ++i) perm[i] = keel::as<int>(i);
     for (keel::usize k = 0; k < n; ++k) {
         keel::usize piv = k;
         double best = keel::abs(A[k + k * n]);

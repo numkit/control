@@ -196,7 +196,7 @@ Value feedback(const Value &G, const Value &H, int sign, keel::Allocator *mr)
     auto denBase = polyMul(g.den, h.den, mr);
     // sign convention: MATLAB feedback default is -1 (negative
     // feedback), giving denBase + loop. sign = +1 ⇒ denBase − loop.
-    auto denT = polyAdd(denBase, loop, -static_cast<double>(sign));
+    auto denT = polyAdd(denBase, loop, -keel::as<double>(sign));
     const double Ts = Ts_combine(sampleTime(G), sampleTime(H), "feedback");
     return tf(rowOf(numT, mr), rowOf(denT, mr), Ts, mr);
 }

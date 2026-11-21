@@ -49,7 +49,7 @@ Value rowFromVec(const Vec &v, bool asSingle, keel::Allocator *mr) {
     if (asSingle) {
         Value r = Value::matrix(1, v.size(), ValueType::SINGLE, mr);
         float *fd = r.singleDataMut();
-        for (keel::usize i = 0; i < v.size(); ++i) fd[i] = static_cast<float>(v[i]);
+        for (keel::usize i = 0; i < v.size(); ++i) fd[i] = keel::as<float>(v[i]);
         return r;
     }
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);

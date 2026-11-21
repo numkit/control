@@ -164,10 +164,10 @@ Grid pickGrid(const Value &sys, keel::Allocator *mr) {
     // get more samples via the maxAbsReal-based dt cap.
     const double Tfinal = 5.80251 / minAbsReal;
     const double dt = std::min(Tfinal / 126.0, 1.0 / (4.0 * maxAbsReal));
-    keel::usize N = static_cast<keel::usize>(std::ceil(Tfinal / dt)) + 1;
+    keel::usize N = keel::as<keel::usize>(std::ceil(Tfinal / dt)) + 1;
     if (N < 60) N = 60;
     if (N > 1000) N = 1000;
-    const double dtFinal = Tfinal / static_cast<double>(N - 1);
+    const double dtFinal = Tfinal / keel::as<double>(N - 1);
     Vec t(N);
     for (keel::usize i = 0; i < N; ++i) t[i] = i * dtFinal;
     return {keel::move(t), dtFinal};
@@ -183,7 +183,7 @@ Vec readTimeArg(const Value &sys, const Value &tArg, keel::Allocator *mr)
         const Grid g = pickGrid(sys, mr);
         // Re-tile at the same dt up to user's Tfinal.
         const double dt = g.dt;
-        const keel::usize N = static_cast<keel::usize>(std::ceil(Tfinal / dt)) + 1;
+        const keel::usize N = keel::as<keel::usize>(std::ceil(Tfinal / dt)) + 1;
         Vec t(N);
         for (keel::usize i = 0; i < N; ++i) t[i] = i * dt;
         return t;
