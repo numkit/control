@@ -48,8 +48,8 @@ CMat readCMat(const Value &v, keel::usize r, keel::usize c) {
 Value rowFromVec(const Vec &v, bool asSingle, keel::Allocator *mr) {
     if (asSingle) {
         Value r = Value::matrix(1, v.size(), ValueType::SINGLE, mr);
-        float *fd = r.singleDataMut();
-        for (keel::usize i = 0; i < v.size(); ++i) fd[i] = keel::as<float>(v[i]);
+        keel::f32 *fd = r.singleDataMut();
+        for (keel::usize i = 0; i < v.size(); ++i) fd[i] = keel::as<keel::f32>(v[i]);
         return r;
     }
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);

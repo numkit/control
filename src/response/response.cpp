@@ -61,13 +61,13 @@ struct SS {
     Mat A;             // n×n
     Vec B;             // n
     Vec C;             // n
-    double D;          // SISO
-    double Ts;
+    keel::f64 D;          // SISO
+    keel::f64 Ts;
 };
 
 SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
     Value Av, Bv, Cv, Dv;
-    double Ts = 0.0;
+    keel::f64 Ts = 0.0;
     if (sys.isStruct() && sys.hasField("kind")) {
         Ts = sys.field("Ts").toScalar();
         const keel::String k = sys.field("kind").toString();
@@ -107,7 +107,7 @@ SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
 }
 
 // Van Loan ZOH: M = [[A,B],[0,0]], expm(M*dt) → top-left A_d, top-right B_d.
-void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, double dt,
+void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, keel::f64 dt,
                    Mat &Ad, Vec &Bd)
 {
     const keel::usize m = n + 1;
@@ -128,15 +128,15 @@ void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, double dt,
 
 // Decide a default time grid for continuous models: ~8 time
 // constants of the slowest stable mode, ~50 samples per slowest pole.
-struct Grid { Vec t; double dt; };
+struct Grid { Vec t; keel::f64 dt; };
 
 Grid pickGrid(const Value &sys, keel::Allocator *mr) {
     // Find pole with smallest |real|, use that to set Tfinal; fastest
     // pole sets dt.
     Value pV = pole(sys, mr);
     const keel::usize np = pV.numel();
-    double minAbsReal = 1.0;
-    double maxAbsReal = 1.0;
+    keel::f64 minAbsReal = 1.0;
+    keel::f64 maxAbsReal = 1.0;
     if (np > 0) {
         keel::Array<keel::c64> ps(np);
         if (pV.type() == ValueType::COMPLEX) {
@@ -148,8 +148,8 @@ Grid pickGrid(const Value &sys, keel::Allocator *mr) {
         }
         bool anyStable = false;
         for (auto &p : ps) {
-            const double ar = keel::abs(p.real());
-            const double mag = keel::abs(p);
+            const keel::f64 ar = keel::abs(p.real());
+            const keel::f64 mag = keel::abs(p);
             if (p.real() < 0.0 && mag > 0.0) {
                 if (!anyStable || ar < minAbsReal) minAbsReal = ar;
                 anyStable = true;
@@ -162,12 +162,12 @@ Grid pickGrid(const Value &sys, keel::Allocator *mr) {
     // of the slowest stable mode (~99.7% settled). Default sample
     // count ~= 127 for simple 1st-order cases; higher-order systems
     // get more samples via the maxAbsReal-based dt cap.
-    const double Tfinal = 5.80251 / minAbsReal;
-    const double dt = std::min(Tfinal / 126.0, 1.0 / (4.0 * maxAbsReal));
+    const keel::f64 Tfinal = 5.80251 / minAbsReal;
+    const keel::f64 dt = std::min(Tfinal / 126.0, 1.0 / (4.0 * maxAbsReal));
     keel::usize N = keel::as<keel::usize>(std::ceil(Tfinal / dt)) + 1;
     if (N < 60) N = 60;
     if (N > 1000) N = 1000;
-    const double dtFinal = Tfinal / keel::as<double>(N - 1);
+    const keel::f64 dtFinal = Tfinal / keel::as<keel::f64>(N - 1);
     Vec t(N);
     for (keel::usize i = 0; i < N; ++i) t[i] = i * dtFinal;
     return {keel::move(t), dtFinal};
@@ -179,10 +179,10 @@ Vec readTimeArg(const Value &sys, const Value &tArg, keel::Allocator *mr)
         return pickGrid(sys, mr).t;
     }
     if (tArg.numel() == 1) {
-        const double Tfinal = tArg.toScalar();
+        const keel::f64 Tfinal = tArg.toScalar();
         const Grid g = pickGrid(sys, mr);
         // Re-tile at the same dt up to user's Tfinal.
-        const double dt = g.dt;
+        const keel::f64 dt = g.dt;
         const keel::usize N = keel::as<keel::usize>(std::ceil(Tfinal / dt)) + 1;
         Vec t(N);
         for (keel::usize i = 0; i < N; ++i) t[i] = i * dt;
@@ -228,13 +228,13 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
         // Already discrete.
         for (keel::usize k = 0; k < N; ++k) {
             record(k);
-            double yk = sys.D * u[k];
+            keel::f64 yk = sys.D * u[k];
             for (keel::usize i = 0; i < n; ++i) yk += sys.C[i] * x[i];
             y[k] = yk;
             // x_{k+1} = A·x + B·u
             Vec xn(n, 0.0);
             for (keel::usize i = 0; i < n; ++i) {
-                double s = sys.B[i] * u[k];
+                keel::f64 s = sys.B[i] * u[k];
                 for (keel::usize j = 0; j < n; ++j)
                     s += sys.A[j * n + i] * x[j];
                 xn[i] = s;
@@ -248,7 +248,7 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
     // one expm; otherwise re-discretise per step (more expensive but
     // robust).
     bool uniform = true;
-    double dt = (N >= 2) ? (t[1] - t[0]) : 0.0;
+    keel::f64 dt = (N >= 2) ? (t[1] - t[0]) : 0.0;
     for (keel::usize k = 2; k < N && uniform; ++k)
         if (keel::abs((t[k] - t[k - 1]) - dt) > 1e-12 * std::max(1.0, keel::abs(dt)))
             uniform = false;
@@ -258,13 +258,13 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
         zohDiscretise(sys.A, sys.B, n, dt, Ad, Bd);
         for (keel::usize k = 0; k < N; ++k) {
             record(k);
-            double yk = sys.D * u[k];
+            keel::f64 yk = sys.D * u[k];
             for (keel::usize i = 0; i < n; ++i) yk += sys.C[i] * x[i];
             y[k] = yk;
             if (k + 1 < N) {
                 Vec xn(n, 0.0);
                 for (keel::usize i = 0; i < n; ++i) {
-                    double s = Bd[i] * u[k];
+                    keel::f64 s = Bd[i] * u[k];
                     for (keel::usize j = 0; j < n; ++j)
                         s += Ad[j * n + i] * x[j];
                     xn[i] = s;
@@ -276,16 +276,16 @@ Vec simulate(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
         // Non-uniform grid: per-step expm.
         for (keel::usize k = 0; k < N; ++k) {
             record(k);
-            double yk = sys.D * u[k];
+            keel::f64 yk = sys.D * u[k];
             for (keel::usize i = 0; i < n; ++i) yk += sys.C[i] * x[i];
             y[k] = yk;
             if (k + 1 < N) {
-                const double dtk = t[k + 1] - t[k];
+                const keel::f64 dtk = t[k + 1] - t[k];
                 Mat Ad; Vec Bd;
                 zohDiscretise(sys.A, sys.B, n, dtk, Ad, Bd);
                 Vec xn(n, 0.0);
                 for (keel::usize i = 0; i < n; ++i) {
-                    double s = Bd[i] * u[k];
+                    keel::f64 s = Bd[i] * u[k];
                     for (keel::usize j = 0; j < n; ++j)
                         s += Ad[j * n + i] * x[j];
                     xn[i] = s;
@@ -419,7 +419,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                                          x0In.numel(), n),
                             0, 0, "lsim", "", "numkit:lsim:x0");
 
-            auto uAt = [&](keel::usize k, keel::usize j) -> double {
+            auto uAt = [&](keel::usize k, keel::usize j) -> keel::f64 {
                 return uTransposed ? uIn.elemAsDouble(k * nu + j)
                                    : uIn.elemAsDouble(j * N + k);
             };
@@ -428,12 +428,12 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                 for (keel::usize i = 0; i < n; ++i) x[i] = x0In.elemAsDouble(i);
             }
             Value yOut = Value::matrix(N, ny, ValueType::DOUBLE, mr);
-            double *yd = yOut.doubleDataMut();
+            keel::f64 *yd = yOut.doubleDataMut();
             if (xOut) *xOut = Value::matrix(N, n, ValueType::DOUBLE, mr);
-            double *xd = xOut ? xOut->doubleDataMut() : nullptr;
+            keel::f64 *xd = xOut ? xOut->doubleDataMut() : nullptr;
 
-            const double Ts = sys.field("Ts").toScalar();
-            auto fohStep = [&](double dt, Mat &Ad, Mat &B0, Mat &B1) {
+            const keel::f64 Ts = sys.field("Ts").toScalar();
+            auto fohStep = [&](keel::f64 dt, Mat &Ad, Mat &B0, Mat &B1) {
                 const keel::usize m = n + 2 * nu;
                 Mat M = zeros(m, m);
                 for (keel::usize j = 0; j < n; ++j)
@@ -453,8 +453,8 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                         Ad[j * n + i] = E[j * m + i];
                 for (keel::usize j = 0; j < nu; ++j) {
                     for (keel::usize i = 0; i < n; ++i) {
-                        const double phi1 = E[(n + j) * m + i];
-                        const double phi2 = E[(n + nu + j) * m + i];
+                        const keel::f64 phi1 = E[(n + j) * m + i];
+                        const keel::f64 phi2 = E[(n + nu + j) * m + i];
                         B0[j * n + i] = phi1 - phi2;
                         B1[j * n + i] = phi2;
                     }
@@ -462,7 +462,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
             };
 
             bool uniform = true;
-            double dt = (N >= 2) ? (t[1] - t[0]) : 0.0;
+            keel::f64 dt = (N >= 2) ? (t[1] - t[0]) : 0.0;
             for (keel::usize k = 2; k < N && uniform; ++k)
                 if (keel::abs((t[k] - t[k - 1]) - dt) > 1e-12 * std::max(1.0, keel::abs(dt)))
                     uniform = false;
@@ -476,7 +476,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                     for (keel::usize i = 0; i < n; ++i) xd[i * N + k] = x[i];
                 }
                 for (keel::usize p = 0; p < ny; ++p) {
-                    double ypk = 0.0;
+                    keel::f64 ypk = 0.0;
                     for (keel::usize i = 0; i < n; ++i)
                         ypk += Cv.elemAsDouble(i * ny + p) * x[i];
                     if (Dv.numel() == ny * nu) {
@@ -492,7 +492,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                     Vec xn(n, 0.0);
                     if (Ts > 0.0) {
                         for (keel::usize i = 0; i < n; ++i) {
-                            double s = 0.0;
+                            keel::f64 s = 0.0;
                             for (keel::usize j = 0; j < n; ++j)
                                 s += Av.elemAsDouble(j * n + i) * x[j];
                             for (keel::usize j = 0; j < nu; ++j)
@@ -503,7 +503,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                         if (!uniform)
                             fohStep(t[k + 1] - t[k], Ad, B0, B1);
                         for (keel::usize i = 0; i < n; ++i) {
-                            double s = 0.0;
+                            keel::f64 s = 0.0;
                             for (keel::usize j = 0; j < n; ++j)
                                 s += Ad[j * n + i] * x[j];
                             for (keel::usize j = 0; j < nu; ++j)

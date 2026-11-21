@@ -44,7 +44,7 @@ bool hasKind(const Value &sys, const char *want) {
     return sys.field("kind").toString() == want;
 }
 
-double sampleTime(const Value &sys) {
+keel::f64 sampleTime(const Value &sys) {
     if (sys.isStruct() && sys.hasField("Ts")) return sys.field("Ts").toScalar();
     return 0.0;
 }
@@ -56,9 +56,9 @@ Value boolValue(bool b, keel::Allocator *mr) {
 // Char poly thin wrapper around the shared Faddeev–LeVerrier kernel.
 // Pulls A out of the LTI struct as a plain column-major double buffer
 // and forwards.
-keel::Array<double> charPoly(const Value &A) {
+keel::Array<keel::f64> charPoly(const Value &A) {
     const keel::usize n = A.dims().rows();
-    keel::Array<double> Av(n * n);
+    keel::Array<keel::f64> Av(n * n);
     for (keel::usize i = 0; i < n * n; ++i) Av[i] = A.elemAsDouble(i);
     return internal::charPoly(Av, n);
 }
@@ -78,7 +78,7 @@ keel::Array<keel::c64> toComplexVec(const Value &v) {
     return out;
 }
 
-Value rowFromCoeffs(keel::ArrayRef<double> v, keel::Allocator *mr) {
+Value rowFromCoeffs(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
@@ -195,7 +195,7 @@ Value isct(const Value &sys, keel::Allocator *mr) {
 
 Value isdt(const Value &sys, keel::Allocator *mr) {
     isdt_argcheck(sys);
-    const double Ts = sampleTime(sys);
+    const keel::f64 Ts = sampleTime(sys);
     return boolValue(Ts > 0.0 || Ts == -1.0, mr);
 }
 
@@ -260,15 +260,15 @@ Value order(const Value &sys, keel::Allocator *mr) {
         const keel::usize n = sys.field("num").numel();
         const keel::usize d = sys.field("den").numel();
         const keel::usize m = (n > d) ? n : d;
-        return Value::scalar((m == 0) ? 0.0 : double(m - 1), mr);
+        return Value::scalar((m == 0) ? 0.0 : keel::f64(m - 1), mr);
     }
     if (hasKind(sys, "zpk")) {
         const keel::usize z = sys.field("z").numel();
         const keel::usize p = sys.field("p").numel();
-        return Value::scalar(double((z > p) ? z : p), mr);
+        return Value::scalar(keel::f64((z > p) ? z : p), mr);
     }
     if (hasKind(sys, "ss"))
-        return Value::scalar(double(sys.field("A").dims().rows()), mr);
+        return Value::scalar(keel::f64(sys.field("A").dims().rows()), mr);
     return Value::scalar(0.0, mr);
 }
 
@@ -288,21 +288,21 @@ DampResult damp(const Value &sys, keel::Allocator *mr)
     Value p = polesOf(sys, mr);
     auto pv = toComplexVec(p);
     const bool discrete = (sampleTime(sys) > 0.0);
-    const double Ts = sampleTime(sys);
+    const keel::f64 Ts = sampleTime(sys);
     const keel::usize N = pv.size();
 
     Value wn = Value::matrix(N, 1, ValueType::DOUBLE, mr);
     Value zeta = Value::matrix(N, 1, ValueType::DOUBLE, mr);
-    double *wd = wn.doubleDataMut();
-    double *zd = zeta.doubleDataMut();
+    keel::f64 *wd = wn.doubleDataMut();
+    keel::f64 *zd = zeta.doubleDataMut();
     for (keel::usize i = 0; i < N; ++i) {
         keel::c64 s = pv[i];
         if (discrete) {
             // s-plane equivalent: s = ln(z) / Ts.
             s = keel::log(s) / Ts;
         }
-        const double wn_i = keel::abs(s);
-        const double zeta_i = (wn_i == 0.0) ? 0.0 : -s.real() / wn_i;
+        const keel::f64 wn_i = keel::abs(s);
+        const keel::f64 zeta_i = (wn_i == 0.0) ? 0.0 : -s.real() / wn_i;
         wd[i] = wn_i;
         zd[i] = zeta_i;
     }

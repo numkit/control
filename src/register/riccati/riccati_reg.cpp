@@ -27,7 +27,7 @@ namespace {
 // m×m identity Value (default R for the 3-argument forms).
 Value eyeVal(keel::usize m, keel::Allocator *mr) {
     Value I = Value::matrix(m, m, ValueType::DOUBLE, mr);
-    double *d = I.doubleDataMut();
+    keel::f64 *d = I.doubleDataMut();
     for (keel::usize i = 0; i < m; ++i) d[i * m + i] = 1.0;
     return I;
 }

@@ -38,7 +38,7 @@ bool hasKind(const Value &sys, const char *want) {
     return sys.field("kind").toString() == want;
 }
 
-double sampleTime(const Value &sys) {
+keel::f64 sampleTime(const Value &sys) {
     if (sys.isStruct() && sys.hasField("Ts"))
         return sys.field("Ts").toScalar();
     // A plain numeric is a static gain with UNSPECIFIED sample time (-1):
@@ -47,13 +47,13 @@ double sampleTime(const Value &sys) {
     return 0.0;
 }
 
-keel::Array<double> coeffsReal(const Value &v) {
-    keel::Array<double> out(v.numel());
+keel::Array<keel::f64> coeffsReal(const Value &v) {
+    keel::Array<keel::f64> out(v.numel());
     for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
-Value rowOf(keel::ArrayRef<double> v, keel::Allocator *mr) {
+Value rowOf(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
@@ -62,7 +62,7 @@ Value rowOf(keel::ArrayRef<double> v, keel::Allocator *mr) {
 // Bring an LTI struct (or a raw 2-arg call: (num, den) split across two
 // args via `series(num1, den1, num2, den2)` — not yet supported) into
 // a (num, den) coefficient pair.
-struct NumDen { keel::Array<double> num, den; };
+struct NumDen { keel::Array<keel::f64> num, den; };
 
 NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
     // A plain numeric scalar is a STATIC gain system K = K/1, i.e.
@@ -70,7 +70,7 @@ NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
     // (e.g. feedback(sys, 1) for unity feedback, series(sys, 2), ...).
     if (!sys.isStruct()) {
         if (sys.numel() == 1)
-            return {keel::Array<double>{sys.toScalar()}, keel::Array<double>{1.0}};
+            return {keel::Array<keel::f64>{sys.toScalar()}, keel::Array<keel::f64>{1.0}};
         throw Error("control connect: a numeric system must be a scalar gain",
                     0, 0, "control", "", "numkit:control:kind");
     }
@@ -91,14 +91,14 @@ NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
 }
 
 // Polynomial addition right-aligned (highest order first, MATLAB style).
-keel::Array<double> polyAdd(keel::ArrayRef<double> a,
-                            keel::ArrayRef<double> b,
-                            double bScale = 1.0)
+keel::Array<keel::f64> polyAdd(keel::ArrayRef<keel::f64> a,
+                            keel::ArrayRef<keel::f64> b,
+                            keel::f64 bScale = 1.0)
 {
     const keel::usize na = a.size();
     const keel::usize nb = b.size();
     const keel::usize n = std::max(na, nb);
-    keel::Array<double> y(n, 0.0);
+    keel::Array<keel::f64> y(n, 0.0);
     // Right-align: a[na-1] aligns with y[n-1], same for b.
     for (keel::usize i = 0; i < na; ++i) y[n - na + i] += a[i];
     for (keel::usize i = 0; i < nb; ++i) y[n - nb + i] += bScale * b[i];
@@ -106,7 +106,7 @@ keel::Array<double> polyAdd(keel::ArrayRef<double> a,
 }
 
 // Polynomial multiplication via signal::conv.
-keel::Array<double> polyMul(keel::ArrayRef<double> a, keel::ArrayRef<double> b, keel::Allocator *mr)
+keel::Array<keel::f64> polyMul(keel::ArrayRef<keel::f64> a, keel::ArrayRef<keel::f64> b, keel::Allocator *mr)
 {
     if (a.empty() || b.empty()) return {};
     Value av = rowOf(a, mr);
@@ -115,7 +115,7 @@ keel::Array<double> polyMul(keel::ArrayRef<double> a, keel::ArrayRef<double> b, 
     return coeffsReal(y);
 }
 
-double Ts_combine(double Ts1, double Ts2, const char *op) {
+keel::f64 Ts_combine(keel::f64 Ts1, keel::f64 Ts2, const char *op) {
     // MATLAB rules: continuous + continuous → continuous; same Ts →
     // same Ts; mismatched Ts → error.
     if (Ts1 == 0.0 && Ts2 == 0.0) return 0.0;
@@ -166,7 +166,7 @@ Value series(const Value &sys1, const Value &sys2, keel::Allocator *mr)
     auto b = toNumDen(sys2, mr);
     auto num = polyMul(a.num, b.num, mr);
     auto den = polyMul(a.den, b.den, mr);
-    const double Ts = Ts_combine(sampleTime(sys1), sampleTime(sys2),
+    const keel::f64 Ts = Ts_combine(sampleTime(sys1), sampleTime(sys2),
                                  "series");
     return tf(rowOf(num, mr), rowOf(den, mr), Ts, mr);
 }
@@ -180,7 +180,7 @@ Value parallel(const Value &sys1, const Value &sys2, keel::Allocator *mr)
     auto t2 = polyMul(b.num, a.den, mr); // n2·d1
     auto num = polyAdd(t1, t2);
     auto den = polyMul(a.den, b.den, mr);
-    const double Ts = Ts_combine(sampleTime(sys1), sampleTime(sys2),
+    const keel::f64 Ts = Ts_combine(sampleTime(sys1), sampleTime(sys2),
                                  "parallel");
     return tf(rowOf(num, mr), rowOf(den, mr), Ts, mr);
 }
@@ -196,8 +196,8 @@ Value feedback(const Value &G, const Value &H, int sign, keel::Allocator *mr)
     auto denBase = polyMul(g.den, h.den, mr);
     // sign convention: MATLAB feedback default is -1 (negative
     // feedback), giving denBase + loop. sign = +1 ⇒ denBase − loop.
-    auto denT = polyAdd(denBase, loop, -keel::as<double>(sign));
-    const double Ts = Ts_combine(sampleTime(G), sampleTime(H), "feedback");
+    auto denT = polyAdd(denBase, loop, -keel::as<keel::f64>(sign));
+    const keel::f64 Ts = Ts_combine(sampleTime(G), sampleTime(H), "feedback");
     return tf(rowOf(numT, mr), rowOf(denT, mr), Ts, mr);
 }
 

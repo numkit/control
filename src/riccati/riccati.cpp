@@ -29,7 +29,7 @@ Mat readMat(const Value &v, keel::usize r, keel::usize c) {
     return M;
 }
 
-Value closedLoopEig(const Mat &A, const Mat &B, const double *G,
+Value closedLoopEig(const Mat &A, const Mat &B, const keel::f64 *G,
                     keel::usize n, keel::usize m, keel::Allocator *mr) {
     Mat BG(n * n, 0.0);
     (void)keel::control::matmul(B, n, m, {G, m * n}, n, BG);

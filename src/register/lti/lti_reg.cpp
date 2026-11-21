@@ -25,7 +25,7 @@
 namespace numkit::control {
 namespace detail {
 
-static double argTs(keel::ArrayRef<Value> args, keel::usize pos) {
+static keel::f64 argTs(keel::ArrayRef<Value> args, keel::usize pos) {
     if (args.size() <= pos || args[pos].isEmpty()) return 0.0;
     return args[pos].toScalar();
 }
@@ -48,7 +48,7 @@ void tf_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
         if (args[0].isChar() || args[0].isString()) {
             const auto v = args[0].toString();
             if (v == "s" || v == "p" || v == "z" || v == "q" || v == "z^-1" || v == "q^-1") {
-                const double Ts = (v == "s" || v == "p")
+                const keel::f64 Ts = (v == "s" || v == "p")
                     ? 0.0
                     : ((args.size() >= 2 && !args[1].isEmpty()) ? args[1].toScalar() : -1.0);
                 Value num = Value::matrix(1, 2, ValueType::DOUBLE, mr);
@@ -72,7 +72,7 @@ void tf_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
                 return;
             }
             auto [num, den] = tfdata(args[0], true, mr);
-            const double Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            const keel::f64 Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
             outs[0] = tf(num, den, Ts, mr);
             return;
         }
@@ -101,7 +101,7 @@ void zpk_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
         if (args[0].isChar() || args[0].isString()) {
             const auto v = args[0].toString();
             if (v == "s" || v == "p" || v == "z" || v == "q") {
-                const double Ts = (v == "s" || v == "p")
+                const keel::f64 Ts = (v == "s" || v == "p")
                     ? 0.0
                     : ((args.size() >= 2 && !args[1].isEmpty()) ? args[1].toScalar() : -1.0);
                 outs[0] = zpk(Value::scalar(0.0, mr),
@@ -114,7 +114,7 @@ void zpk_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
     if (args.size() == 1) {
         if (args[0].isStruct()) {
             auto [z, p, k] = zpkdata(args[0], true, mr);
-            const double Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            const keel::f64 Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
             outs[0] = zpk(z, p, k.toScalar(), Ts, mr);
             return;
         }
@@ -146,7 +146,7 @@ void ss_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
     if (args.size() == 1) {
         if (args[0].isStruct()) {
             auto [A, B, C, D] = ssdata(args[0], mr);
-            const double Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            const keel::f64 Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
             outs[0] = ss(A, B, C, D, Ts, mr);
             return;
         }
@@ -180,7 +180,7 @@ void filt_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArra
         return;
     }
     // MATLAB default Ts for filt is -1 (unspecified discrete).
-    const double Ts = (args.size() >= 3 && !args[2].isEmpty())
+    const keel::f64 Ts = (args.size() >= 3 && !args[2].isEmpty())
                       ? args[2].toScalar() : -1.0;
     outs[0] = filt(args[0], args[1], Ts, mr);
 }
@@ -259,7 +259,7 @@ void minreal_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutA
     // real part carries); logical/char/cell/string are rejected
     // (Control:transformation:minreal3). The compute API takes a plain
     // double, so this is where the Value→native crossing happens.
-    double tol = 0.0;
+    keel::f64 tol = 0.0;
     if (args.size() >= 2 && !args[1].isEmpty()) {
         const Value &tv = args[1];
         const ValueType t = tv.type();
@@ -305,7 +305,7 @@ void ss2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRe
     argcheck::checkNargin(args.size(), 4, 5, "ss2tf");
     int iu = 1;
     if (args.size() >= 5 && !args[4].isEmpty()) {
-        const double iuVal = argcheck::expectedReal(args[4], 5, "iu", "ss2tf");
+        const keel::f64 iuVal = argcheck::expectedReal(args[4], 5, "iu", "ss2tf");
         iu = argcheck::expectedPositiveInteger(iuVal, 5, "iu", "ss2tf");
     }
     auto [num, den] = ss2tf(args[0], args[1], args[2], args[3], iu, ctx.engine->allocator());
@@ -336,8 +336,8 @@ void ord2_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef
               CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 2, "ord2");
-    const double wn = argcheck::expectedReal(args[0], 1, "wn", "ord2");
-    const double z  = argcheck::expectedReal(args[1], 2, "z", "ord2");
+    const keel::f64 wn = argcheck::expectedReal(args[0], 1, "wn", "ord2");
+    const keel::f64 z  = argcheck::expectedReal(args[1], 2, "z", "ord2");
     auto *mr = ctx.engine->allocator();
     if (nargout <= 2) {
         outs[0] = Value::scalar(1.0, mr);
@@ -373,7 +373,7 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     argcheck::checkNargin(args.size(), 2, 3, "modred");
     auto *mr = ctx.engine->allocator();
     auto [A, B, C, D] = ssdata(args[0], mr);
-    const double Ts = (args[0].isStruct() && args[0].hasField("Ts"))
+    const keel::f64 Ts = (args[0].isStruct() && args[0].hasField("Ts"))
         ? args[0].field("Ts").toScalar() : 0.0;
     const keel::usize n = A.dims().rows();
     const keel::usize nu = B.dims().cols();
@@ -381,7 +381,7 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
 
     keel::Array<bool> isElim(n, false);
     for (keel::usize i = 0; i < args[1].numel(); ++i) {
-        const double v = args[1].elemAsDouble(i);
+        const keel::f64 v = args[1].elemAsDouble(i);
         const int idx = keel::as<int>(v) - 1;
         if (idx < 0 || keel::as<keel::usize>(idx) >= n)
             throw Error("modred: state elimination index out of range.",

@@ -31,7 +31,7 @@ void feedback_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value>
     argcheck::checkNargin(a.size(), 2, 10, "feedback");
     int sign = -1;
     if (a.size() >= 3 && !a[2].isEmpty()) {
-        const double sv = argcheck::expectedReal(a[2], 3, "sign", "feedback");
+        const keel::f64 sv = argcheck::expectedReal(a[2], 3, "sign", "feedback");
         argcheck::expectedInteger(sv, 3, "sign", "feedback");
         if (sv != 1.0 && sv != -1.0)
             throw Error("feedback: sign must be 1 or -1",

@@ -48,7 +48,7 @@ bool hasKind(const Value &sys, const char *want) {
     return sys.field("kind").toString() == want;
 }
 
-double sampleTime(const Value &sys) {
+keel::f64 sampleTime(const Value &sys) {
     if (sys.isStruct() && sys.hasField("Ts"))
         return sys.field("Ts").toScalar();
     return 0.0;
@@ -78,13 +78,13 @@ struct SS {
     Mat A;
     Vec B;
     Vec C;
-    double D;
-    double Ts;
+    keel::f64 D;
+    keel::f64 Ts;
 };
 
 SS toSSiso(const Value &sys, keel::Allocator *mr) {
     Value Av, Bv, Cv, Dv;
-    double Ts = sampleTime(sys);
+    keel::f64 Ts = sampleTime(sys);
     if (hasKind(sys, "ss")) {
         Av = sys.field("A"); Bv = sys.field("B");
         Cv = sys.field("C"); Dv = sys.field("D");
@@ -114,7 +114,7 @@ SS toSSiso(const Value &sys, keel::Allocator *mr) {
     return s;
 }
 
-void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, double Ts,
+void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, keel::f64 Ts,
                    Mat &Ad, Vec &Bd)
 {
     const keel::usize m = n + 1;
@@ -142,9 +142,9 @@ void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, double Ts,
 //                    C_d = √Ts · C · inv(I − A·Ts/2)
 //                    D_d = D + (Ts/2) · C · inv(I − A·Ts/2) · B
 // We use the standard (non-frequency-prewarped) form.
-void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
-                      keel::usize n, double Ts,
-                      Mat &Ad, Vec &Bd, Vec &Cd, double &Dd)
+void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, keel::f64 D,
+                      keel::usize n, keel::f64 Ts,
+                      Mat &Ad, Vec &Bd, Vec &Cd, keel::f64 &Dd)
 {
     // Build M_minus = I − A·Ts/2  and  M_plus = I + A·Ts/2.
     Mat Mminus = eyeM(n), Mplus = eyeM(n);
@@ -167,7 +167,7 @@ void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
         throw Error("c2d (tustin): I − A·Ts/2 is singular",
                     0, 0, "c2d", "", "numkit:c2d:singular");
     Bd.assign(n, 0.0);
-    const double sTs = std::sqrt(Ts);
+    const keel::f64 sTs = std::sqrt(Ts);
     for (keel::usize i = 0; i < n; ++i) Bd[i] = sTs * Bm[i];
 
     // C_d = √Ts · C · inv(M_minus). Compute via inv(M_minus)^T·Cᵀ.
@@ -192,7 +192,7 @@ void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
     if (!solveInPlace(Mc3, yvec, n, 1))
         throw Error("c2d (tustin): I − A·Ts/2 is singular",
                     0, 0, "c2d", "", "numkit:c2d:singular");
-    double cy = 0.0;
+    keel::f64 cy = 0.0;
     for (keel::usize i = 0; i < n; ++i) cy += C[i] * yvec[i];
     Dd = D + (Ts / 2.0) * cy;
 }
@@ -201,8 +201,8 @@ void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
 // matrix exp [[A·Ts, B·Ts, 0]; [0, 0, I·Ts]; [0, 0, 0]] → blocks
 // Phi, G1, G2 (the top n rows of cols n, n+1). MATLAB R2025b:
 //   Ad = Phi,  Bd = G1 + Phi·G2/Ts − G2/Ts,  Cd = C,  Dd = D + C·G2/Ts.
-void fohDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
-                   keel::usize n, double Ts, Mat &Ad, Vec &Bd, Vec &Cd, double &Dd)
+void fohDiscretise(const Mat &A, const Vec &B, const Vec &C, keel::f64 D,
+                   keel::usize n, keel::f64 Ts, Mat &Ad, Vec &Bd, Vec &Cd, keel::f64 &Dd)
 {
     const keel::usize m = n + 2;                 // augmented dim (1 input)
     Mat M = zerosM(m, m);
@@ -225,18 +225,18 @@ void fohDiscretise(const Mat &A, const Vec &B, const Vec &C, double D,
     }
     Bd.assign(n, 0.0);
     for (keel::usize i = 0; i < n; ++i) {
-        double phiG2 = 0.0;                         // (Phi·G2)[i]
+        keel::f64 phiG2 = 0.0;                         // (Phi·G2)[i]
         for (keel::usize k = 0; k < n; ++k) phiG2 += Ad[k * n + i] * G2[k];
         Bd[i] = G1[i] + phiG2 / Ts - G2[i] / Ts;
     }
     Cd = C.clone();
-    double cg2 = 0.0;
+    keel::f64 cg2 = 0.0;
     for (keel::usize i = 0; i < n; ++i) cg2 += C[i] * G2[i];
     Dd = D + cg2 / Ts;
 }
 
 // Build an output struct of the requested kind from (A, B, C, D, Ts).
-Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, double Dd, keel::usize n, double Ts, keel::StringRef origKind, keel::Allocator *mr)
+Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, keel::f64 Dd, keel::usize n, keel::f64 Ts, keel::StringRef origKind, keel::Allocator *mr)
 {
     Value Av = matFromVec(n, n, Ad, mr);
     Value Bv = matFromVec(n, 1, Bd, mr);
@@ -259,14 +259,14 @@ Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, double Dd, keel::u
         Vec denVec = coeffsReal(denV);
         keel::usize in = 0; while (in + 1 < numVec.size() && numVec[in] == 0.0) ++in;
         keel::usize id = 0; while (id + 1 < denVec.size() && denVec[id] == 0.0) ++id;
-        const double k = (in < numVec.size() && id < denVec.size())
+        const keel::f64 k = (in < numVec.size() && id < denVec.size())
                          ? numVec[in] / denVec[id] : 0.0;
         return zpk(zV, pV, k, Ts, mr);
     }
     return ss(Av, Bv, Cv, Dv, Ts, mr);
 }
 
-void c2d_argcheck(const Value &sys, double Ts, keel::StringRef method)
+void c2d_argcheck(const Value &sys, keel::f64 Ts, keel::StringRef method)
 {
     if (Ts <= 0.0)
         throw Error("c2d: Ts must be positive",
@@ -300,7 +300,7 @@ void d2c_argcheck(const Value &sys, keel::StringRef method)
 
 } // anonymous
 
-Value c2d(const Value &sys, double Ts, keel::StringRef method, keel::Allocator *mr)
+Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocator *mr)
 {
     c2d_argcheck(sys, Ts, method);
     if (hasKind(sys, "ss")) {
@@ -324,7 +324,7 @@ Value c2d(const Value &sys, double Ts, keel::StringRef method, keel::Allocator *
                         (Dv.numel() == ny * nu) ? Dv.elemAsDouble(j * ny + p)
                         : ((Dv.numel() == 1) ? Dv.elemAsDouble(0) : 0.0);
             Value GV = Value::matrix(n, n + nu, ValueType::DOUBLE, mr);
-            double *gd = GV.doubleDataMut();
+            keel::f64 *gd = GV.doubleDataMut();
             std::fill(gd, gd + n * (n + nu), 0.0);
             for (keel::usize i = 0; i < n; ++i) gd[i * n + i] = 1.0;
 
@@ -361,13 +361,13 @@ Value c2d(const Value &sys, double Ts, keel::StringRef method, keel::Allocator *
                         G2[r] = E[(n + 1) * m + r];
                     }
                     for (keel::usize r = 0; r < n; ++r) {
-                        double phiG2 = 0.0;
+                        keel::f64 phiG2 = 0.0;
                         for (keel::usize k = 0; k < n; ++k) phiG2 += Ad[k * n + r] * G2[k];
                         BdV.doubleDataMut()[j * n + r] = G1[r] + phiG2 / Ts - G2[r] / Ts;
                         gd[(n + j) * n + r] = -G2[r] / Ts;
                     }
                     for (keel::usize p = 0; p < ny; ++p) {
-                        double cg2 = 0.0;
+                        keel::f64 cg2 = 0.0;
                         for (keel::usize k = 0; k < n; ++k)
                             cg2 += Cv.elemAsDouble(k * ny + p) * G2[k];
                         DvOut.doubleDataMut()[j * ny + p] += cg2 / Ts;
@@ -386,7 +386,7 @@ Value c2d(const Value &sys, double Ts, keel::StringRef method, keel::Allocator *
         throw Error("c2d: input system is already discrete (Ts > 0)",
                     0, 0, "c2d", "", "numkit:c2d:already_discrete");
 
-    Mat Ad; Vec Bd, Cd; double Dd;
+    Mat Ad; Vec Bd, Cd; keel::f64 Dd;
     if (method.empty() || method == "zoh") {
         zohDiscretise(s.A, s.B, s.n, Ts, Ad, Bd);
         // ZOH leaves C and D untouched.
@@ -412,7 +412,7 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
     d2c_argcheck(sys, method);
     SS s = toSSiso(sys, mr);
     const bool isZoh = method.empty() || method == "zoh";
-    const double Ts = s.Ts;
+    const keel::f64 Ts = s.Ts;
     const keel::String origKind = sys.isStruct() && sys.hasField("kind")
                                   ? sys.field("kind").toString()
                                   : keel::String::from("ss");
@@ -424,7 +424,7 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
         // Augmented ZOH matrix Phi = [[A_d, B_d]; [0, 1]], (n+1)x(n+1).
         const keel::usize m = s.n + 1;
         Value Phi = Value::matrix(m, m, ValueType::DOUBLE, mr);
-        double *pd = Phi.doubleDataMut();
+        keel::f64 *pd = Phi.doubleDataMut();
         std::fill(pd, pd + m * m, 0.0);
         for (keel::usize j = 0; j < s.n; ++j)
             for (keel::usize i = 0; i < s.n; ++i)
@@ -452,13 +452,13 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
             Vec Bc(s.n, 0.0);
             for (keel::usize j = 0; j < s.n; ++j) {
                 for (keel::usize i = 0; i < s.n; ++i) {
-                    const double v = L.isComplex() ? L.complexData()[j * m + i].real()
+                    const keel::f64 v = L.isComplex() ? L.complexData()[j * m + i].real()
                                                    : L.doubleData()[j * m + i];
                     Ac[j * s.n + i] = v / Ts;
                 }
             }
             for (keel::usize i = 0; i < s.n; ++i) {
-                const double v = L.isComplex() ? L.complexData()[s.n * m + i].real()
+                const keel::f64 v = L.isComplex() ? L.complexData()[s.n * m + i].real()
                                                : L.doubleData()[s.n * m + i];
                 Bc[i] = v / Ts;
             }
@@ -476,8 +476,8 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
         const keel::c64 *lc = L.complexData();
         for (keel::usize j = 0; j < s.n; ++j) {
             for (keel::usize i = 0; i < s.n; ++i) {
-                const double ar = lc[j * m + i].real() / Ts;
-                const double ai = lc[j * m + i].imag() / Ts;
+                const keel::f64 ar = lc[j * m + i].real() / Ts;
+                const keel::f64 ai = lc[j * m + i].imag() / Ts;
                 Ac[j * n2 + i]               =  ar;
                 Ac[(j + s.n) * n2 + i]       = -ai;
                 Ac[j * n2 + (i + s.n)]       =  ai;
@@ -526,7 +526,7 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
         throw Error("d2c (tustin): A_d + I is singular",
                     0, 0, "d2c", "", "numkit:d2c:singular");
     Vec Bc(s.n, 0.0);
-    const double inv_sqrtTs = 2.0 / std::sqrt(Ts);
+    const keel::f64 inv_sqrtTs = 2.0 / std::sqrt(Ts);
     for (keel::usize i = 0; i < s.n; ++i) Bc[i] = inv_sqrtTs * Bvec[i];
 
     Mat ApT(s.n * s.n, 0.0);
@@ -543,14 +543,14 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
 
     Vec ApBc(s.n, 0.0);
     for (keel::usize i = 0; i < s.n; ++i) {
-        double ssum = 0.0;
+        keel::f64 ssum = 0.0;
         for (keel::usize j = 0; j < s.n; ++j)
             ssum += Aplus[j * s.n + i] * Bc[j];
         ApBc[i] = ssum;
     }
-    double cAB = 0.0;
+    keel::f64 cAB = 0.0;
     for (keel::usize i = 0; i < s.n; ++i) cAB += Cc[i] * ApBc[i];
-    const double Dc = s.D - (Ts / 4.0) * cAB;
+    const keel::f64 Dc = s.D - (Ts / 4.0) * cAB;
 
     // Continuous → Ts = 0.
     return packResult(Ac, Bc, Cc, Dc, s.n, 0.0, origKind, mr);

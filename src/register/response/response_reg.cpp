@@ -135,16 +135,16 @@ void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRe
     if (a.size() >= 3 && !a[2].isEmpty()) {
         tIn = a[2];
     } else {
-        const double Ts = (a[0].isStruct() && a[0].hasField("Ts"))
+        const keel::f64 Ts = (a[0].isStruct() && a[0].hasField("Ts"))
             ? a[0].field("Ts").toScalar() : 0.0;
         if (Ts == 0.0)
             throw Error("lsim: time vector t is required for continuous-time models.",
                         0, 0, "lsim", "", "numkit:lsim:t");
-        const double dt = (Ts > 0.0) ? Ts : 1.0;
+        const keel::f64 dt = (Ts > 0.0) ? Ts : 1.0;
         const keel::usize N = a[1].numel();
         tIn = Value::matrix(N, 1, ValueType::DOUBLE, mr);
         for (keel::usize i = 0; i < N; ++i)
-            tIn.doubleDataMut()[i] = keel::as<double>(i) * dt;
+            tIn.doubleDataMut()[i] = keel::as<keel::f64>(i) * dt;
     }
     Value x0 = (a.size() >= 4 && !a[3].isChar() && !a[3].isString())
         ? a[3] : Value::matrix(0, 0, ValueType::DOUBLE, mr);

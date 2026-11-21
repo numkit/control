@@ -31,8 +31,8 @@ namespace {
 // Read a row/column polynomial coefficient vector into a vector of
 // doubles. Complex coefficients are reduced to their real parts (the
 // caller verifies the inputs are real for the SS path).
-keel::Array<double> coeffsReal(const Value &v) {
-    keel::Array<double> out(v.numel());
+keel::Array<keel::f64> coeffsReal(const Value &v) {
+    keel::Array<keel::f64> out(v.numel());
     if (v.type() == ValueType::COMPLEX) {
         const keel::c64 *c = v.complexData();
         for (keel::usize i = 0; i < v.numel(); ++i) out[i] = c[i].real();
@@ -43,26 +43,26 @@ keel::Array<double> coeffsReal(const Value &v) {
 }
 
 // Strip leading zeros (preserve at least 1 entry).
-keel::Array<double> stripLeading(keel::ArrayRef<double> v) {
+keel::Array<keel::f64> stripLeading(keel::ArrayRef<keel::f64> v) {
     keel::usize i = 0;
     while (i + 1 < v.size() && v[i] == 0.0) ++i;
-    return keel::Array<double>::from(v.slice(i));
+    return keel::Array<keel::f64>::from(v.slice(i));
 }
 
-Value rowOfDoubles(keel::ArrayRef<double> v, keel::Allocator *mr) {
+Value rowOfDoubles(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
-Value matrixFromVec(keel::usize rows, keel::usize cols, keel::ArrayRef<double> v, keel::Allocator *mr) {
+Value matrixFromVec(keel::usize rows, keel::usize cols, keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value m = Value::matrix(rows, cols, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
 void tf2zp_argcheck(const Value &num, const Value &den,
-                    keel::Array<double> &numV, keel::Array<double> &denV)
+                    keel::Array<keel::f64> &numV, keel::Array<keel::f64> &denV)
 {
     numV = stripLeading(coeffsReal(num));
     denV = stripLeading(coeffsReal(den));
@@ -79,7 +79,7 @@ void zp2tf_argcheck(const Value &z, const Value &p, const Value &k)
 }
 
 void tf2ss_argcheck(const Value &num, const Value &den,
-                    keel::Array<double> &numV, keel::Array<double> &denV)
+                    keel::Array<keel::f64> &numV, keel::Array<keel::f64> &denV)
 {
     denV = stripLeading(coeffsReal(den));
     if (denV.empty() || denV[0] == 0.0)
@@ -112,11 +112,11 @@ void ss2tf_argcheck(const Value &A, const Value &B, const Value &C, int iu)
 Tf2ZpResult tf2zp(const Value &num, const Value &den,
                   keel::Allocator *mr)
 {
-    keel::Array<double> numV, denV;
+    keel::Array<keel::f64> numV, denV;
     tf2zp_argcheck(num, den, numV, denV);
 
     // Gain is num(1)/den(1) (after stripping leading zeros).
-    const double k = numV.empty() ? 0.0 : numV[0] / denV[0];
+    const keel::f64 k = numV.empty() ? 0.0 : numV[0] / denV[0];
 
     // Roots of num and den. The existing numkit::builtin::roots already
     // handles both real-and-complex output and trailing-zero roots.
@@ -149,7 +149,7 @@ zp2tf(const Value &z, const Value &p, const Value &k,
 
     // Multiply num by the gain (real scalar in our zpk; we handle the
     // complex-product case by promoting num if k or num is complex).
-    const double kVal = k.toScalar();
+    const keel::f64 kVal = k.toScalar();
     if (num.type() == ValueType::COMPLEX) {
         const keel::usize N = num.numel();
         Value scaled = Value::matrix(1, N, ValueType::COMPLEX, mr);
@@ -160,7 +160,7 @@ zp2tf(const Value &z, const Value &p, const Value &k,
     } else {
         const keel::usize N = num.numel();
         Value scaled = Value::matrix(1, N, ValueType::DOUBLE, mr);
-        double *dst = scaled.doubleDataMut();
+        keel::f64 *dst = scaled.doubleDataMut();
         for (keel::usize i = 0; i < N; ++i) dst[i] = num.elemAsDouble(i) * kVal;
         num = scaled;
     }
@@ -171,15 +171,15 @@ zp2tf(const Value &z, const Value &p, const Value &k,
 StateSpace tf2ss(const Value &num, const Value &den,
                  keel::Allocator *mr)
 {
-    keel::Array<double> numV, denV;
+    keel::Array<keel::f64> numV, denV;
     tf2ss_argcheck(num, den, numV, denV);
-    const double a0 = denV[0];
+    const keel::f64 a0 = denV[0];
     // Normalise so leading coefficient of den is 1.
-    keel::Array<double> a(denV.size());
+    keel::Array<keel::f64> a(denV.size());
     for (keel::usize i = 0; i < denV.size(); ++i) a[i] = denV[i] / a0;
 
     // Left-pad numerator with zeros so it has the same length as `a`.
-    keel::Array<double> b(a.size(), 0.0);
+    keel::Array<keel::f64> b(a.size(), 0.0);
     const keel::usize pad = a.size() - numV.size();
     for (keel::usize i = 0; i < numV.size(); ++i) b[pad + i] = numV[i] / a0;
 
@@ -198,7 +198,7 @@ StateSpace tf2ss(const Value &num, const Value &den,
     //      ...
     //      0 0 0 ... 1;
     //      -a_n -a_{n-1} ... -a_1]
-    keel::Array<double> Avec(n * n, 0.0);
+    keel::Array<keel::f64> Avec(n * n, 0.0);
     for (keel::usize i = 0; i + 1 < n; ++i) {
         // column j = i+1, row i.
         Avec[(i + 1) * n + i] = 1.0;
@@ -210,14 +210,14 @@ StateSpace tf2ss(const Value &num, const Value &den,
     }
 
     // B = [0; ...; 0; 1] (column).
-    keel::Array<double> Bvec(n, 0.0);
+    keel::Array<keel::f64> Bvec(n, 0.0);
     Bvec[n - 1] = 1.0;
 
     // C row of length n. With proper rational form b[0] is the D term.
     // For G(s) = b(s)/a(s) with deg(b) <= deg(a), after dividing,
     // G(s) = b[0] + (b[1] - b[0]·a[1]) s^{n-1}/a(s) + ... + (b[n] - b[0]·a[n])/a(s).
     // C[k] = b[n - k] - b[0] · a[n - k]   for k = 0..n-1
-    keel::Array<double> Cvec(n, 0.0);
+    keel::Array<keel::f64> Cvec(n, 0.0);
     for (keel::usize k = 0; k < n; ++k) {
         Cvec[k] = b[n - k] - b[0] * a[n - k];
     }
@@ -239,19 +239,19 @@ ss2tf(const Value &A, const Value &B,
 
     // Read matrices into flat column-major double buffers.
     auto readMat = [&](const Value &v, keel::usize r, keel::usize c) {
-        keel::Array<double> M(r * c, 0.0);
+        keel::Array<keel::f64> M(r * c, 0.0);
         for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
         return M;
     };
     auto Av = readMat(A, n, n);
     // B column iu.
-    keel::Array<double> Bv(n, 0.0);
+    keel::Array<keel::f64> Bv(n, 0.0);
     for (keel::usize i = 0; i < n; ++i) Bv[i] = B.elemAsDouble(inIdx * n + i);
     // C row 0 (single-output).
-    keel::Array<double> Cv(n, 0.0);
+    keel::Array<keel::f64> Cv(n, 0.0);
     for (keel::usize i = 0; i < n; ++i) Cv[i] = C.elemAsDouble(i * 1 + 0);
     // D scalar at (0, iu-1).
-    double Dscalar = 0.0;
+    keel::f64 Dscalar = 0.0;
     if (D.numel() > 0) {
         // D is ny × nin; we read element (0, inIdx).
         const keel::usize Drows = (D.dims().rows() == 0) ? 1 : D.dims().rows();
@@ -260,31 +260,31 @@ ss2tf(const Value &A, const Value &B,
 
     // Faddeev–LeVerrier.  M_0 = I,  c_k = -(1/k) trace(A·M_{k-1}),
     // M_k = A·M_{k-1} + c_k I.  char poly = s^n + c_1 s^{n-1} + ... + c_n.
-    keel::Array<double> M(n * n, 0.0); // current M_{k-1}
+    keel::Array<keel::f64> M(n * n, 0.0); // current M_{k-1}
     for (keel::usize i = 0; i < n; ++i) M[i * n + i] = 1.0; // I
-    keel::Array<double> coeff(n + 1, 0.0);
+    keel::Array<keel::f64> coeff(n + 1, 0.0);
     coeff[0] = 1.0;
 
     // num accumulates from C·M_k·B (length n) + D·char(s).
-    keel::Array<double> numAcc(n, 0.0); // s^{n-1} ... s^0
+    keel::Array<keel::f64> numAcc(n, 0.0); // s^{n-1} ... s^0
 
-    auto matMul = [&](keel::ArrayRef<double> X,
-                      keel::ArrayRef<double> Y) {
-        keel::Array<double> Z(n * n, 0.0);
+    auto matMul = [&](keel::ArrayRef<keel::f64> X,
+                      keel::ArrayRef<keel::f64> Y) {
+        keel::Array<keel::f64> Z(n * n, 0.0);
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < n; ++i) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize l = 0; l < n; ++l)
                     s += X[l * n + i] * Y[j * n + l];
                 Z[j * n + i] = s;
             }
         return Z;
     };
-    auto matVec = [&](keel::ArrayRef<double> X,
-                      keel::ArrayRef<double> y) {
-        keel::Array<double> z(n, 0.0);
+    auto matVec = [&](keel::ArrayRef<keel::f64> X,
+                      keel::ArrayRef<keel::f64> y) {
+        keel::Array<keel::f64> z(n, 0.0);
         for (keel::usize i = 0; i < n; ++i) {
-            double s = 0.0;
+            keel::f64 s = 0.0;
             for (keel::usize j = 0; j < n; ++j) s += X[j * n + i] * y[j];
             z[i] = s;
         }
@@ -294,7 +294,7 @@ ss2tf(const Value &A, const Value &B,
     // numAcc[k] gets C·M_k·B for k = 0..n-1.
     {
         // k = 0: M_0 = I → C·I·B = C·B.
-        double cb = 0.0;
+        keel::f64 cb = 0.0;
         for (keel::usize i = 0; i < n; ++i) cb += Cv[i] * Bv[i];
         numAcc[0] = cb;
     }
@@ -303,19 +303,19 @@ ss2tf(const Value &A, const Value &B,
         // A·M_{k-1}
         auto AM = matMul(Av, M);
         // trace(A·M_{k-1})
-        double tr = 0.0;
+        keel::f64 tr = 0.0;
         for (keel::usize i = 0; i < n; ++i) tr += AM[i * n + i];
-        const double ck = -tr / keel::as<double>(k);
+        const keel::f64 ck = -tr / keel::as<keel::f64>(k);
         coeff[k] = ck;
         // M_k = A·M_{k-1} + ck · I
-        keel::Array<double> Mk(n * n, 0.0);
+        keel::Array<keel::f64> Mk(n * n, 0.0);
         for (keel::usize i = 0; i < n * n; ++i) Mk[i] = AM[i];
         for (keel::usize i = 0; i < n; ++i) Mk[i * n + i] += ck;
         M = keel::move(Mk);
 
         if (k < n) {
             auto MB = matVec(M, Bv);
-            double cmb = 0.0;
+            keel::f64 cmb = 0.0;
             for (keel::usize i = 0; i < n; ++i) cmb += Cv[i] * MB[i];
             numAcc[k] = cmb;
         }
@@ -323,7 +323,7 @@ ss2tf(const Value &A, const Value &B,
 
     // Final num = numAcc + D·char_poly.
     // num is degree n (length n+1) when D != 0; otherwise degree n-1.
-    keel::Array<double> numOutVec;
+    keel::Array<keel::f64> numOutVec;
     if (Dscalar != 0.0) {
         numOutVec.assign(n + 1, 0.0);
         for (keel::usize i = 0; i <= n; ++i) numOutVec[i] = Dscalar * coeff[i];
@@ -333,7 +333,7 @@ ss2tf(const Value &A, const Value &B,
         numOutVec = keel::move(numAcc); // length n
     }
     // den is the char poly: length n+1, leading 1.
-    keel::Array<double> denOutVec = keel::move(coeff);
+    keel::Array<keel::f64> denOutVec = keel::move(coeff);
 
     return {rowOfDoubles(numOutVec, mr),
             rowOfDoubles(denOutVec, mr)};
@@ -348,7 +348,7 @@ bool isKind(const Value &sys, const char *want) {
            sys.field("kind").toString() == want;
 }
 
-double sampleTimeOf(const Value &sys) {
+keel::f64 sampleTimeOf(const Value &sys) {
     return (sys.isStruct() && sys.hasField("Ts")) ? sys.field("Ts").toScalar() : 0.0;
 }
 
@@ -369,19 +369,19 @@ rootsComplex(const Value &polyV, keel::Allocator *mr) {
 // Monic polynomial whose roots are `rts`, expanded as ∏(s − r_i) in complex
 // arithmetic; the real part is returned (conjugate pairs cancel the imaginary
 // part exactly, up to round-off noise).
-keel::Array<double> polyFromRoots(keel::ArrayRef<keel::c64> rts) {
+keel::Array<keel::f64> polyFromRoots(keel::ArrayRef<keel::c64> rts) {
     keel::Array<keel::c64> c{keel::c64{1.0, 0.0}};
     for (const auto &r : rts) {
         keel::Array<keel::c64> nc(c.size() + 1, keel::c64{0.0, 0.0});
         for (keel::usize i = 0; i < c.size(); ++i) { nc[i] += c[i]; nc[i + 1] -= c[i] * r; }
         c = keel::move(nc);
     }
-    keel::Array<double> out(c.size());
+    keel::Array<keel::f64> out(c.size());
     for (keel::usize i = 0; i < c.size(); ++i) out[i] = c[i].real();
     return out;
 }
 
-Value taggedStruct(const char *kind, double Ts, keel::Allocator *mr) {
+Value taggedStruct(const char *kind, keel::f64 Ts, keel::Allocator *mr) {
     Value s = Value::structure(mr);
     s.field("kind") = Value::fromString(kind, mr);
     s.field("Ts") = Value::scalar(Ts, mr);
@@ -393,15 +393,15 @@ Value taggedStruct(const char *kind, double Ts, keel::Allocator *mr) {
 // nearest surviving zero within tol — symmetric, so conjugate pairs cancel
 // together and the rebuilt polynomials stay real.
 std::pair<Value, Value>
-cancelTf(const Value &numV, const Value &denV, double tol,
+cancelTf(const Value &numV, const Value &denV, keel::f64 tol,
          keel::Allocator *mr) {
     auto numS = stripLeading(coeffsReal(numV));
     auto denS = stripLeading(coeffsReal(denV));
     if (denS.empty())
         throw Error("minreal: denominator is identically zero",
                     0, 0, "minreal", "", "numkit:minreal:den");
-    const double numLead = numS.empty() ? 0.0 : numS.front();
-    const double denLead = denS.front();
+    const keel::f64 numLead = numS.empty() ? 0.0 : numS.front();
+    const keel::f64 denLead = denS.front();
 
     auto z = rootsComplex(numV, mr);
     auto p = rootsComplex(denV, mr);
@@ -410,10 +410,10 @@ cancelTf(const Value &numV, const Value &denV, double tol,
     keel::Array<keel::c64> remP, remZ;
     for (const auto &pj : p) {
         int best = -1;
-        double bd = std::numeric_limits<double>::max();
+        keel::f64 bd = std::numeric_limits<keel::f64>::max();
         for (keel::usize i = 0; i < z.size(); ++i)
             if (!zused[i]) {
-                const double d = keel::abs(z[i] - pj);
+                const keel::f64 d = keel::abs(z[i] - pj);
                 if (d < bd) { bd = d; best = keel::as<int>(i); }
             }
         if (best >= 0 && bd <= tol * std::max(1.0, keel::abs(pj))) zused[best] = 1;
@@ -444,9 +444,9 @@ void minreal_argcheck(const Value &sys)
 
 } // anonymous
 
-Value minreal(const Value &sys, double tol, keel::Allocator *mr) {
+Value minreal(const Value &sys, keel::f64 tol, keel::Allocator *mr) {
     minreal_argcheck(sys);
-    if (tol <= 0.0) tol = std::sqrt(std::numeric_limits<double>::epsilon());
+    if (tol <= 0.0) tol = std::sqrt(std::numeric_limits<keel::f64>::epsilon());
 
     if (isKind(sys, "tf")) {
         auto [n2, d2] = cancelTf(sys.field("num"), sys.field("den"), tol, mr);

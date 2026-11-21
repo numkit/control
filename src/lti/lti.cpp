@@ -43,12 +43,12 @@ Value rowVec(const Value &v, keel::Allocator *mr) {
         return r;
     }
     Value r = Value::matrix(1, N, ValueType::DOUBLE, mr);
-    double *rd = r.doubleDataMut();
+    keel::f64 *rd = r.doubleDataMut();
     for (keel::usize i = 0; i < N; ++i) rd[i] = v.elemAsDouble(i);
     return r;
 }
 
-Value tagStruct(const char *kind, double Ts, keel::Allocator *mr) {
+Value tagStruct(const char *kind, keel::f64 Ts, keel::Allocator *mr) {
     Value s = Value::structure(mr);
     s.field("kind") = Value::fromString(kind, mr);
     s.field("Ts") = Value::scalar(Ts, mr);
@@ -154,7 +154,7 @@ bool tf_argcheck(const Value &num, const Value &den, Value &numOut, Value &denOu
     return false;
 }
 
-void zpk_argcheck(const Value &z, const Value &p, double k, double Ts)
+void zpk_argcheck(const Value &z, const Value &p, keel::f64 k, keel::f64 Ts)
 {
     (void)z;
     (void)p;
@@ -181,7 +181,7 @@ void frd_argcheck(const Value &response, const Value &frequency)
 
 } // anonymous
 
-Value tf(const Value &num, const Value &den, double Ts, keel::Allocator *mr)
+Value tf(const Value &num, const Value &den, keel::f64 Ts, keel::Allocator *mr)
 {
     Value numC, denC;
     if (tf_argcheck(num, den, numC, denC, mr)) {
@@ -196,7 +196,7 @@ Value tf(const Value &num, const Value &den, double Ts, keel::Allocator *mr)
     return s;
 }
 
-Value zpk(const Value &z, const Value &p, double k, double Ts,
+Value zpk(const Value &z, const Value &p, keel::f64 k, keel::f64 Ts,
           keel::Allocator *mr)
 {
     zpk_argcheck(z, p, k, Ts);
@@ -241,8 +241,8 @@ Value expandScalarBlock(const Value &m, keel::usize r, keel::usize c,
         return out;
     }
     Value out = Value::matrix(r, c, ValueType::DOUBLE, mr);
-    const double src = m.elemAsDouble(0);
-    double *od = out.doubleDataMut();
+    const keel::f64 src = m.elemAsDouble(0);
+    keel::f64 *od = out.doubleDataMut();
     for (keel::usize i = 0; i < r * c; ++i) od[i] = src;
     return out;
 }
@@ -279,7 +279,7 @@ void ss_argcheck(const Value &A, const Value &B, const Value &C, const Value &D,
 
 } // anonymous
 
-Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double Ts, keel::Allocator *mr)
+Value ss(const Value &A, const Value &B, const Value &C, const Value &D, keel::f64 Ts, keel::Allocator *mr)
 {
     Value Av, Bv, Cv, Dv;
     ss_argcheck(A, B, C, D, Av, Bv, Cv, Dv, mr);
@@ -297,7 +297,7 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
             return out;
         }
         Value out = Value::matrix(r, c, ValueType::DOUBLE, mr);
-        double *od = out.doubleDataMut();
+        keel::f64 *od = out.doubleDataMut();
         for (keel::usize i = 0; i < r * c; ++i) od[i] = m.elemAsDouble(i);
         return out;
     };
@@ -308,7 +308,7 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, double 
     return s;
 }
 
-Value filt(const Value &num, const Value &den, double Ts, keel::Allocator *mr)
+Value filt(const Value &num, const Value &den, keel::f64 Ts, keel::Allocator *mr)
 {
     Value numC, denC;
     if (filt_argcheck(num, den, numC, denC, mr)) {
@@ -325,7 +325,7 @@ Value filt(const Value &num, const Value &den, double Ts, keel::Allocator *mr)
     return s;
 }
 
-Value frd(const Value &response, const Value &frequency, double Ts, keel::Allocator *mr)
+Value frd(const Value &response, const Value &frequency, keel::f64 Ts, keel::Allocator *mr)
 {
     frd_argcheck(response, frequency);
     Value s = tagStruct("frd", Ts, mr);
@@ -339,12 +339,12 @@ Value frd(const Value &response, const Value &frequency, double Ts, keel::Alloca
         s.field("resp") = std::move(rv);
     } else {
         Value rv = Value::matrix(N, 1, ValueType::DOUBLE, mr);
-        double *rd = rv.doubleDataMut();
+        keel::f64 *rd = rv.doubleDataMut();
         for (keel::usize i = 0; i < N; ++i) rd[i] = response.elemAsDouble(i);
         s.field("resp") = std::move(rv);
     }
     Value fv = Value::matrix(N, 1, ValueType::DOUBLE, mr);
-    double *fd = fv.doubleDataMut();
+    keel::f64 *fd = fv.doubleDataMut();
     for (keel::usize i = 0; i < N; ++i) fd[i] = frequency.elemAsDouble(i);
     s.field("freq") = std::move(fv);
     return s;
@@ -361,9 +361,9 @@ bool lu_decomp(T *A, int *perm, keel::usize n) {
     for (keel::usize i = 0; i < n; ++i) perm[i] = keel::as<int>(i);
     for (keel::usize k = 0; k < n; ++k) {
         keel::usize piv = k;
-        double best = keel::abs(A[k + k * n]);
+        keel::f64 best = keel::abs(A[k + k * n]);
         for (keel::usize i = k + 1; i < n; ++i) {
-            const double v = keel::abs(A[i + k * n]);
+            const keel::f64 v = keel::abs(A[i + k * n]);
             if (v > best) { best = v; piv = i; }
         }
         if (best == 0.0) return false;
@@ -399,14 +399,14 @@ void lu_solve(const T *LU, const int *perm,
     }
 }
 
-bool inverse_n(const Value &T, keel::Array<double> &out, keel::usize n) {
+bool inverse_n(const Value &T, keel::Array<keel::f64> &out, keel::usize n) {
     if (T.dims().rows() != n || T.dims().cols() != n) return false;
-    keel::Array<double> LU(n * n);
+    keel::Array<keel::f64> LU(n * n);
     for (keel::usize i = 0; i < n * n; ++i) LU[i] = T.elemAsDouble(i);
     keel::Array<int> perm(n);
     if (!lu_decomp(LU.data(), perm.data(), n)) return false;
     out.assign(n * n, 0.0);
-    keel::Array<double> ej(n), x(n);
+    keel::Array<keel::f64> ej(n), x(n);
     for (keel::usize k = 0; k < n; ++k) {
         std::fill(ej.begin(), ej.end(), 0.0);
         ej[k] = 1.0;
@@ -453,10 +453,10 @@ void matmul_n(const keel::Array<T> &A, keel::usize aR, keel::usize aC,
         }
 }
 
-keel::Array<double> readMat(const Value &v) {
+keel::Array<keel::f64> readMat(const Value &v) {
     const keel::usize r = v.dims().rows();
     const keel::usize c = v.dims().cols();
-    keel::Array<double> out(r * c);
+    keel::Array<keel::f64> out(r * c);
     for (keel::usize i = 0; i < r * c; ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
@@ -492,7 +492,7 @@ Value padToLen(const Value &row, keel::usize targetLen, keel::Allocator *mr) {
     const keel::usize N = row.numel();
     if (N >= targetLen) return rowVec(row, mr);
     Value out = Value::matrix(1, targetLen, ValueType::DOUBLE, mr);
-    double *od = out.doubleDataMut();
+    keel::f64 *od = out.doubleDataMut();
     const keel::usize pad = targetLen - N;
     for (keel::usize i = 0; i < pad; ++i)     od[i] = 0.0;
     for (keel::usize i = 0; i < N;   ++i)     od[pad + i] = row.elemAsDouble(i);
@@ -517,7 +517,7 @@ Value colVec(const Value &v, keel::Allocator *mr) {
         return r;
     }
     Value r = Value::matrix(N, 1, ValueType::DOUBLE, mr);
-    double *rd = r.doubleDataMut();
+    keel::f64 *rd = r.doubleDataMut();
     for (keel::usize i = 0; i < N; ++i) rd[i] = v.elemAsDouble(i);
     return r;
 }
@@ -663,7 +663,7 @@ frdata(const Value &sys, keel::Allocator *mr)
             return out;
         }
         Value out = Value::matrix(N, 1, ValueType::DOUBLE, mr);
-        double *od = out.doubleDataMut();
+        keel::f64 *od = out.doubleDataMut();
         for (keel::usize i = 0; i < N; ++i) od[i] = v.elemAsDouble(i);
         return out;
     };
@@ -710,25 +710,25 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
         return out;
     }
 
-    keel::Array<double> Tinv;
+    keel::Array<keel::f64> Tinv;
     if (!inverse_n(Tc, Tinv, n))
         throw Error("ss2ss: T is singular",
                     0, 0, "ss2ss", "", "numkit:ss2ss:singular");
 
-    keel::Array<double> Tm = readMat(Tc);
-    keel::Array<double> Am = readMat(Av);
-    keel::Array<double> Bm = readMat(Bv);
-    keel::Array<double> Cm = readMat(Cv);
+    keel::Array<keel::f64> Tm = readMat(Tc);
+    keel::Array<keel::f64> Am = readMat(Av);
+    keel::Array<keel::f64> Bm = readMat(Bv);
+    keel::Array<keel::f64> Cm = readMat(Cv);
 
-    keel::Array<double> M, Anew, Bnew, Cnew;
+    keel::Array<keel::f64> M, Anew, Bnew, Cnew;
     matmul_n(Am, n, n, Tinv, n, n, M);
     matmul_n(Tm, n, n, M, n, n, Anew);
     matmul_n(Tm, n, n, Bm, n, m, Bnew);
     matmul_n(Cm, p, n, Tinv, n, n, Cnew);
 
-    auto putMat = [&](keel::ArrayRef<double> v, keel::usize rr, keel::usize cc) {
+    auto putMat = [&](keel::ArrayRef<keel::f64> v, keel::usize rr, keel::usize cc) {
         Value out = Value::matrix(rr, cc, ValueType::DOUBLE, mr);
-        double *od = out.doubleDataMut();
+        keel::f64 *od = out.doubleDataMut();
         for (keel::usize i = 0; i < rr * cc; ++i) od[i] = v[i];
         return out;
     };

@@ -62,8 +62,8 @@ ABC pullABC(const Value &sys, const char *fn, keel::Allocator *mr) {
 }
 
 // Read a matrix into a column-major double buffer.
-keel::Array<double> readMat(const Value &v, keel::usize r, keel::usize c) {
-    keel::Array<double> M(r * c, 0.0);
+keel::Array<keel::f64> readMat(const Value &v, keel::usize r, keel::usize c) {
+    keel::Array<keel::f64> M(r * c, 0.0);
     for (keel::usize i = 0; i < r * c; ++i) M[i] = v.elemAsDouble(i);
     return M;
 }
@@ -79,7 +79,7 @@ keel::Array<keel::c64> readCMat(const Value &v, keel::usize r, keel::usize c) {
     return M;
 }
 
-Value matFromVec(keel::usize r, keel::usize c, keel::ArrayRef<double> v, keel::Allocator *mr) {
+Value matFromVec(keel::usize r, keel::usize c, keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
@@ -172,19 +172,19 @@ Value ctrb_AB(const Value &Av, const Value &Bv, keel::Allocator *mr)
 
     // Output Co is n × (n·m), column-major. Block k (k=0..n-1) holds
     // A^k · B at columns [k·m … k·m + m − 1].
-    keel::Array<double> Co(n * (n * m), 0.0);
+    keel::Array<keel::f64> Co(n * (n * m), 0.0);
     // Block 0 = B.
     for (keel::usize j = 0; j < m; ++j)
         for (keel::usize i = 0; i < n; ++i)
             Co[j * n + i] = B[j * n + i];
     // Blocks 1..n-1 by repeated multiplication: prev = A^k · B,
     // next = A · prev.
-    keel::Array<double> prev = B.clone();
+    keel::Array<keel::f64> prev = B.clone();
     for (keel::usize k = 1; k < n; ++k) {
-        keel::Array<double> next(n * m, 0.0);
+        keel::Array<keel::f64> next(n * m, 0.0);
         for (keel::usize j = 0; j < m; ++j)
             for (keel::usize i = 0; i < n; ++i) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize l = 0; l < n; ++l)
                     s += A[l * n + i] * prev[j * n + l];
                 next[j * n + i] = s;
@@ -242,18 +242,18 @@ Value obsv_AC(const Value &Av, const Value &Cv, keel::Allocator *mr)
 
     // Output Ob is (n·p) × n, column-major. Block k (k=0..n-1) holds
     // C · A^k at rows [k·p … k·p + p − 1].
-    keel::Array<double> Ob((n * p) * n, 0.0);
+    keel::Array<keel::f64> Ob((n * p) * n, 0.0);
     // Block 0 = C.
     for (keel::usize j = 0; j < n; ++j)
         for (keel::usize i = 0; i < p; ++i)
             Ob[j * (n * p) + i] = C[j * p + i];
     // Walk k = 1..n-1: next = prev · A.
-    keel::Array<double> prev = C.clone();
+    keel::Array<keel::f64> prev = C.clone();
     for (keel::usize k = 1; k < n; ++k) {
-        keel::Array<double> next(p * n, 0.0);
+        keel::Array<keel::f64> next(p * n, 0.0);
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < p; ++i) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize l = 0; l < n; ++l)
                     s += prev[l * p + i] * A[j * n + l];
                 next[j * p + i] = s;
@@ -290,14 +290,14 @@ Value gram(const Value &sys, const Value &type, keel::Allocator *mr)
     //   'c': A·Wc + Wc·Aᵀ + B·Bᵀ = 0   → lyap(A,  B·Bᵀ)
     //   'o': Aᵀ·Wo + Wo·A + Cᵀ·C = 0   → lyap(Aᵀ, Cᵀ·C)
     auto A = readMat(abc.A, n, n);
-    keel::Array<double> Q(n * n, 0.0);
+    keel::Array<keel::f64> Q(n * n, 0.0);
     Value Ause;
     if (t == 'c') {
         const keel::usize m = abc.B.dims().cols();
         auto B = readMat(abc.B, n, m);
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < n; ++i) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize k = 0; k < m; ++k) s += B[k * n + i] * B[k * n + j];  // (B·Bᵀ)[i,j]
                 Q[j * n + i] = s;
             }
@@ -307,11 +307,11 @@ Value gram(const Value &sys, const Value &type, keel::Allocator *mr)
         auto C = readMat(abc.C, p, n);   // p×n column-major: C[i,j] = C[j*p + i]
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < n; ++i) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize k = 0; k < p; ++k) s += C[i * p + k] * C[j * p + k];  // (Cᵀ·C)[i,j]
                 Q[j * n + i] = s;
             }
-        keel::Array<double> At(n * n, 0.0);
+        keel::Array<keel::f64> At(n * n, 0.0);
         for (keel::usize j = 0; j < n; ++j)
             for (keel::usize i = 0; i < n; ++i) At[j * n + i] = A[i * n + j];   // Aᵀ
         Ause = matFromVec(n, n, At, mr);
@@ -336,17 +336,17 @@ CovarResult covar(const Value &sys, const Value &Wv, keel::Allocator *mr)
 
     // Noise intensity: scalar W → W·I_m, or a full m×m matrix.
     const bool wScalar = (Wv.numel() == 1);
-    const keel::Array<double> W = wScalar ? keel::Array<double>{} : readMat(Wv, m, m);
-    const double wval = wScalar ? Wv.toScalar() : 0.0;
-    auto Wij = [&](keel::usize i, keel::usize j) -> double {
+    const keel::Array<keel::f64> W = wScalar ? keel::Array<keel::f64>{} : readMat(Wv, m, m);
+    const keel::f64 wval = wScalar ? Wv.toScalar() : 0.0;
+    auto Wij = [&](keel::usize i, keel::usize j) -> keel::f64 {
         return wScalar ? (i == j ? wval : 0.0) : W[j * m + i];
     };
 
     // State covariance Q solves the gramian Lyapunov equation with B·W·Bᵀ.
-    keel::Array<double> BWBt(n * n, 0.0);
+    keel::Array<keel::f64> BWBt(n * n, 0.0);
     for (keel::usize a = 0; a < n; ++a)
         for (keel::usize b = 0; b < n; ++b) {
-            double s = 0.0;
+            keel::f64 s = 0.0;
             for (keel::usize i = 0; i < m; ++i)
                 for (keel::usize j = 0; j < m; ++j)
                     s += B[i * n + a] * Wij(i, j) * B[j * n + b];   // B[a,i]·W[i,j]·B[b,j]
@@ -357,28 +357,28 @@ CovarResult covar(const Value &sys, const Value &Wv, keel::Allocator *mr)
 
     // Output covariance P = C·Q·Cᵀ (+ D·W·Dᵀ discrete; ∞ if continuous & D≠0).
     auto Qm = readMat(Q, n, n);
-    keel::Array<double> P(p * p, 0.0);
+    keel::Array<keel::f64> P(p * p, 0.0);
     for (keel::usize a = 0; a < p; ++a)
         for (keel::usize b = 0; b < p; ++b) {
-            double s = 0.0;
+            keel::f64 s = 0.0;
             for (keel::usize i = 0; i < n; ++i)
                 for (keel::usize j = 0; j < n; ++j)
                     s += C[i * p + a] * Qm[j * n + i] * C[j * p + b];   // C[a,i]·Q[i,j]·C[b,j]
             P[b * p + a] = s;
         }
     bool dNonzero = false;
-    for (double d : D) if (d != 0.0) { dNonzero = true; break; }
+    for (keel::f64 d : D) if (d != 0.0) { dNonzero = true; break; }
     if (discrete) {
         for (keel::usize a = 0; a < p; ++a)
             for (keel::usize b = 0; b < p; ++b) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize i = 0; i < m; ++i)
                     for (keel::usize j = 0; j < m; ++j)
                         s += D[i * p + a] * Wij(i, j) * D[j * p + b];   // D·W·Dᵀ
                 P[b * p + a] += s;
             }
     } else if (dNonzero) {
-        std::fill(P.begin(), P.end(), std::numeric_limits<double>::infinity());
+        std::fill(P.begin(), P.end(), std::numeric_limits<keel::f64>::infinity());
     }
 
     CovarResult out;

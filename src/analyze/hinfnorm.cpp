@@ -53,7 +53,7 @@ bool hasKind(const Value &sys, const char *want) {
     return sys.field("kind").toString() == want;
 }
 
-double sampleTime(const Value &sys) {
+keel::f64 sampleTime(const Value &sys) {
     if (sys.isStruct() && sys.hasField("Ts")) return sys.field("Ts").toScalar();
     return 0.0;
 }
@@ -87,7 +87,7 @@ Mat matmul(const Mat &A, keel::usize ra, keel::usize ca, const Mat &B, keel::usi
     Mat C(ra * cb, 0.0);
     for (keel::usize j = 0; j < cb; ++j)
         for (keel::usize k = 0; k < ca; ++k) {
-            const double b = B[j * ca + k];
+            const keel::f64 b = B[j * ca + k];
             if (b == 0.0) continue;
             for (keel::usize i = 0; i < ra; ++i)
                 C[j * ra + i] += A[k * ra + i] * b;
@@ -113,7 +113,7 @@ bool inverse(const Mat &A, keel::usize n, Mat &out) {
 // Largest singular value of a real r×c matrix via Rayleigh power
 // iteration on the smaller Gram matrix. The Rayleigh quotient never
 // exceeds λ_max, so the returned value is ≤ σ_max — a SAFE lower bracket.
-double sigmaMax(const Mat &M, keel::usize r, keel::usize c) {
+keel::f64 sigmaMax(const Mat &M, keel::usize r, keel::usize c) {
     if (r == 0 || c == 0) return 0.0;
     const keel::usize g = std::min(r, c);
     // Gram = MᵀM (c×c) if c≤r, else MMᵀ (r×r); take the g×g one.
@@ -121,31 +121,31 @@ double sigmaMax(const Mat &M, keel::usize r, keel::usize c) {
     if (c <= r) {
         for (keel::usize a = 0; a < c; ++a)
             for (keel::usize b = 0; b < c; ++b) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize k = 0; k < r; ++k) s += M[a * r + k] * M[b * r + k];
                 G[b * c + a] = s;   // (MᵀM)[a,b]
             }
     } else {
         for (keel::usize a = 0; a < r; ++a)
             for (keel::usize b = 0; b < r; ++b) {
-                double s = 0.0;
+                keel::f64 s = 0.0;
                 for (keel::usize k = 0; k < c; ++k) s += M[k * r + a] * M[k * r + b];
                 G[b * r + a] = s;   // (MMᵀ)[a,b]
             }
     }
-    keel::Array<double> x(g, 1.0), y(g, 0.0);
-    double lambda = 0.0;
+    keel::Array<keel::f64> x(g, 1.0), y(g, 0.0);
+    keel::f64 lambda = 0.0;
     for (int it = 0; it < 200; ++it) {
         for (keel::usize i = 0; i < g; ++i) {
-            double s = 0.0;
+            keel::f64 s = 0.0;
             for (keel::usize k = 0; k < g; ++k) s += G[k * g + i] * x[k];
             y[i] = s;
         }
-        double num = 0.0, den = 0.0;
+        keel::f64 num = 0.0, den = 0.0;
         for (keel::usize i = 0; i < g; ++i) { num += x[i] * y[i]; den += x[i] * x[i]; }
         if (den <= 0.0) break;
         lambda = num / den;                       // Rayleigh quotient ≤ λ_max
-        double nrm = 0.0;
+        keel::f64 nrm = 0.0;
         for (keel::usize i = 0; i < g; ++i) nrm += y[i] * y[i];
         nrm = std::sqrt(nrm);
         if (nrm <= 0.0) break;
@@ -173,7 +173,7 @@ keel::Array<keel::c64> eigOf(const Mat &M, keel::usize n, keel::Allocator *mr) {
 // Does the Hamiltonian M(γ) have a purely imaginary eigenvalue?
 // (γ ≤ σ_max(D) ⇒ R not positive-definite ⇒ treat as "yes".)
 bool hasImagEig(const Mat &A, const Mat &B, const Mat &C, const Mat &D,
-                keel::usize n, keel::usize m, keel::usize p, double gamma, double sigD,
+                keel::usize n, keel::usize m, keel::usize p, keel::f64 gamma, keel::f64 sigD,
                 keel::Allocator *mr)
 {
     if (gamma <= sigD * (1.0 + 1e-12)) return true;
@@ -218,9 +218,9 @@ bool hasImagEig(const Mat &A, const Mat &B, const Mat &C, const Mat &D,
         }
 
     auto ev = eigOf(M, k, mr);
-    double scale = 1.0;
+    keel::f64 scale = 1.0;
     for (const auto &e : ev) scale = std::max(scale, keel::abs(e));
-    const double tol = 1e-7 * scale;
+    const keel::f64 tol = 1e-7 * scale;
     for (const auto &e : ev)
         if (keel::abs(e.real()) < tol && keel::abs(e.imag()) > tol) return true;
     return false;
@@ -254,10 +254,10 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
     // and static gains. (Its Inf-with-warning answer for plain structs
     // is a dispatch accident we deliberately do not mirror.)
     if (hinfnorm_argcheck(sys)) {
-        const double g = sys.isComplex()
+        const keel::f64 g = sys.isComplex()
             ? keel::abs(sys.complexData()[0]) : keel::abs(sys.elemAsDouble(0));
         Value out = Value::matrix(1, 3, ValueType::DOUBLE, mr);
-        double *od = out.doubleDataMut();
+        keel::f64 *od = out.doubleDataMut();
         od[0] = g; od[1] = g; od[2] = 0.0;
         return out;
     }
@@ -272,7 +272,7 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
         throw Error("hinfnorm: A must be square",
                     0, 0, "hinfnorm", "", "numkit:hinfnorm:A");
 
-    const double inf = std::numeric_limits<double>::infinity();
+    const keel::f64 inf = std::numeric_limits<keel::f64>::infinity();
     Value g = Value::scalar(0.0, mr);
 
     // n == 0 (static gain): ‖G‖∞ = σ_max(D).
@@ -280,14 +280,14 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
     auto B = (n ? readMat(ss.B, n, m) : Mat{});
     auto C = (n ? readMat(ss.C, p, n) : Mat{});
     auto D = readMat(ss.D, p, m);
-    double sigD = sigmaMax(D, p, m);
+    keel::f64 sigD = sigmaMax(D, p, m);
 
     if (n == 0) { g = Value::scalar(sigD, mr); return g; }
 
     if (discrete) {
         // Unstable / unit-circle poles (|λ| >= 1) → Inf.
         auto ev = eigOf(A, n, mr);
-        double maxAbs = 0.0;
+        keel::f64 maxAbs = 0.0;
         for (const auto &e : ev) maxAbs = std::max(maxAbs, keel::abs(e));
         if (maxAbs >= 1.0 - 1e-9) { g = Value::scalar(inf, mr); return g; }
 
@@ -309,9 +309,9 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
         Mat MiB = matmul(Mi, n, n, B, m);
         Mat CMi = matmul(C, p, n, Mi, n);
         Mat CMiB = matmul(C, p, n, MiB, m);
-        const double s2 = std::sqrt(2.0);
-        for (double &v : MiB) v *= s2;
-        for (double &v : CMi) v *= s2;
+        const keel::f64 s2 = std::sqrt(2.0);
+        for (keel::f64 &v : MiB) v *= s2;
+        for (keel::f64 &v : CMi) v *= s2;
         Mat Dc(p * m);
         for (keel::usize i = 0; i < p * m; ++i) Dc[i] = D[i] - CMiB[i];
         A = std::move(Ac);
@@ -322,14 +322,14 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
     } else {
         // Unstable / jω-axis poles → Inf.
         auto ev = eigOf(A, n, mr);
-        double maxRe = -inf;
+        keel::f64 maxRe = -inf;
         for (const auto &e : ev) maxRe = std::max(maxRe, e.real());
         if (maxRe >= -1e-9) { g = Value::scalar(inf, mr); return g; }
     }
 
     // Lower bracket: max frequency-point gain we can read cheaply —
     // the DC gain G(0) = D − C·A⁻¹·B and the ω→∞ gain D. Both ≤ ‖G‖∞.
-    double lb = sigD;
+    keel::f64 lb = sigD;
     {
         Mat Ai;
         if (inverse(A, n, Ai)) {
@@ -343,15 +343,15 @@ Value hinfnorm(const Value &sys, keel::Allocator *mr)
 
     // Bisect: lo a valid lower bracket (M(lo) has imag eig), hi an upper
     // bound found by doubling.
-    double lo = lb;
-    double hi = (lb > 0.0 ? lb : 1.0) * (1.0 + 1e-6) + 1e-300;
+    keel::f64 lo = lb;
+    keel::f64 hi = (lb > 0.0 ? lb : 1.0) * (1.0 + 1e-6) + 1e-300;
     int grow = 0;
     while (hasImagEig(A, B, C, D, n, m, p, hi, sigD, mr)) {
         hi *= 2.0;
         if (++grow > 80) { g = Value::scalar(inf, mr); return g; }
     }
     for (int it = 0; it < 200; ++it) {
-        const double mid = 0.5 * (lo + hi);
+        const keel::f64 mid = 0.5 * (lo + hi);
         if (mid <= lo || mid >= hi) break;       // converged to FP resolution
         if (hasImagEig(A, B, C, D, n, m, p, mid, sigD, mr)) lo = mid;
         else hi = mid;

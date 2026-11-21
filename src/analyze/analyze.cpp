@@ -38,35 +38,35 @@ namespace numkit::control {
 
 namespace {
 
-[[maybe_unused]] double sampleTime(const Value &sys) {
+[[maybe_unused]] keel::f64 sampleTime(const Value &sys) {
     if (sys.isStruct() && sys.hasField("Ts"))
         return sys.field("Ts").toScalar();
     return 0.0;
 }
 
-keel::Array<double> readCol(const Value &v) {
-    keel::Array<double> out(v.numel());
+keel::Array<keel::f64> readCol(const Value &v) {
+    keel::Array<keel::f64> out(v.numel());
     for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
 // Find the first index k where signal `s[k]` crosses level `lvl`
 // (linear interpolation between samples). Returns -1 if no crossing.
-struct CrossResult { bool found; double w; double yAtCross; };
+struct CrossResult { bool found; keel::f64 w; keel::f64 yAtCross; };
 
-CrossResult crossAt(keel::ArrayRef<double> x,
-                    keel::ArrayRef<double> y,
-                    double lvl)
+CrossResult crossAt(keel::ArrayRef<keel::f64> x,
+                    keel::ArrayRef<keel::f64> y,
+                    keel::f64 lvl)
 {
     for (keel::usize i = 1; i < y.size(); ++i) {
-        const double a = y[i - 1] - lvl;
-        const double b = y[i] - lvl;
+        const keel::f64 a = y[i - 1] - lvl;
+        const keel::f64 b = y[i] - lvl;
         if (a == 0.0)
             return {true, x[i - 1], y[i - 1]};
         if ((a < 0.0) != (b < 0.0)) {
-            const double t = a / (a - b);   // 0..1
-            const double w = x[i - 1] + t * (x[i] - x[i - 1]);
-            const double yv = y[i - 1] + t * (y[i] - y[i - 1]);
+            const keel::f64 t = a / (a - b);   // 0..1
+            const keel::f64 w = x[i - 1] + t * (x[i] - x[i - 1]);
+            const keel::f64 yv = y[i - 1] + t * (y[i] - y[i - 1]);
             return {true, w, yv};
         }
     }
@@ -74,16 +74,16 @@ CrossResult crossAt(keel::ArrayRef<double> x,
 }
 
 // Interpolate y at x = x0 (assumes x sorted ascending).
-double interpAt(keel::ArrayRef<double> x,
-                keel::ArrayRef<double> y,
-                double x0)
+keel::f64 interpAt(keel::ArrayRef<keel::f64> x,
+                keel::ArrayRef<keel::f64> y,
+                keel::f64 x0)
 {
     if (x.empty()) return 0.0;
     if (x0 <= x.front()) return y.front();
     if (x0 >= x.back()) return y.back();
     auto it = std::upper_bound(x.begin(), x.end(), x0);
     const keel::usize j = it - x.begin();
-    const double t = (x0 - x[j - 1]) / (x[j] - x[j - 1]);
+    const keel::f64 t = (x0 - x[j - 1]) / (x[j] - x[j - 1]);
     return y[j - 1] + t * (y[j] - y[j - 1]);
 }
 
@@ -147,22 +147,22 @@ MarginResult margin(const Value &sys, keel::Allocator *mr)
     auto pc = crossAt(w, phase, -180.0);
     // Gain crossover (where |H| = 1, equivalently 0 dB). We scan the
     // *log* magnitude so a linear interpolation matches the bode plot.
-    keel::Array<double> magLog(mag.size());
+    keel::Array<keel::f64> magLog(mag.size());
     for (keel::usize i = 0; i < mag.size(); ++i)
         magLog[i] = (mag[i] > 0.0) ? 20.0 * std::log10(mag[i])
                                    : -300.0;
     auto gc = crossAt(w, magLog, 0.0);
 
-    const double inf = std::numeric_limits<double>::infinity();
-    double Gm = inf, Pm = inf, Wcg = inf, Wcp = inf;
+    const keel::f64 inf = std::numeric_limits<keel::f64>::infinity();
+    keel::f64 Gm = inf, Pm = inf, Wcg = inf, Wcp = inf;
     if (pc.found) {
         Wcg = pc.w;
-        const double magAtPc = interpAt(w, mag, Wcg);
+        const keel::f64 magAtPc = interpAt(w, mag, Wcg);
         Gm = (magAtPc > 0.0) ? 1.0 / magAtPc : inf;
     }
     if (gc.found) {
         Wcp = gc.w;
-        const double phAtGc = interpAt(w, phase, Wcp);
+        const keel::f64 phAtGc = interpAt(w, phase, Wcp);
         Pm = phAtGc + 180.0;
     }
 
@@ -175,10 +175,10 @@ MarginResult margin(const Value &sys, keel::Allocator *mr)
 namespace {
 
 // Open-loop (num, den) of an LTI struct as descending-power coefficient rows.
-std::pair<keel::Array<double>, keel::Array<double>>
+std::pair<keel::Array<keel::f64>, keel::Array<keel::f64>>
 openLoopNumDen(const Value &sys, keel::Allocator *mr) {
     auto coeffs = [](const Value &v) {
-        keel::Array<double> c(v.numel());
+        keel::Array<keel::f64> c(v.numel());
         for (keel::usize i = 0; i < v.numel(); ++i) c[i] = v.elemAsDouble(i);
         return c;
     };
@@ -200,36 +200,36 @@ openLoopNumDen(const Value &sys, keel::Allocator *mr) {
                 0, 0, "allmargin", "", "numkit:allmargin:kind");
 }
 
-Value rowFrom(keel::ArrayRef<double> v, keel::Allocator *mr) {
+Value rowFrom(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
     for (keel::usize i = 0; i < v.size(); ++i) r.doubleDataMut()[i] = v[i];
     return r;
 }
 
 // Horner evaluation of a descending-power real polynomial at a complex point.
-keel::c64 polyvalC(keel::ArrayRef<double> c, keel::c64 x) {
+keel::c64 polyvalC(keel::ArrayRef<keel::f64> c, keel::c64 x) {
     keel::c64 r(0.0, 0.0);
-    for (double a : c) r = r * x + a;
+    for (keel::f64 a : c) r = r * x + a;
     return r;
 }
 
 // Exact open-loop frequency response G(jω) = num(jω) / den(jω).
-keel::c64 evalG(keel::ArrayRef<double> num,
-                keel::ArrayRef<double> den, double w) {
+keel::c64 evalG(keel::ArrayRef<keel::f64> num,
+                keel::ArrayRef<keel::f64> den, keel::f64 w) {
     const keel::c64 jw(0.0, w);
     const keel::c64 d = polyvalC(den, jw);
     if (d == keel::c64(0.0, 0.0))
-        return {std::numeric_limits<double>::infinity(), 0.0};
+        return {std::numeric_limits<keel::f64>::infinity(), 0.0};
     return polyvalC(num, jw) / d;
 }
 
 // Bisect a scalar f(ω) for its root in [a,b] (sign change assumed), ~60 iters.
 template <class F>
-double bisectRoot(F f, double a, double b) {
-    double fa = f(a);
+keel::f64 bisectRoot(F f, keel::f64 a, keel::f64 b) {
+    keel::f64 fa = f(a);
     for (int it = 0; it < 80; ++it) {
-        const double m = 0.5 * (a + b);
-        const double fm = f(m);
+        const keel::f64 m = 0.5 * (a + b);
+        const keel::f64 fm = f(m);
         if (fm == 0.0 || (b - a) <= 1e-13 * (1.0 + b)) return m;
         if ((fa < 0.0) != (fm < 0.0)) b = m;
         else { a = m; fa = fm; }
@@ -248,22 +248,22 @@ Value allmargin(const Value &sys, keel::Allocator *mr)
     // then bisect each bracket on the exact response.
     auto [num, den] = openLoopNumDen(sys, mr);
 
-    const double inf = std::numeric_limits<double>::infinity();
-    const double PI = 3.14159265358979323846;
+    const keel::f64 inf = std::numeric_limits<keel::f64>::infinity();
+    const keel::f64 PI = 3.14159265358979323846;
 
     // Frequency span from the pole/zero magnitudes (±3 decades).
-    double wlo = 1e-3, whi = 1e3;
+    keel::f64 wlo = 1e-3, whi = 1e3;
     {
-        keel::Array<double> mags;
-        auto addRoots = [&](keel::ArrayRef<double> c) {
+        keel::Array<keel::f64> mags;
+        auto addRoots = [&](keel::ArrayRef<keel::f64> c) {
             if (c.size() < 2) return;
             Value rts = numkit::builtin::roots(rowFrom(c, mr), mr);
             const keel::usize n = rts.numel();
             if (rts.type() == ValueType::COMPLEX) {
                 const keel::c64 *p = rts.complexData();
-                for (keel::usize i = 0; i < n; ++i) { double m = keel::abs(p[i]); if (m > 1e-9) mags.push_back(m); }
+                for (keel::usize i = 0; i < n; ++i) { keel::f64 m = keel::abs(p[i]); if (m > 1e-9) mags.push_back(m); }
             } else {
-                for (keel::usize i = 0; i < n; ++i) { double m = keel::abs(rts.elemAsDouble(i)); if (m > 1e-9) mags.push_back(m); }
+                for (keel::usize i = 0; i < n; ++i) { keel::f64 m = keel::abs(rts.elemAsDouble(i)); if (m > 1e-9) mags.push_back(m); }
             }
         };
         addRoots(num);
@@ -274,40 +274,40 @@ Value allmargin(const Value &sys, keel::Allocator *mr)
         }
     }
 
-    keel::Array<double> gmVal, gmFreq, pmVal, pmFreq, dmVal, dmFreq;
+    keel::Array<keel::f64> gmVal, gmFreq, pmVal, pmFreq, dmVal, dmFreq;
     const int N = 4000;
-    const double llo = std::log10(wlo), lhi = std::log10(whi);
-    double wPrev = wlo;
+    const keel::f64 llo = std::log10(wlo), lhi = std::log10(whi);
+    keel::f64 wPrev = wlo;
     keel::c64 gPrev = evalG(num, den, wPrev);
     for (int i = 1; i <= N; ++i) {
-        const double w = std::pow(10.0, llo + (lhi - llo) * (double)i / N);
+        const keel::f64 w = std::pow(10.0, llo + (lhi - llo) * (keel::f64)i / N);
         const keel::c64 g = evalG(num, den, w);
 
         // Gain crossover: |G| − 1 changes sign → phase + delay margin.
-        const double a = keel::abs(gPrev) - 1.0, b = keel::abs(g) - 1.0;
+        const keel::f64 a = keel::abs(gPrev) - 1.0, b = keel::abs(g) - 1.0;
         if (std::isfinite(a) && std::isfinite(b) && a != 0.0 && (a < 0.0) != (b < 0.0)) {
-            const double wc = bisectRoot(
-                [&](double x) { return keel::abs(evalG(num, den, x)) - 1.0; }, wPrev, w);
+            const keel::f64 wc = bisectRoot(
+                [&](keel::f64 x) { return keel::abs(evalG(num, den, x)) - 1.0; }, wPrev, w);
             const keel::c64 gc = evalG(num, den, wc);
-            double PM = keel::arg(gc) * 180.0 / PI + 180.0;
+            keel::f64 PM = keel::arg(gc) * 180.0 / PI + 180.0;
             while (PM > 180.0) PM -= 360.0;
             while (PM <= -180.0) PM += 360.0;
             pmVal.push_back(PM);
             pmFreq.push_back(wc);
-            double pmRad = PM * PI / 180.0;
+            keel::f64 pmRad = PM * PI / 180.0;
             while (pmRad < 0.0) pmRad += 2.0 * PI;
             dmVal.push_back(wc > 0.0 ? pmRad / wc : inf);
             dmFreq.push_back(wc);
         }
 
         // Phase crossover: Im(G) changes sign and Re(G) < 0 → ∠G = ±180°.
-        const double ia = gPrev.imag(), ib = g.imag();
+        const keel::f64 ia = gPrev.imag(), ib = g.imag();
         if (std::isfinite(ia) && std::isfinite(ib) && ia != 0.0 && (ia < 0.0) != (ib < 0.0)) {
-            const double wc = bisectRoot(
-                [&](double x) { return evalG(num, den, x).imag(); }, wPrev, w);
+            const keel::f64 wc = bisectRoot(
+                [&](keel::f64 x) { return evalG(num, den, x).imag(); }, wPrev, w);
             const keel::c64 gc = evalG(num, den, wc);
             if (gc.real() < 0.0) {
-                const double m = keel::abs(gc);
+                const keel::f64 m = keel::abs(gc);
                 gmVal.push_back(m > 0.0 ? 1.0 / m : inf);
                 gmFreq.push_back(wc);
             }
@@ -320,12 +320,12 @@ Value allmargin(const Value &sys, keel::Allocator *mr)
     bool stable = true;
     {
         const keel::usize L = std::max(num.size(), den.size());
-        keel::Array<double> cl(L, 0.0);
+        keel::Array<keel::f64> cl(L, 0.0);
         for (keel::usize i = 0; i < den.size(); ++i) cl[L - den.size() + i] += den[i];
         for (keel::usize i = 0; i < num.size(); ++i) cl[L - num.size() + i] += num[i];
         keel::usize s0 = 0;
         while (s0 + 1 < cl.size() && cl[s0] == 0.0) ++s0;
-        keel::ArrayRef<double> clTrim = cl.slice(s0);
+        keel::ArrayRef<keel::f64> clTrim = cl.slice(s0);
         if (clTrim.size() >= 2) {
             Value rts = numkit::builtin::roots(rowFrom(clTrim, mr), mr);
             const keel::usize n = rts.numel();
@@ -366,62 +366,62 @@ Value stepinfo(const Value &sys, keel::Allocator *mr)
         Value s = Value::structure(mr);
         return s;
     }
-    const double Tfinal = t.back();
+    const keel::f64 Tfinal = t.back();
     // Re-grid out to 2× Tfinal.
     Value tArg = Value::scalar(2.0 * Tfinal, mr);
     auto [y1, t1] = step_response(sys, tArg, /*xOut=*/nullptr, mr);
     t = readCol(t1);
     y = readCol(y1);
 
-    const double yfinal = y.back();
-    const double absYf = keel::abs(yfinal);
-    const double band = 0.02 * absYf;        // 2% settling band
+    const keel::f64 yfinal = y.back();
+    const keel::f64 absYf = keel::abs(yfinal);
+    const keel::f64 band = 0.02 * absYf;        // 2% settling band
 
     // Peak / peak time.
-    double peak = keel::abs(y[0]);
-    double peakTime = t[0];
+    keel::f64 peak = keel::abs(y[0]);
+    keel::f64 peakTime = t[0];
     for (keel::usize i = 0; i < y.size(); ++i) {
-        const double a = keel::abs(y[i]);
+        const keel::f64 a = keel::abs(y[i]);
         if (a > peak) { peak = a; peakTime = t[i]; }
     }
 
     // Overshoot / undershoot (only if yfinal != 0).
-    double overshoot = 0.0;
-    double undershoot = 0.0;
+    keel::f64 overshoot = 0.0;
+    keel::f64 undershoot = 0.0;
     if (yfinal > 0.0) {
-        double maxY = y[0];
-        for (double v : y) maxY = std::max(maxY, v);
+        keel::f64 maxY = y[0];
+        for (keel::f64 v : y) maxY = std::max(maxY, v);
         overshoot = std::max(0.0, 100.0 * (maxY - yfinal) / yfinal);
-        double minBeforePeak = 0.0;
-        for (double v : y) {
+        keel::f64 minBeforePeak = 0.0;
+        for (keel::f64 v : y) {
             if (v < minBeforePeak) minBeforePeak = v;
         }
         undershoot = std::max(0.0, 100.0 * (-minBeforePeak) / yfinal);
     } else if (yfinal < 0.0) {
-        double minY = y[0];
-        for (double v : y) minY = std::min(minY, v);
+        keel::f64 minY = y[0];
+        for (keel::f64 v : y) minY = std::min(minY, v);
         overshoot = std::max(0.0, 100.0 * (minY - yfinal) / yfinal);
     }
 
     // Rise time: 10 % → 90 % of yfinal (sign-aware).
-    double riseTime = std::numeric_limits<double>::quiet_NaN();
+    keel::f64 riseTime = std::numeric_limits<keel::f64>::quiet_NaN();
     if (absYf > 0.0) {
-        const double y10 = 0.1 * yfinal;
-        const double y90 = 0.9 * yfinal;
+        const keel::f64 y10 = 0.1 * yfinal;
+        const keel::f64 y90 = 0.9 * yfinal;
         // Find first sample crossing y10, then first subsequent crossing y90.
-        double t10 = std::numeric_limits<double>::quiet_NaN();
-        double t90 = std::numeric_limits<double>::quiet_NaN();
+        keel::f64 t10 = std::numeric_limits<keel::f64>::quiet_NaN();
+        keel::f64 t90 = std::numeric_limits<keel::f64>::quiet_NaN();
         for (keel::usize i = 1; i < y.size(); ++i) {
-            const double a = y[i - 1] - y10;
-            const double b = y[i] - y10;
+            const keel::f64 a = y[i - 1] - y10;
+            const keel::f64 b = y[i] - y10;
             if ((a < 0.0) != (b < 0.0) && std::isnan(t10)) {
-                const double tt = a / (a - b);
+                const keel::f64 tt = a / (a - b);
                 t10 = t[i - 1] + tt * (t[i] - t[i - 1]);
             }
-            const double a9 = y[i - 1] - y90;
-            const double b9 = y[i] - y90;
+            const keel::f64 a9 = y[i - 1] - y90;
+            const keel::f64 b9 = y[i] - y90;
             if ((a9 < 0.0) != (b9 < 0.0)) {
-                const double tt = a9 / (a9 - b9);
+                const keel::f64 tt = a9 / (a9 - b9);
                 t90 = t[i - 1] + tt * (t[i] - t[i - 1]);
                 if (!std::isnan(t10)) break;
             }
@@ -431,7 +431,7 @@ Value stepinfo(const Value &sys, keel::Allocator *mr)
     }
 
     // Settling time: last index where |y - yfinal| > band.
-    double settlingTime = 0.0;
+    keel::f64 settlingTime = 0.0;
     for (keel::usize i = 0; i < y.size(); ++i) {
         if (keel::abs(y[i] - yfinal) > band)
             settlingTime = t[i];
@@ -442,17 +442,17 @@ Value stepinfo(const Value &sys, keel::Allocator *mr)
     // |yinit-yfinal|. For a standard step the peak deviation occurs at t=0 and
     // equals |yfinal| (yinit=0), so TransientTime == SettlingTime; it can be
     // smaller when |y-yfinal| overshoots past |yfinal|.
-    double peakDev = 0.0;
+    keel::f64 peakDev = 0.0;
     for (keel::usize i = 0; i < y.size(); ++i)
         peakDev = std::max(peakDev, keel::abs(y[i] - yfinal));
-    const double transBand = 0.02 * peakDev;
-    double transientTime = 0.0;
+    const keel::f64 transBand = 0.02 * peakDev;
+    keel::f64 transientTime = 0.0;
     for (keel::usize i = 0; i < y.size(); ++i) {
         if (keel::abs(y[i] - yfinal) > transBand)
             transientTime = t[i];
     }
     // Min/max within the settling band (after settling).
-    double sMin = yfinal, sMax = yfinal;
+    keel::f64 sMin = yfinal, sMax = yfinal;
     for (keel::usize i = 0; i < y.size(); ++i) {
         if (t[i] >= settlingTime) {
             sMin = std::min(sMin, y[i]);
