@@ -114,6 +114,26 @@ if(NOT TARGET numkit_ops)
     endif()
 endif()
 
+# Dependency: keel::control (zero-STL control-systems numerical kernels)
+if(NOT TARGET keel::control)
+    find_package(keel_control QUIET CONFIG)
+    if(TARGET keel::keel_control AND NOT TARGET keel::control)
+        add_library(keel::control ALIAS keel::keel_control)
+    endif()
+endif()
+if(NOT TARGET keel::control)
+    set(KEEL_CONTROL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../../keelcpp/control/CMakeLists.txt" AND NOT DEFINED FETCHCONTENT_SOURCE_DIR_KEEL_CONTROL)
+        set(FETCHCONTENT_SOURCE_DIR_KEEL_CONTROL "${CMAKE_CURRENT_SOURCE_DIR}/../../../keelcpp/control" CACHE PATH "Local keel_control checkout")
+    endif()
+    FetchContent_Declare(
+        keel_control
+        GIT_REPOSITORY https://github.com/keelcpp/control.git
+        GIT_TAG        2e0cfb8ed6951d89ea274bfbf56bf5ae3934899c
+    )
+    FetchContent_MakeAvailable(keel_control)
+endif()
+
 file(GLOB_RECURSE CONTROL_COMPUTE_SOURCES
     "src/analyze/*.cpp"
     "src/connect/*.cpp"
@@ -147,7 +167,10 @@ target_include_directories(numkit_control_core
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(numkit_control_core PUBLIC numkit_value numkit_sys numkit_ops)
+target_link_libraries(numkit_control_core
+    PUBLIC numkit_value numkit_sys numkit_ops
+    PRIVATE keel::control
+)
 
 if(MSVC)
     target_compile_options(numkit_control_core PRIVATE /W4 /MP /bigobj)

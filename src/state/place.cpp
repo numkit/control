@@ -1,35 +1,23 @@
 // toolboxes/control/src/state/place.cpp
 //
-// Ackermann pole placement for SISO (single-input) systems.
-//
-//   K = [0 … 0 1] · ctrb(A, B)⁻¹ · φ(A),
-//
-// where φ(s) = ∏ (s − p_i) is the desired closed-loop characteristic
-// polynomial. We use numkit::builtin::poly to expand p into coefficients in
-// MATLAB convention (descending powers, leading 1), then evaluate
-// φ(A) by Horner-style matrix multiplications, and finally solve
-// the n×n linear system  ctrb(A, B)ᵀ · Kᵀ = (e_nᵀ · φ(A))ᵀ via the
-// partial-pivot LU kernel.
+// Ackermann pole placement for SISO systems, delegated to keel::control.
 
 #include <keel/array.h>
+#include <keel/control.h>
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
 #include <numkit/control/state/place.hpp>
-#include <numkit/control/state/state.hpp>
 #include <numkit/control/internal/numerics.hpp>
 #include <numkit/control/internal/type_gates.hpp>
 
 #include <numkit/builtin/polyfun.hpp>
 
-// Compute-only TU: Value substrate + Error, no engine. The acker / place
-// builtins (CallContext wrappers) live in state/place_reg.cpp.
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
 #include <algorithm>
-#include <cmath>
 
 namespace numkit::control {
 
@@ -39,8 +27,6 @@ using Mat = internal::Mat;
 using Vec = internal::Vec;
 using CMat = internal::CMat;
 using CVec = internal::CVec;
-using internal::solveInPlace;
-using internal::matmulSq;
 
 Mat readMat(const Value &v, keel::usize r, keel::usize c) {
     Mat M(r * c, 0.0);
@@ -71,38 +57,8 @@ Value rowFromVec(const Vec &v, bool asSingle, keel::Allocator *mr) {
     return r;
 }
 
-Value crowFromVec(const CVec &v, keel::Allocator *mr) {
-    Value r = Value::matrix(1, v.size(), ValueType::COMPLEX, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.complexDataMut());
-    return r;
-}
-
-// φ(A) for desired char poly with coefficients `c` in MATLAB
-// convention: c[0] is leading (highest-degree) coefficient.
-//   φ(A) = c[0]·A^n + c[1]·A^(n-1) + … + c[n]·I
-// Implemented as Horner:
-//   φ(A) = ((( c[0]·I · A + c[1]·I ) · A + c[2]·I ) · A + … ) + c[n]·I
-template <typename T>
-keel::Array<T> phiOfA(const keel::Array<T> &A, keel::usize n, const Vec &c) {
-    keel::Array<T> H(n * n, T(0));
-    for (keel::usize i = 0; i < n; ++i) H[i * n + i] = T(c[0]);
-
-    for (keel::usize k = 1; k <= n; ++k) {
-        H = matmulSq(H, A, n);
-        for (keel::usize i = 0; i < n; ++i) H[i * n + i] += T(c[k]);
-    }
-    return H;
-}
-
 void acker_argcheck(const Value &Av, const Value &Bv, const Value &pv)
 {
-    // acker argcheck (argcheck separation). Classes probed R2025b:
-    // A/B coerce double/single/logical/char; integer matrices fail at
-    // the reference's matmul layer; single anywhere yields a
-    // single-class K; complex A or B yields a complex K.
-    // Complex p is ACCEPTED: conjugate pairs give a real K in both
-    // engines, and non-conjugate sets degenerate to the same real
-    // answer the reference computes ([8 21] probed, with its warning).
     internal::requireCoercibleMatrix(Av, "acker", "A", 1);
     internal::requireNonIntegerMatrix(Av, "acker", "A", 1);
     internal::requireCoercibleMatrix(Bv, "acker", "B", 2);
@@ -139,11 +95,6 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, keel::Allocator *
                              pv.type() == ValueType::SINGLE);
     const bool wantComplex = (Av.isComplex() || Bv.isComplex());
 
-    // Desired characteristic polynomial φ(s) = ∏(s − p_i). Coerce the
-    // pole list to a double buffer (logical/int sets arrive here after
-    // the gates above); complex conjugate sets keep their complex
-    // coefficients through builtin poly, and real(poly(p)) is used per
-    // the reference's acker.m.
     Value pC = internal::coerceToDoubleMatrix(pv, mr);
     Value coeffs = numkit::builtin::poly(pC, mr);
     Vec c(coeffs.numel());
@@ -154,69 +105,23 @@ Value acker(const Value &Av, const Value &Bv, const Value &pv, keel::Allocator *
 
     if (wantComplex) {
         auto A = readCMat(Av, n, n);
-        CMat phi = phiOfA(A, n, c);
-        Value CoV = ctrb_AB(Av, Bv, mr);
-        CMat Co = readCMat(CoV, n, n);
-
-        CMat CoT(n * n, keel::c64(0.0, 0.0));
-        for (keel::usize j = 0; j < n; ++j)
-            for (keel::usize i = 0; i < n; ++i)
-                CoT[j * n + i] = Co[i * n + j];
-
-        CMat eN(n, keel::c64(0.0, 0.0));
-        eN[n - 1] = keel::c64(1.0, 0.0);
-
-        if (!solveInPlace(CoT, eN, n, 1))
+        auto B = readCMat(Bv, n, 1);
+        Value out = Value::matrix(1, n, ValueType::COMPLEX, mr);
+        if (keel::control::acker_from_poly_c64(A, B, c, n, {out.complexDataMut(), n}, mr) !=
+            keel::control::ControlStatus::kOk)
             throw Error("acker: controllability matrix is singular "
                         "(system is uncontrollable)",
                         0, 0, "acker", "", "numkit:acker:singular");
-
-        CVec K(n, keel::c64(0.0, 0.0));
-        for (keel::usize k = 0; k < n; ++k) {
-            keel::c64 s(0.0, 0.0);
-            for (keel::usize j = 0; j < n; ++j)
-                s += eN[j] * phi[k * n + j];
-            K[k] = s;
-        }
-        return crowFromVec(K, mr);
+        return out;
     }
 
     auto A = readMat(Av, n, n);
-
-    // φ(A) — n×n.
-    Mat phi = phiOfA(A, n, c);
-
-    // Co = ctrb(A, B), n×n for SISO.
-    Value CoV = ctrb_AB(Av, Bv, mr);
-    Mat Co = readMat(CoV, n, n);
-
-    // Ackermann's formula:  K = e_nᵀ · Co⁻¹ · φ(A).
-    // Compute in two steps:
-    //   (1) v = e_nᵀ · Co⁻¹     ⟺  Coᵀ · vᵀ = e_n
-    //   (2) K = v · φ(A)         (row × matrix → row)
-    Mat CoT(n * n, 0.0);
-    for (keel::usize j = 0; j < n; ++j)
-        for (keel::usize i = 0; i < n; ++i)
-            CoT[j * n + i] = Co[i * n + j];
-
-    // RHS column = e_n  (last basis vector — entry n-1 is 1).
-    Mat eN(n, 0.0);
-    eN[n - 1] = 1.0;
-
-    if (!solveInPlace(CoT, eN, n, 1))
+    auto B = readMat(Bv, n, 1);
+    Vec K(n, 0.0);
+    if (keel::control::acker_from_poly(A, B, c, n, K, mr) != keel::control::ControlStatus::kOk)
         throw Error("acker: controllability matrix is singular "
                     "(system is uncontrollable)",
                     0, 0, "acker", "", "numkit:acker:singular");
-    // eN now holds vᵀ.  v is a length-n row vector.
-
-    // K[k] = sum_j v[j] · phi[j, k].   (column-major phi: phi[j,k] = phi[k*n + j])
-    Vec K(n, 0.0);
-    for (keel::usize k = 0; k < n; ++k) {
-        double s = 0.0;
-        for (keel::usize j = 0; j < n; ++j)
-            s += eN[j] * phi[k * n + j];
-        K[k] = s;
-    }
     return rowFromVec(K, wantSingle, mr);
 }
 
