@@ -14,6 +14,7 @@
 // for in a function-form environment.
 
 #include <keel/array.h>
+#include <keel/control.h>
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
@@ -287,26 +288,14 @@ DampResult damp(const Value &sys, keel::Allocator *mr)
     damp_argcheck(sys);
     Value p = polesOf(sys, mr);
     auto pv = toComplexVec(p);
-    const bool discrete = (sampleTime(sys) > 0.0);
     const keel::f64 Ts = sampleTime(sys);
     const keel::usize N = pv.size();
 
     Value wn = Value::matrix(N, 1, ValueType::DOUBLE, mr);
     Value zeta = Value::matrix(N, 1, ValueType::DOUBLE, mr);
-    keel::f64 *wd = wn.doubleDataMut();
-    keel::f64 *zd = zeta.doubleDataMut();
-    for (keel::usize i = 0; i < N; ++i) {
-        keel::c64 s = pv[i];
-        if (discrete) {
-            // s-plane equivalent: s = ln(z) / Ts.
-            s = keel::log(s) / Ts;
-        }
-        const keel::f64 wn_i = keel::abs(s);
-        const keel::f64 zeta_i = (wn_i == 0.0) ? 0.0 : -s.real() / wn_i;
-        wd[i] = wn_i;
-        zd[i] = zeta_i;
-    }
-
+    (void)keel::control::damp(pv.as_ref(), Ts,
+                              keel::MutArrayRef<keel::f64>(wn.doubleDataMut(), N),
+                              keel::MutArrayRef<keel::f64>(zeta.doubleDataMut(), N));
     return {std::move(wn), std::move(zeta), std::move(p)};
 }
 

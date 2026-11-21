@@ -129,7 +129,7 @@ if(NOT TARGET keel::control)
     FetchContent_Declare(
         keel_control
         GIT_REPOSITORY https://github.com/keelcpp/control.git
-        GIT_TAG        1f7f58b3a88e65f44437e7f4fc78aa6cb85cb1b3
+        GIT_TAG        be24f12953804a59001a88577ee565f966ca1a8d
     )
     FetchContent_MakeAvailable(keel_control)
 endif()

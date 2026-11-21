@@ -1,47 +1,26 @@
 // toolboxes/control/src/discretize/discretize.cpp
 //
-// c2d / d2c — sample-time conversion. Uses the shared numerical
-// kernels (matrix exponential via [6/6] Padé with scaling/squaring,
-// Van Loan augmented-matrix ZOH discretiser) from
-// toolboxes/control/internal/numerics — same pair the cycle-34 step
-// response already validated. (Cycle 44 DRY: this file used to
-// inline its own copies of expm + LU.)
+// c2d / d2c sample-time conversions delegating numerical kernels to keel::control.
 
 #include <keel/array.h>
+#include <keel/control.h>
 #include <keel/core.h>
 #include <keel/memory.h>
-#include <keel/complex.h>
-#include <keel/math.h>
 #include <keel/string.h>
+#include <numkit/control/conversion/conversion.hpp>
 #include <numkit/control/discretize/discretize.hpp>
 #include <numkit/control/lti/lti.hpp>
-#include <numkit/control/conversion/conversion.hpp>
-#include <numkit/control/internal/numerics.hpp>
 
 #include <numkit/builtin/polyfun.hpp>
-#include <numkit/linalg/matrix_functions.hpp>
-#include <numkit/signal/convolution/convolution.hpp>
-
-// Compute-only TU: Value substrate + Error, no engine. The c2d/d2c builtins
-// (CallContext wrappers) live in discretize_reg.cpp.
-#include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
-#include <numkit/value/argcheck.hpp>
+#include <numkit/value/value.hpp>
 
 #include <algorithm>
-#include <cmath>
+#include <utility>
 
 namespace numkit::control {
 
 namespace {
-
-using Mat = internal::Mat;
-using Vec = internal::Vec;
-using internal::solveInPlace;
-using internal::expm;
-
-Mat zerosM(keel::usize r, keel::usize c) { return Mat(r * c, 0.0); }
-Mat eyeM(keel::usize n) { Mat I(n * n, 0.0); for (keel::usize i = 0; i < n; ++i) I[i * n + i] = 1.0; return I; }
 
 bool hasKind(const Value &sys, const char *want) {
     if (!sys.isStruct() || !sys.hasField("kind")) return false;
@@ -54,49 +33,42 @@ keel::f64 sampleTime(const Value &sys) {
     return 0.0;
 }
 
-Vec coeffsReal(const Value &v) {
-    Vec out(v.numel());
+keel::Array<keel::f64> coeffsReal(const Value &v, keel::Allocator *mr) {
+    keel::Array<keel::f64> out(v.numel(), 0.0, mr);
     for (keel::usize i = 0; i < v.numel(); ++i) out[i] = v.elemAsDouble(i);
     return out;
 }
 
-[[maybe_unused]] Value rowOfDoubles(const Vec &v, keel::Allocator *mr) {
-    Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
-    return r;
-}
-
-Value matFromVec(keel::usize r, keel::usize c, const Vec &v, keel::Allocator *mr) {
+Value matFromVec(keel::usize r, keel::usize c, keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
     if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
-// Pull (A, B, C, D) from any LTI form (continuous or discrete).
 struct SS {
-    keel::usize n;
-    Mat A;
-    Vec B;
-    Vec C;
-    keel::f64 D;
-    keel::f64 Ts;
+    keel::usize n = 0;
+    keel::Array<keel::f64> A;
+    keel::Array<keel::f64> B;
+    keel::Array<keel::f64> C;
+    keel::f64 D = 0.0;
+    keel::f64 Ts = 0.0;
 };
 
 SS toSSiso(const Value &sys, keel::Allocator *mr) {
     Value Av, Bv, Cv, Dv;
-    keel::f64 Ts = sampleTime(sys);
+    const keel::f64 Ts = sampleTime(sys);
     if (hasKind(sys, "ss")) {
         Av = sys.field("A"); Bv = sys.field("B");
         Cv = sys.field("C"); Dv = sys.field("D");
     } else if (hasKind(sys, "tf")) {
-        auto ss = tf2ss(sys.field("num"), sys.field("den"), mr);
-        Av = std::move(ss.A); Bv = std::move(ss.B);
-        Cv = std::move(ss.C); Dv = std::move(ss.D);
+        auto s = tf2ss(sys.field("num"), sys.field("den"), mr);
+        Av = std::move(s.A); Bv = std::move(s.B);
+        Cv = std::move(s.C); Dv = std::move(s.D);
     } else if (hasKind(sys, "zpk")) {
         auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
-        auto ss = tf2ss(num, den, mr);
-        Av = std::move(ss.A); Bv = std::move(ss.B);
-        Cv = std::move(ss.C); Dv = std::move(ss.D);
+        auto s = tf2ss(num, den, mr);
+        Av = std::move(s.A); Bv = std::move(s.B);
+        Cv = std::move(s.C); Dv = std::move(s.D);
     } else {
         throw Error("c2d/d2c: expected an LTI struct (tf/zpk/ss)",
                     0, 0, "discretize", "", "numkit:control:kind");
@@ -104,140 +76,19 @@ SS toSSiso(const Value &sys, keel::Allocator *mr) {
     SS s;
     s.n = Av.dims().rows();
     s.Ts = Ts;
-    s.A.resize(s.n * s.n);
+    s.A = keel::Array<keel::f64>(s.n * s.n, 0.0, mr);
     for (keel::usize i = 0; i < s.n * s.n; ++i) s.A[i] = Av.elemAsDouble(i);
-    s.B.resize(s.n);
+    s.B = keel::Array<keel::f64>(s.n, 0.0, mr);
     for (keel::usize i = 0; i < s.n; ++i) s.B[i] = Bv.elemAsDouble(i);
-    s.C.resize(s.n);
-    for (keel::usize i = 0; i < s.n; ++i) s.C[i] = Cv.elemAsDouble(i * 1 + 0);
+    s.C = keel::Array<keel::f64>(s.n, 0.0, mr);
+    for (keel::usize i = 0; i < s.n; ++i) s.C[i] = Cv.elemAsDouble(i);
     s.D = (Dv.numel() == 0) ? 0.0 : Dv.toScalar();
     return s;
 }
 
-void zohDiscretise(const Mat &A, const Vec &B, keel::usize n, keel::f64 Ts,
-                   Mat &Ad, Vec &Bd)
-{
-    const keel::usize m = n + 1;
-    Mat M = zerosM(m, m);
-    for (keel::usize j = 0; j < n; ++j)
-        for (keel::usize i = 0; i < n; ++i)
-            M[j * m + i] = A[j * n + i] * Ts;
-    for (keel::usize i = 0; i < n; ++i)
-        M[n * m + i] = B[i] * Ts;
-    Mat E = expm(M, m);
-    Ad.assign(n * n, 0.0);
-    Bd.assign(n, 0.0);
-    for (keel::usize j = 0; j < n; ++j)
-        for (keel::usize i = 0; i < n; ++i)
-            Ad[j * n + i] = E[j * m + i];
-    for (keel::usize i = 0; i < n; ++i) Bd[i] = E[n * m + i];
-}
-
-// Tustin (bilinear): A_d = (I + A·Ts/2)·(I − A·Ts/2)^-1
-//                    B_d = (I − A·Ts/2)^-1 · B · √Ts (scaling factor
-//                                                    is √Ts so that
-//                                                    DC gain matches)
-// MATLAB convention: A_d = inv(I − A·Ts/2)·(I + A·Ts/2)
-//                    B_d = √Ts · inv(I − A·Ts/2) · B
-//                    C_d = √Ts · C · inv(I − A·Ts/2)
-//                    D_d = D + (Ts/2) · C · inv(I − A·Ts/2) · B
-// We use the standard (non-frequency-prewarped) form.
-void tustinDiscretise(const Mat &A, const Vec &B, const Vec &C, keel::f64 D,
-                      keel::usize n, keel::f64 Ts,
-                      Mat &Ad, Vec &Bd, Vec &Cd, keel::f64 &Dd)
-{
-    // Build M_minus = I − A·Ts/2  and  M_plus = I + A·Ts/2.
-    Mat Mminus = eyeM(n), Mplus = eyeM(n);
-    for (keel::usize i = 0; i < n * n; ++i) Mminus[i] -= A[i] * (Ts / 2.0);
-    for (keel::usize i = 0; i < n * n; ++i) Mplus[i]  += A[i] * (Ts / 2.0);
-
-    // Solve M_minus · X = M_plus   ⇒  X = inv(M_minus)·M_plus.
-    Mat Mc = Mminus.clone();
-    Mat X  = keel::move(Mplus);
-    if (!solveInPlace(Mc, X, n, n))
-        throw Error("c2d (tustin): I − A·Ts/2 is singular",
-                    0, 0, "c2d", "", "numkit:c2d:singular");
-    Ad = keel::move(X);
-
-    // B_d = √Ts · inv(M_minus) · B.
-    Mat Mc2 = Mminus.clone();
-    Mat Bm(n, 0.0);
-    for (keel::usize i = 0; i < n; ++i) Bm[i] = B[i];
-    if (!solveInPlace(Mc2, Bm, n, 1))
-        throw Error("c2d (tustin): I − A·Ts/2 is singular",
-                    0, 0, "c2d", "", "numkit:c2d:singular");
-    Bd.assign(n, 0.0);
-    const keel::f64 sTs = std::sqrt(Ts);
-    for (keel::usize i = 0; i < n; ++i) Bd[i] = sTs * Bm[i];
-
-    // C_d = √Ts · C · inv(M_minus). Compute via inv(M_minus)^T·Cᵀ.
-    Mat McT(n * n, 0.0);
-    for (keel::usize j = 0; j < n; ++j)
-        for (keel::usize i = 0; i < n; ++i)
-            McT[i * n + j] = Mminus[j * n + i];   // transpose
-    Mat Cm(n, 0.0);
-    for (keel::usize i = 0; i < n; ++i) Cm[i] = C[i];
-    if (!solveInPlace(McT, Cm, n, 1))
-        throw Error("c2d (tustin): I − A·Ts/2 is singular",
-                    0, 0, "c2d", "", "numkit:c2d:singular");
-    Cd.assign(n, 0.0);
-    for (keel::usize i = 0; i < n; ++i) Cd[i] = sTs * Cm[i];
-
-    // D_d = D + (Ts/2) · C · inv(M_minus) · B = D + (Ts/2) · Cm·B (with Cm
-    // computed against the original B, not the scaled one).
-    // Solve M_minus · y = B for y, then D_d = D + (Ts/2)·C·y.
-    Mat Mc3 = Mminus.clone();
-    Mat yvec(n, 0.0);
-    for (keel::usize i = 0; i < n; ++i) yvec[i] = B[i];
-    if (!solveInPlace(Mc3, yvec, n, 1))
-        throw Error("c2d (tustin): I − A·Ts/2 is singular",
-                    0, 0, "c2d", "", "numkit:c2d:singular");
-    keel::f64 cy = 0.0;
-    for (keel::usize i = 0; i < n; ++i) cy += C[i] * yvec[i];
-    Dd = D + (Ts / 2.0) * cy;
-}
-
-// First-order hold (triangle approximation), SISO. Van Loan augmented
-// matrix exp [[A·Ts, B·Ts, 0]; [0, 0, I·Ts]; [0, 0, 0]] → blocks
-// Phi, G1, G2 (the top n rows of cols n, n+1). MATLAB R2025b:
-//   Ad = Phi,  Bd = G1 + Phi·G2/Ts − G2/Ts,  Cd = C,  Dd = D + C·G2/Ts.
-void fohDiscretise(const Mat &A, const Vec &B, const Vec &C, keel::f64 D,
-                   keel::usize n, keel::f64 Ts, Mat &Ad, Vec &Bd, Vec &Cd, keel::f64 &Dd)
-{
-    const keel::usize m = n + 2;                 // augmented dim (1 input)
-    Mat M = zerosM(m, m);
-    for (keel::usize j = 0; j < n; ++j)
-        for (keel::usize i = 0; i < n; ++i)
-            M[j * m + i] = A[j * n + i] * Ts;     // A·Ts block
-    for (keel::usize i = 0; i < n; ++i)
-        M[n * m + i] = B[i] * Ts;                  // B·Ts column (col n)
-    M[(n + 1) * m + n] = Ts;                       // I·Ts entry (row n, col n+1)
-
-    Mat E = expm(M, m);
-    Ad.assign(n * n, 0.0);
-    for (keel::usize j = 0; j < n; ++j)
-        for (keel::usize i = 0; i < n; ++i)
-            Ad[j * n + i] = E[j * m + i];          // Phi
-    Vec G1(n, 0.0), G2(n, 0.0);
-    for (keel::usize i = 0; i < n; ++i) {
-        G1[i] = E[n * m + i];
-        G2[i] = E[(n + 1) * m + i];
-    }
-    Bd.assign(n, 0.0);
-    for (keel::usize i = 0; i < n; ++i) {
-        keel::f64 phiG2 = 0.0;                         // (Phi·G2)[i]
-        for (keel::usize k = 0; k < n; ++k) phiG2 += Ad[k * n + i] * G2[k];
-        Bd[i] = G1[i] + phiG2 / Ts - G2[i] / Ts;
-    }
-    Cd = C.clone();
-    keel::f64 cg2 = 0.0;
-    for (keel::usize i = 0; i < n; ++i) cg2 += C[i] * G2[i];
-    Dd = D + cg2 / Ts;
-}
-
-// Build an output struct of the requested kind from (A, B, C, D, Ts).
-Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, keel::f64 Dd, keel::usize n, keel::f64 Ts, keel::StringRef origKind, keel::Allocator *mr)
-{
+Value packResult(keel::ArrayRef<keel::f64> Ad, keel::ArrayRef<keel::f64> Bd,
+                 keel::ArrayRef<keel::f64> Cd, keel::f64 Dd, keel::usize n, keel::f64 Ts,
+                 keel::StringRef origKind, keel::Allocator *mr) {
     Value Av = matFromVec(n, n, Ad, mr);
     Value Bv = matFromVec(n, 1, Bd, mr);
     Value Cv = matFromVec(1, n, Cd, mr);
@@ -246,7 +97,6 @@ Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, keel::f64 Dd, keel
     if (origKind == "ss") {
         return ss(Av, Bv, Cv, Dv, Ts, mr);
     }
-    // Convert (A, B, C, D) → (num, den) via toolboxes/control's ss2tf.
     auto [numV, denV] = ss2tf(Av, Bv, Cv, Dv, /*iu=*/1, mr);
     if (origKind == "tf") {
         return tf(numV, denV, Ts, mr);
@@ -254,9 +104,8 @@ Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, keel::f64 Dd, keel
     if (origKind == "zpk") {
         Value zV = numkit::builtin::roots(numV, mr);
         Value pV = numkit::builtin::roots(denV, mr);
-        // Gain = num(1)/den(1) (after stripping leading zeros).
-        Vec numVec = coeffsReal(numV);
-        Vec denVec = coeffsReal(denV);
+        const auto numVec = coeffsReal(numV, mr);
+        const auto denVec = coeffsReal(denV, mr);
         keel::usize in = 0; while (in + 1 < numVec.size() && numVec[in] == 0.0) ++in;
         keel::usize id = 0; while (id + 1 < denVec.size() && denVec[id] == 0.0) ++id;
         const keel::f64 k = (in < numVec.size() && id < denVec.size())
@@ -266,8 +115,7 @@ Value packResult(const Mat &Ad, const Vec &Bd, const Vec &Cd, keel::f64 Dd, keel
     return ss(Av, Bv, Cv, Dv, Ts, mr);
 }
 
-void c2d_argcheck(const Value &sys, keel::f64 Ts, keel::StringRef method)
-{
+void c2d_argcheck(const Value &sys, keel::f64 Ts, keel::StringRef method) {
     if (Ts <= 0.0)
         throw Error("c2d: Ts must be positive",
                     0, 0, "c2d", "", "numkit:c2d:Ts");
@@ -283,8 +131,7 @@ void c2d_argcheck(const Value &sys, keel::f64 Ts, keel::StringRef method)
                     0, 0, "c2d", "", "numkit:c2d:method");
 }
 
-void d2c_argcheck(const Value &sys, keel::StringRef method)
-{
+void d2c_argcheck(const Value &sys, keel::StringRef method) {
     if (!hasKind(sys, "ss") && !hasKind(sys, "tf") && !hasKind(sys, "zpk"))
         throw Error("c2d/d2c: expected an LTI struct (tf/zpk/ss)",
                     0, 0, "discretize", "", "numkit:control:kind");
@@ -300,10 +147,10 @@ void d2c_argcheck(const Value &sys, keel::StringRef method)
 
 } // anonymous
 
-Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocator *mr)
-{
+Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocator *mr) {
     c2d_argcheck(sys, Ts, method);
-    if (hasKind(sys, "ss")) {
+
+    if (hasKind(sys, "ss") && (method.empty() || method == "zoh" || method == "foh")) {
         const Value &Av = sys.field("A");
         const Value &Bv = sys.field("B");
         const Value &Cv = sys.field("C");
@@ -311,74 +158,47 @@ Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocato
         const keel::usize n = Av.dims().rows();
         const keel::usize nu = Bv.dims().cols();
         const keel::usize ny = Cv.dims().rows();
-        if (method.empty() || method == "zoh" || method == "foh") {
-            Mat A(n * n, 0.0);
-            for (keel::usize i = 0; i < n * n; ++i) A[i] = Av.elemAsDouble(i);
-            Mat Ad = eyeM(n);
-            Value BdV = Value::matrix(n, nu, ValueType::DOUBLE, mr);
-            Value CdV = Cv;
-            Value DvOut = Value::matrix(ny, nu, ValueType::DOUBLE, mr);
-            for (keel::usize j = 0; j < nu; ++j)
-                for (keel::usize p = 0; p < ny; ++p)
-                    DvOut.doubleDataMut()[j * ny + p] =
-                        (Dv.numel() == ny * nu) ? Dv.elemAsDouble(j * ny + p)
-                        : ((Dv.numel() == 1) ? Dv.elemAsDouble(0) : 0.0);
-            Value GV = Value::matrix(n, n + nu, ValueType::DOUBLE, mr);
-            keel::f64 *gd = GV.doubleDataMut();
-            std::fill(gd, gd + n * (n + nu), 0.0);
-            for (keel::usize i = 0; i < n; ++i) gd[i * n + i] = 1.0;
 
-            if (nu == 0 && n > 0) {
-                Mat M(n * n, 0.0);
-                for (keel::usize i = 0; i < n * n; ++i) M[i] = A[i] * Ts;
-                Ad = expm(M, n);
-            }
-            for (keel::usize j = 0; j < nu; ++j) {
-                Vec Bj(n, 0.0);
-                for (keel::usize i = 0; i < n; ++i) Bj[i] = Bv.elemAsDouble(j * n + i);
-                if (method.empty() || method == "zoh") {
-                    Vec Bdj;
-                    zohDiscretise(A, Bj, n, Ts, Ad, Bdj);
-                    for (keel::usize i = 0; i < n; ++i)
-                        BdV.doubleDataMut()[j * n + i] = Bdj[i];
-                } else {
-                    const keel::usize m = n + 2;
-                    Mat M = zerosM(m, m);
-                    for (keel::usize c = 0; c < n; ++c)
-                        for (keel::usize r = 0; r < n; ++r)
-                            M[c * m + r] = A[c * n + r] * Ts;
-                    for (keel::usize r = 0; r < n; ++r)
-                        M[n * m + r] = Bj[r] * Ts;
-                    M[(n + 1) * m + n] = Ts;
-                    Mat E = expm(M, m);
-                    Ad.assign(n * n, 0.0);
-                    for (keel::usize c = 0; c < n; ++c)
-                        for (keel::usize r = 0; r < n; ++r)
-                            Ad[c * n + r] = E[c * m + r];
-                    Vec G1(n, 0.0), G2(n, 0.0);
-                    for (keel::usize r = 0; r < n; ++r) {
-                        G1[r] = E[n * m + r];
-                        G2[r] = E[(n + 1) * m + r];
-                    }
-                    for (keel::usize r = 0; r < n; ++r) {
-                        keel::f64 phiG2 = 0.0;
-                        for (keel::usize k = 0; k < n; ++k) phiG2 += Ad[k * n + r] * G2[k];
-                        BdV.doubleDataMut()[j * n + r] = G1[r] + phiG2 / Ts - G2[r] / Ts;
-                        gd[(n + j) * n + r] = -G2[r] / Ts;
-                    }
-                    for (keel::usize p = 0; p < ny; ++p) {
-                        keel::f64 cg2 = 0.0;
-                        for (keel::usize k = 0; k < n; ++k)
-                            cg2 += Cv.elemAsDouble(k * ny + p) * G2[k];
-                        DvOut.doubleDataMut()[j * ny + p] += cg2 / Ts;
-                    }
-                }
-            }
-            Value AdV = matFromVec(n, n, Ad, mr);
-            Value res = ss(AdV, BdV, CdV, DvOut, Ts, mr);
-            res.field("G") = std::move(GV);
-            return res;
+        keel::Array<keel::f64> A(n * n, 0.0, mr);
+        for (keel::usize i = 0; i < n * n; ++i) A[i] = Av.elemAsDouble(i);
+        keel::Array<keel::f64> B(n * nu, 0.0, mr);
+        for (keel::usize i = 0; i < n * nu; ++i) B[i] = Bv.elemAsDouble(i);
+        keel::Array<keel::f64> C(ny * n, 0.0, mr);
+        for (keel::usize i = 0; i < ny * n; ++i) C[i] = Cv.elemAsDouble(i);
+        keel::Array<keel::f64> D(ny * nu, 0.0, mr);
+        for (keel::usize j = 0; j < nu; ++j)
+            for (keel::usize p = 0; p < ny; ++p)
+                D[j * ny + p] =
+                    (Dv.numel() == ny * nu) ? Dv.elemAsDouble(j * ny + p)
+                    : ((Dv.numel() == 1) ? Dv.elemAsDouble(0) : 0.0);
+
+        keel::Array<keel::f64> Ad(n * n, 0.0, mr);
+        keel::Array<keel::f64> Bd(n * nu, 0.0, mr);
+        keel::Array<keel::f64> Cd(ny * n, 0.0, mr);
+        keel::Array<keel::f64> Dd(ny * nu, 0.0, mr);
+        Value GV = Value::matrix(n, n + nu, ValueType::DOUBLE, mr);
+        keel::MutArrayRef<keel::f64> gRef(GV.doubleDataMut(), n * (n + nu));
+
+        if (method.empty() || method == "zoh") {
+            (void)keel::control::c2d_zoh(A.as_ref(), B.as_ref(), n, nu, Ts,
+                                         Ad.as_mut_ref(), Bd.as_mut_ref(), mr);
+            Cd = C.clone();
+            Dd = D.clone();
+            for (keel::usize i = 0; i < gRef.size(); ++i) gRef[i] = 0.0;
+            for (keel::usize i = 0; i < n; ++i) gRef[i * n + i] = 1.0;
+        } else {
+            (void)keel::control::c2d_foh(A.as_ref(), B.as_ref(), C.as_ref(), D.as_ref(),
+                                         n, nu, ny, Ts, Ad.as_mut_ref(), Bd.as_mut_ref(),
+                                         Cd.as_mut_ref(), Dd.as_mut_ref(), gRef, mr);
         }
+
+        Value AdV = matFromVec(n, n, Ad.as_ref(), mr);
+        Value BdV = matFromVec(n, nu, Bd.as_ref(), mr);
+        Value CdV = (method.empty() || method == "zoh") ? Cv : matFromVec(ny, n, Cd.as_ref(), mr);
+        Value DdV = matFromVec(ny, nu, Dd.as_ref(), mr);
+        Value res = ss(AdV, BdV, CdV, DdV, Ts, mr);
+        res.field("G") = std::move(GV);
+        return res;
     }
 
     SS s = toSSiso(sys, mr);
@@ -386,16 +206,33 @@ Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocato
         throw Error("c2d: input system is already discrete (Ts > 0)",
                     0, 0, "c2d", "", "numkit:c2d:already_discrete");
 
-    Mat Ad; Vec Bd, Cd; keel::f64 Dd;
+    keel::Array<keel::f64> Ad(s.n * s.n, 0.0, mr);
+    keel::Array<keel::f64> Bd(s.n, 0.0, mr);
+    keel::Array<keel::f64> Cd(s.n, 0.0, mr);
+    keel::f64 Dd = s.D;
+    const keel::f64 D_in[1] = {s.D};
+    keel::f64 D_out[1] = {s.D};
+
     if (method.empty() || method == "zoh") {
-        zohDiscretise(s.A, s.B, s.n, Ts, Ad, Bd);
-        // ZOH leaves C and D untouched.
+        (void)keel::control::c2d_zoh(s.A.as_ref(), s.B.as_ref(), s.n, 1, Ts,
+                                     Ad.as_mut_ref(), Bd.as_mut_ref(), mr);
         Cd = s.C.clone();
-        Dd = s.D;
     } else if (method == "tustin" || method == "tutsin" || method == "bilinear") {
-        tustinDiscretise(s.A, s.B, s.C, s.D, s.n, Ts, Ad, Bd, Cd, Dd);
+        if (keel::control::c2d_tustin(s.A.as_ref(), s.B.as_ref(), s.C.as_ref(),
+                                      keel::ArrayRef<keel::f64>(D_in, 1), s.n, 1, 1, Ts,
+                                      Ad.as_mut_ref(), Bd.as_mut_ref(), Cd.as_mut_ref(),
+                                      keel::MutArrayRef<keel::f64>(D_out, 1), mr) !=
+            keel::control::ControlStatus::kOk) {
+            throw Error("c2d (tustin): I − A·Ts/2 is singular",
+                        0, 0, "c2d", "", "numkit:c2d:singular");
+        }
+        Dd = D_out[0];
     } else if (method == "foh") {
-        fohDiscretise(s.A, s.B, s.C, s.D, s.n, Ts, Ad, Bd, Cd, Dd);
+        (void)keel::control::c2d_foh(s.A.as_ref(), s.B.as_ref(), s.C.as_ref(),
+                                     keel::ArrayRef<keel::f64>(D_in, 1), s.n, 1, 1, Ts,
+                                     Ad.as_mut_ref(), Bd.as_mut_ref(), Cd.as_mut_ref(),
+                                     keel::MutArrayRef<keel::f64>(D_out, 1), {}, mr);
+        Dd = D_out[0];
     } else {
         throw Error("c2d: method must be 'zoh', 'foh', or 'tustin'",
                     0, 0, "c2d", "", "numkit:c2d:method");
@@ -404,11 +241,10 @@ Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocato
     const keel::String origKind = sys.isStruct() && sys.hasField("kind")
                                   ? sys.field("kind").toString()
                                   : keel::String::from("ss");
-    return packResult(Ad, Bd, Cd, Dd, s.n, Ts, origKind.as_ref(), mr);
+    return packResult(Ad.as_ref(), Bd.as_ref(), Cd.as_ref(), Dd, s.n, Ts, origKind.as_ref(), mr);
 }
 
-Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
-{
+Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr) {
     d2c_argcheck(sys, method);
     SS s = toSSiso(sys, mr);
     const bool isZoh = method.empty() || method == "zoh";
@@ -418,142 +254,28 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr)
                                   : keel::String::from("ss");
 
     if (isZoh) {
-        if (s.n == 0)
-            return packResult({}, {}, {}, s.D, 0, 0.0, origKind, mr);
-
-        // Augmented ZOH matrix Phi = [[A_d, B_d]; [0, 1]], (n+1)x(n+1).
-        const keel::usize m = s.n + 1;
-        Value Phi = Value::matrix(m, m, ValueType::DOUBLE, mr);
-        keel::f64 *pd = Phi.doubleDataMut();
-        std::fill(pd, pd + m * m, 0.0);
-        for (keel::usize j = 0; j < s.n; ++j)
-            for (keel::usize i = 0; i < s.n; ++i)
-                pd[j * m + i] = s.A[j * s.n + i];
-        for (keel::usize i = 0; i < s.n; ++i)
-            pd[s.n * m + i] = s.B[i];
-        pd[s.n * m + s.n] = 1.0;
-
-        Value L = numkit::linalg::logm(Phi, mr);
-        bool hasImag = false;
-        if (L.isComplex()) {
-            const keel::c64 *lc = L.complexData();
-            for (keel::usize j = 0; j <= s.n; ++j) {
-                for (keel::usize i = 0; i < s.n; ++i) {
-                    if (keel::abs(lc[j * m + i].imag()) > 1e-9) {
-                        hasImag = true;
-                        break;
-                    }
-                }
-            }
+        keel::control::StateSpace res;
+        if (keel::control::d2c_zoh(s.A.as_ref(), s.B.as_ref(), s.C.as_ref(), s.D,
+                                   s.n, Ts, res, mr) != keel::control::ControlStatus::kOk) {
+            throw Error("d2c (zoh): matrix logarithm failed (singular or zero pole)",
+                        0, 0, "d2c", "", "numkit:d2c:singular");
         }
-
-        if (!hasImag) {
-            Mat Ac(s.n * s.n, 0.0);
-            Vec Bc(s.n, 0.0);
-            for (keel::usize j = 0; j < s.n; ++j) {
-                for (keel::usize i = 0; i < s.n; ++i) {
-                    const keel::f64 v = L.isComplex() ? L.complexData()[j * m + i].real()
-                                                   : L.doubleData()[j * m + i];
-                    Ac[j * s.n + i] = v / Ts;
-                }
-            }
-            for (keel::usize i = 0; i < s.n; ++i) {
-                const keel::f64 v = L.isComplex() ? L.complexData()[s.n * m + i].real()
-                                               : L.doubleData()[s.n * m + i];
-                Bc[i] = v / Ts;
-            }
-            return packResult(Ac, Bc, s.C, s.D, s.n, 0.0, origKind, mr);
-        }
-
-        // Negative real discrete eigenvalues produce complex logm entries
-        // (imag part = pi/Ts); expand complex state z = x_R + i*x_I into
-        // the 2n-dimensional real system [[A_R, -A_I]; [A_I, A_R]],
-        // B_c = [B_R; B_I], C_c = [C, 0].
-        const keel::usize n2 = 2 * s.n;
-        Mat Ac(n2 * n2, 0.0);
-        Vec Bc(n2, 0.0);
-        Vec Cc(n2, 0.0);
-        const keel::c64 *lc = L.complexData();
-        for (keel::usize j = 0; j < s.n; ++j) {
-            for (keel::usize i = 0; i < s.n; ++i) {
-                const keel::f64 ar = lc[j * m + i].real() / Ts;
-                const keel::f64 ai = lc[j * m + i].imag() / Ts;
-                Ac[j * n2 + i]               =  ar;
-                Ac[(j + s.n) * n2 + i]       = -ai;
-                Ac[j * n2 + (i + s.n)]       =  ai;
-                Ac[(j + s.n) * n2 + (i + s.n)] = ar;
-            }
-        }
-        for (keel::usize i = 0; i < s.n; ++i) {
-            Bc[i]       = lc[s.n * m + i].real() / Ts;
-            Bc[i + s.n] = lc[s.n * m + i].imag() / Ts;
-            Cc[i]       = s.C[i];
-        }
-        return packResult(Ac, Bc, Cc, s.D, n2, 0.0, origKind, mr);
+        return packResult(res.a.as_ref(), res.b.as_ref(), res.c.as_ref(), res.d,
+                          res.n, 0.0, origKind.as_ref(), mr);
     }
 
-    // Inverse of Tustin: from
-    //   A_d = (I − A·Ts/2)^-1 · (I + A·Ts/2),
-    //   B_d = √Ts · (I − A·Ts/2)^-1 · B,
-    //   C_d = √Ts · C · (I − A·Ts/2)^-1,
-    //   D_d = D + (Ts/2) · C · (I − A·Ts/2)^-1 · B.
-    // We solve for A first:  A = (2/Ts)·(A_d + I)^-1 · (A_d − I).
-    const Mat &Ad = s.A;     // careful: SS struct used .A as the discrete A
-    Mat Aplus(s.A.size(), 0.0);    // A_d + I
-    Mat Aminus(s.A.size(), 0.0);   // A_d − I
-    for (keel::usize i = 0; i < s.n * s.n; ++i) {
-        Aplus[i]  = Ad[i];
-        Aminus[i] = Ad[i];
-    }
-    for (keel::usize i = 0; i < s.n; ++i) {
-        Aplus[i * s.n + i]  += 1.0;
-        Aminus[i * s.n + i] -= 1.0;
-    }
-    // Solve (A_d + I) · X = (A_d − I)  ⇒  X = (A_d + I)^-1 · (A_d − I).
-    Mat ApCopy = Aplus.clone();
-    Mat X = keel::move(Aminus);
-    if (!solveInPlace(ApCopy, X, s.n, s.n))
+    keel::Array<keel::f64> Ac(s.n * s.n, 0.0, mr);
+    keel::Array<keel::f64> Bc(s.n, 0.0, mr);
+    keel::Array<keel::f64> Cc(s.n, 0.0, mr);
+    keel::f64 Dc = s.D;
+    if (keel::control::d2c_tustin(s.A.as_ref(), s.B.as_ref(), s.C.as_ref(), s.D,
+                                  s.n, Ts, Ac.as_mut_ref(), Bc.as_mut_ref(),
+                                  Cc.as_mut_ref(), Dc, mr) !=
+        keel::control::ControlStatus::kOk) {
         throw Error("d2c (tustin): A_d + I is singular",
                     0, 0, "d2c", "", "numkit:d2c:singular");
-    // Now A = (2/Ts) · X.
-    Mat Ac(s.n * s.n, 0.0);
-    for (keel::usize i = 0; i < s.n * s.n; ++i) Ac[i] = (2.0 / Ts) * X[i];
-
-    Mat ApCopy2 = Aplus.clone();
-    Vec Bvec(s.n);
-    for (keel::usize i = 0; i < s.n; ++i) Bvec[i] = s.B[i];
-    if (!solveInPlace(ApCopy2, Bvec, s.n, 1))
-        throw Error("d2c (tustin): A_d + I is singular",
-                    0, 0, "d2c", "", "numkit:d2c:singular");
-    Vec Bc(s.n, 0.0);
-    const keel::f64 inv_sqrtTs = 2.0 / std::sqrt(Ts);
-    for (keel::usize i = 0; i < s.n; ++i) Bc[i] = inv_sqrtTs * Bvec[i];
-
-    Mat ApT(s.n * s.n, 0.0);
-    for (keel::usize j = 0; j < s.n; ++j)
-        for (keel::usize i = 0; i < s.n; ++i)
-            ApT[i * s.n + j] = Aplus[j * s.n + i];
-    Vec Cvec(s.n);
-    for (keel::usize i = 0; i < s.n; ++i) Cvec[i] = s.C[i];
-    if (!solveInPlace(ApT, Cvec, s.n, 1))
-        throw Error("d2c (tustin): A_d + I is singular",
-                    0, 0, "d2c", "", "numkit:d2c:singular");
-    Vec Cc(s.n, 0.0);
-    for (keel::usize i = 0; i < s.n; ++i) Cc[i] = inv_sqrtTs * Cvec[i];
-
-    Vec ApBc(s.n, 0.0);
-    for (keel::usize i = 0; i < s.n; ++i) {
-        keel::f64 ssum = 0.0;
-        for (keel::usize j = 0; j < s.n; ++j)
-            ssum += Aplus[j * s.n + i] * Bc[j];
-        ApBc[i] = ssum;
     }
-    keel::f64 cAB = 0.0;
-    for (keel::usize i = 0; i < s.n; ++i) cAB += Cc[i] * ApBc[i];
-    const keel::f64 Dc = s.D - (Ts / 4.0) * cAB;
-
-    // Continuous → Ts = 0.
-    return packResult(Ac, Bc, Cc, Dc, s.n, 0.0, origKind, mr);
+    return packResult(Ac.as_ref(), Bc.as_ref(), Cc.as_ref(), Dc, s.n, 0.0, origKind.as_ref(), mr);
 }
 
 } // namespace numkit::control
