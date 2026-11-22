@@ -6,6 +6,7 @@
 //
 // Phase 2b compute/register split — see project_layering_refactor memory.
 
+#include <keel/algo.h>
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/ref.h>
@@ -73,8 +74,8 @@ void bode_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, 
         const keel::usize N = b.mag.numel();
         Value m3 = Value::matrix3d(1, 1, N, ValueType::DOUBLE, mr);
         Value p3 = Value::matrix3d(1, 1, N, ValueType::DOUBLE, mr);
-        std::copy(b.mag.doubleData(), b.mag.doubleData() + N, m3.doubleDataMut());
-        std::copy(b.phase.doubleData(), b.phase.doubleData() + N, p3.doubleDataMut());
+        keel::copy_n(m3.doubleDataMut(), b.mag.doubleData(), N);
+        keel::copy_n(p3.doubleDataMut(), b.phase.doubleData(), N);
         b.mag = std::move(m3);
         b.phase = std::move(p3);
     }

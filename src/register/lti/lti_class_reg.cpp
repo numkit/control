@@ -23,7 +23,6 @@
 #include <numkit/value/value.hpp>
 
 #include <algorithm>
-#include <stdexcept>
 #include <utility>
 
 namespace numkit::control::detail {
@@ -229,16 +228,16 @@ Value evalLtiBinaryOp(char op, const Value &a, const Value &b, keel::Allocator *
 {
     LtiPoly pa, pb;
     if (!toLtiPoly(a, pa))
-        throw std::runtime_error(keel::format("Undefined operator '{}' for LTI model", op).c_str());
+        throw numkit::Error(keel::format("Undefined operator '{}' for LTI model", op).c_str());
     const bool aIsLti = (isSisoTf(a) || isSisoSs(a));
     const bool bIsLti = (isSisoTf(b) || isSisoSs(b));
     if (op == '^') {
         if (!aIsLti || !b.isScalar() || !b.isNumeric() || b.isComplex())
-            throw std::runtime_error("Undefined operator '^' for LTI model");
+            throw numkit::Error("Undefined operator '^' for LTI model");
         const keel::f64 expVal = b.toScalar();
         const keel::i32 k = keel::as<keel::i32>(expVal);
         if (keel::as<keel::f64>(k) != expVal)
-            throw std::runtime_error("LTI power exponent must be an integer");
+            throw numkit::Error("LTI power exponent must be an integer");
         keel::Array<keel::f64> num = {1.0}, den = {1.0};
         const keel::i32 ak = keel::abs(k);
         const auto &baseN = (k >= 0) ? pa.num : pa.den;
@@ -250,7 +249,7 @@ Value evalLtiBinaryOp(char op, const Value &a, const Value &b, keel::Allocator *
         return buildTfObject(num, den, pa.Ts, mr);
     }
     if (!toLtiPoly(b, pb))
-        throw std::runtime_error(keel::format("Undefined operator '{}' for LTI model", op).c_str());
+        throw numkit::Error(keel::format("Undefined operator '{}' for LTI model", op).c_str());
     const keel::f64 Ts = aIsLti ? pa.Ts : (bIsLti ? pb.Ts : 0.0);
     if (op == '+' || op == '-') {
         const keel::f64 sgn = (op == '+') ? 1.0 : -1.0;
@@ -264,7 +263,7 @@ Value evalLtiBinaryOp(char op, const Value &a, const Value &b, keel::Allocator *
         return buildTfObject(polyMul(pa.num, pb.num), polyMul(pa.den, pb.den), Ts, mr);
     if (op == '/')
         return buildTfObject(polyMul(pa.num, pb.den), polyMul(pa.den, pb.num), Ts, mr);
-    throw std::runtime_error(keel::format("Undefined operator '{}' for LTI model", op).c_str());
+    throw numkit::Error(keel::format("Undefined operator '{}' for LTI model", op).c_str());
 }
 
 // ── MIMO tf / ss indexing helpers ───────────────────────────────────────────
@@ -454,7 +453,7 @@ BuiltinClass makeCommonLtiClass(const char *clsName,
         keel::Allocator *mr = ctx.engine->allocator();
         LtiPoly p;
         if (!toLtiPoly(self, p))
-            throw std::runtime_error("Undefined unary '-' for LTI model");
+            throw numkit::Error("Undefined unary '-' for LTI model");
         for (keel::f64 &x : p.num) x = -x;
         outs[0] = buildTfObject(p.num, p.den, p.Ts, mr);
     });
@@ -478,7 +477,7 @@ BuiltinClass makeTfBuiltinClass()
         keel::Allocator *mr = ctx.engine->allocator();
         const Value *d = ltiDataPtr(self);
         if (!d || !d->hasField("num") || !d->hasField("den"))
-            throw std::runtime_error("tf: invalid model state");
+            throw numkit::Error("tf: invalid model state");
         const Value &num = d->field("num");
         const Value &den = d->field("den");
         if (!num.isCell() || !den.isCell()) {
@@ -497,7 +496,7 @@ BuiltinClass makeTfBuiltinClass()
                     return;
                 }
             }
-            throw std::runtime_error("Index exceeds array dimensions");
+            throw numkit::Error("Index exceeds array dimensions");
         }
         if (idxArgs.size() == 1) {
             auto ids = Value::resolveIndices(idxArgs[0], num.numel());
@@ -514,7 +513,7 @@ BuiltinClass makeTfBuiltinClass()
             outs[0] = wrapIndexedTf(*d, std::move(subNum), std::move(subDen), mr);
             return;
         }
-        throw std::runtime_error("tf: expected 1 or 2 subscripts");
+        throw numkit::Error("tf: expected 1 or 2 subscripts");
     };
     return cls;
 }
@@ -527,7 +526,7 @@ BuiltinClass makeSsBuiltinClass()
         keel::Allocator *mr = ctx.engine->allocator();
         const Value *d = ltiDataPtr(self);
         if (!d || !d->hasField("A") || !d->hasField("B") || !d->hasField("C") || !d->hasField("D"))
-            throw std::runtime_error("ss: invalid model state");
+            throw numkit::Error("ss: invalid model state");
         const Value &D = d->field("D");
         const keel::usize ny = D.dims().rows();
         const keel::usize nu = D.dims().cols();
@@ -551,7 +550,7 @@ BuiltinClass makeSsBuiltinClass()
                 outs[0] = indexSs2D(*d, &r, 1, &c, 1, mr);
                 return;
             }
-            throw std::runtime_error("ss: multi-element linear indexing on MIMO ss requires 2D subscripts");
+            throw numkit::Error("ss: multi-element linear indexing on MIMO ss requires 2D subscripts");
         }
         if (idxArgs.size() == 2) {
             auto rids = Value::resolveIndices(idxArgs[0], ny);
@@ -559,7 +558,7 @@ BuiltinClass makeSsBuiltinClass()
             outs[0] = indexSs2D(*d, rids.data(), rids.size(), cids.data(), cids.size(), mr);
             return;
         }
-        throw std::runtime_error("ss: expected 1 or 2 subscripts");
+        throw numkit::Error("ss: expected 1 or 2 subscripts");
     };
     return cls;
 }
