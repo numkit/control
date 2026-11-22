@@ -209,7 +209,7 @@ static bool wantVector(keel::ArrayRef<Value> args, keel::usize pos) {
     if (args.size() <= pos) return false;
     if (!args[pos].isChar() && !args[pos].isString()) return false;
     keel::String s = args[pos].toString();
-    for (auto &c : s) c = keel::to_ascii_lower(c);
+    s.to_ascii_lower_in_place();
     return s == "v" || s == "vector";
 }
 
@@ -398,7 +398,7 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     keel::String method = keel::String::from("matchdc");
     if (args.size() >= 3 && (args[2].isChar() || args[2].isString())) {
         method = args[2].toString();
-        for (char &ch : method) ch = keel::to_ascii_lower(ch);
+        method.to_ascii_lower_in_place();
     }
 
     const keel::usize nk = keep.size();
