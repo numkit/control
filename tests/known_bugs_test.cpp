@@ -280,3 +280,33 @@ TEST_F(ControlKnownBug, HinfnormDiscrete)
     EXPECT_NEAR(evalScalar("hinfnorm(ss(0.5, 1, 1, 0, 0.1))"), 2.0, 1e-6);
 }
 
+// bugs/open/control/tf-miso-linear-indexing.md — MISO/MIMO tf from ss and
+// linear/2D indexing H(1), H(2), H(1,2), H(end) + size(H).
+TEST_F(ControlKnownBug, TfMisoLinearIndexing)
+{
+    for (auto be : {Engine::Backend::TreeWalker, Engine::Backend::VM}) {
+        engine.setBackend(be);
+        eval("A = [-1 0; 0 -2]; B = [1 0; 0 1]; C = [1 1]; D = [0 0];");
+        eval("H = tf(ss(A, B, C, D));");
+        EXPECT_EQ(evalScalar("size(H, 1)"), 1.0);
+        EXPECT_EQ(evalScalar("size(H, 2)"), 2.0);
+        eval("sz = size(H);");
+        EXPECT_EQ(evalScalar("sz(1)"), 1.0);
+        EXPECT_EQ(evalScalar("sz(2)"), 2.0);
+        eval("h1 = H(1); h2 = H(2); hend = H(end);");
+        EXPECT_EQ(evalScalar("issiso(h1)"), 1.0);
+        EXPECT_EQ(evalScalar("issiso(h2)"), 1.0);
+        EXPECT_NEAR(evalScalar("dcgain(h1)"), 1.0, 1e-9);
+        EXPECT_NEAR(evalScalar("dcgain(h2)"), 0.5, 1e-9);
+        EXPECT_NEAR(evalScalar("dcgain(hend)"), 0.5, 1e-9);
+
+        // MIMO ss 2D indexing and 1 / siso_ss inversion
+        eval("S = ss([-1 0; 0 -2], [1 0; 0 1], [1 0; 0 1], [0 0; 0 0]);");
+        eval("s22 = S(2, 2);");
+        EXPECT_EQ(evalScalar("issiso(s22)"), 1.0);
+        EXPECT_NEAR(evalScalar("dcgain(s22)"), 0.5, 1e-9);
+        eval("inv_s22 = 1 / s22;");
+        EXPECT_NEAR(evalScalar("dcgain(inv_s22)"), 2.0, 1e-9);
+    }
+}
+

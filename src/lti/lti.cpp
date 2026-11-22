@@ -580,11 +580,55 @@ tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
     if (k == "tf") {
         num = sys.field("num");
         den = sys.field("den");
+        if (num.isCell() && den.isCell()) {
+            const keel::usize ny = num.dims().rows();
+            const keel::usize nu = num.dims().cols();
+            if (ny * nu == 1 && asVector) {
+                num = num.cellAt(0);
+                den = den.cellAt(0);
+            } else {
+                Value numOut = Value::cell(ny, nu, mr);
+                Value denOut = Value::cell(ny, nu, mr);
+                for (keel::usize i = 0; i < ny * nu; ++i) {
+                    const Value &ni = num.cellAt(i);
+                    const Value &di = den.cellAt(i);
+                    const keel::usize L = std::max(ni.numel(), di.numel());
+                    numOut.cellAt(i) = padToLen(ni, L, mr);
+                    denOut.cellAt(i) = padToLen(di, L, mr);
+                }
+                return {std::move(numOut), std::move(denOut)};
+            }
+        }
     } else if (k == "zpk") {
         std::tie(num, den) = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
     } else {
-        std::tie(num, den) = ss2tf(sys.field("A"), sys.field("B"),
-                                    sys.field("C"), sys.field("D"), 1, mr);
+        const Value &A = sys.field("A");
+        const Value &B = sys.field("B");
+        const Value &C = sys.field("C");
+        const Value &D = sys.field("D");
+        const keel::usize ny = (C.dims().rows() == 0) ? 1 : C.dims().rows();
+        const keel::usize nu = (B.dims().cols() == 0) ? 1 : B.dims().cols();
+        if (ny > 1 || nu > 1) {
+            const keel::usize n = A.dims().rows();
+            Value numOut = Value::cell(ny, nu, mr);
+            Value denOut = Value::cell(ny, nu, mr);
+            for (keel::usize iy = 0; iy < ny; ++iy) {
+                Value Crow = Value::matrix(1, n, ValueType::DOUBLE, mr);
+                for (keel::usize j = 0; j < n; ++j)
+                    Crow.doubleDataMut()[j] = C.elemAsDouble(iy + j * ny);
+                Value Drow = Value::matrix(1, nu, ValueType::DOUBLE, mr);
+                for (keel::usize j = 0; j < nu; ++j)
+                    Drow.doubleDataMut()[j] = (D.numel() > 0) ? D.elemAsDouble(iy + j * ny) : 0.0;
+                for (keel::usize iu = 0; iu < nu; ++iu) {
+                    auto [nij, dij] = ss2tf(A, B, Crow, Drow, keel::as<keel::i32>(iu + 1), mr);
+                    const keel::usize L = std::max(nij.numel(), dij.numel());
+                    numOut.cellAt(iy + iu * ny) = padToLen(nij, L, mr);
+                    denOut.cellAt(iy + iu * ny) = padToLen(dij, L, mr);
+                }
+            }
+            return {std::move(numOut), std::move(denOut)};
+        }
+        std::tie(num, den) = ss2tf(A, B, C, D, 1, mr);
     }
     const keel::usize L = std::max(num.numel(), den.numel());
     Value np = padToLen(num, L, mr);
