@@ -5,6 +5,7 @@
 // MATLAB R2025b reference values.
 
 #include <numkit/control/connect/connect.hpp>
+#include <keel/math.h>
 #include <numkit/core/standard_engine.hpp>
 #include <numkit/core/standard_engine.hpp>
 #include <gtest/gtest.h>
@@ -34,7 +35,7 @@ TEST_F(ControlKnownBug, Lqr)
 TEST_F(ControlKnownBug, Hinfnorm)
 {
     eval("g = hinfnorm(ss([0 1; -1 0], [0; 1], [1 0], 0));");
-    EXPECT_TRUE(std::isinf(evalScalar("g")));
+    EXPECT_TRUE(keel::is_inf(evalScalar("g")));
 }
 
 // bugs/control/lqr-hinfnorm.md — dlqr (discrete LQR) missing.
@@ -276,7 +277,7 @@ TEST_F(ControlKnownBug, AckerSingleResult)
 TEST_F(ControlKnownBug, HinfnormDiscrete)
 {
     eval("g = hinfnorm(ss([2 1; 1 3], [1; 0], [1 0], 0, 0.1));");
-    EXPECT_TRUE(std::isinf(evalScalar("g")));
+    EXPECT_TRUE(keel::is_inf(evalScalar("g")));
     EXPECT_NEAR(evalScalar("hinfnorm(ss(0.5, 1, 1, 0, 0.1))"), 2.0, 1e-6);
 }
 

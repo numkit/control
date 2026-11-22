@@ -7,6 +7,7 @@
 // H(0)=1 (matching control_freq_smoke.m + the bode/nyquist parity specs).
 
 #include "dual_engine_fixture.hpp"
+#include <keel/math.h>
 
 #include <cmath>
 
@@ -40,7 +41,7 @@ TEST_P(ControlFreqLtiTest, BodeAtOmega1)
 {
     eval("[m, p] = bode(tf(1, [1 1]), 1);");
     EXPECT_EQ(eval("m").numel(), 1u);
-    EXPECT_NEAR(evalScalar("m(1)"), 1.0 / std::sqrt(2.0), 1e-6);  // |H(j1)|
+    EXPECT_NEAR(evalScalar("m(1)"), 1.0 / keel::sqrt(2.0), 1e-6);  // |H(j1)|
     EXPECT_NEAR(evalScalar("p(1)"), -45.0, 1e-4);                 // degrees
 }
 

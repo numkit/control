@@ -5,6 +5,7 @@
 // MATLAB R2025b.
 
 #include <numkit/core/standard_engine.hpp>
+#include <keel/math.h>
 #include <numkit/core/engine.hpp>
 #include <gtest/gtest.h>
 
@@ -51,5 +52,5 @@ TEST_F(CovarTest, Discrete)
 // Continuous with a direct feedthrough D≠0 → infinite output covariance.
 TEST_F(CovarTest, ContinuousFeedthroughIsInf)
 {
-    EXPECT_TRUE(std::isinf(evalScalar("covar(ss(-1, 1, 1, 0.5), 1)")));
+    EXPECT_TRUE(keel::is_inf(evalScalar("covar(ss(-1, 1, 1, 0.5), 1)")));
 }

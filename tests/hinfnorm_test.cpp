@@ -5,6 +5,7 @@
 // One TEST_F per documented branch/edge.
 
 #include <numkit/core/standard_engine.hpp>
+#include <keel/math.h>
 #include <numkit/core/engine.hpp>
 #include <gtest/gtest.h>
 
@@ -51,14 +52,14 @@ TEST_F(HinfnormTest, WithFeedthrough)
 // Marginally stable / jω-axis poles (±i) → Inf.
 TEST_F(HinfnormTest, MarginalIsInf)
 {
-    EXPECT_TRUE(std::isinf(evalScalar(
+    EXPECT_TRUE(keel::is_inf(evalScalar(
         "hinfnorm(ss([0 1; -1 0], [0; 1], [1 0], 0))")));
 }
 
 // Unstable pole (Re > 0) → Inf.
 TEST_F(HinfnormTest, UnstableIsInf)
 {
-    EXPECT_TRUE(std::isinf(evalScalar("hinfnorm(ss(1, 1, 1, 0))")));
+    EXPECT_TRUE(keel::is_inf(evalScalar("hinfnorm(ss(1, 1, 1, 0))")));
 }
 
 // tf input path: 1/(s+1)^2, peak 1 at ω=0.

@@ -11,6 +11,7 @@
 // crash raw (cell/string) or silently drop imaginary parts.
 
 #include <numkit/core/standard_engine.hpp>
+#include <keel/math.h>
 #include <numkit/core/engine.hpp>
 #include <gtest/gtest.h>
 
@@ -327,7 +328,7 @@ TEST_F(ControlTypeContractTest, HinfnormContracts)
     EXPECT_NEAR(evalScalar("hc(1)"), 2.0, 1e-12);
     expectId("numkit:hinfnorm:inputType", [&] { eval("hinfnorm(struct('a', 1))"); });
     expectId("numkit:hinfnorm:inputType", [&] { eval("hinfnorm({})"); });
-    EXPECT_TRUE(std::isinf(evalScalar("hinfnorm(ss([0 1; -1 -2], [1; 0], [1 0], 0, 0.1))")));
+    EXPECT_TRUE(keel::is_inf(evalScalar("hinfnorm(ss([0 1; -1 -2], [1; 0], [1 0], 0, 0.1))")));
 }
 
 // ──────────────────────────────────────────────────────────────────────
