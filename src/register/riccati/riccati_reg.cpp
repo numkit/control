@@ -12,6 +12,7 @@
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/ref.h>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/control/riccati/riccati.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -70,7 +71,7 @@ void emitLqr(const RiccatiResult &r, keel::MutArrayRef<Value> o) {
 void lqr_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     auto *mr = c.engine->allocator();
-    if (!a.empty() && a[0].isStruct()) {
+    if (!a.empty() && internal::isLtiModel(a[0])) {
         argcheck::checkNargin(a.size(), 3, 4, "lqr");
         auto [A, B, C, D] = ssdata(a[0], mr);
         emitLqr(care(A, B, a[1], a[2], mr), o);
@@ -83,7 +84,7 @@ void lqr_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, C
 void dlqr_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     auto *mr = c.engine->allocator();
-    if (!a.empty() && a[0].isStruct()) {
+    if (!a.empty() && internal::isLtiModel(a[0])) {
         argcheck::checkNargin(a.size(), 3, 4, "dlqr");
         auto [A, B, C, D] = ssdata(a[0], mr);
         emitLqr(dare(A, B, a[1], a[2], mr), o);

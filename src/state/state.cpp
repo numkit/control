@@ -25,27 +25,27 @@ namespace numkit::control {
 namespace {
 
 bool hasKind(const Value &sys, const char *want) {
-    if (!sys.isStruct() || !sys.hasField("kind")) return false;
-    return sys.field("kind").toString() == want;
+    return internal::isLtiKind(sys, want);
 }
 
 struct ABC { Value A, B, C, D; };
 ABC pullABC(const Value &sys, const char *fn, keel::Allocator *mr) {
+    const Value &d = internal::ltiStruct(sys);
     ABC out;
     if (hasKind(sys, "ss")) {
-        out.A = sys.field("A"); out.B = sys.field("B");
-        out.C = sys.field("C"); out.D = sys.field("D");
+        out.A = d.field("A"); out.B = d.field("B");
+        out.C = d.field("C"); out.D = d.field("D");
     } else if (hasKind(sys, "tf")) {
-        auto ss = tf2ss(sys.field("num"), sys.field("den"), mr);
+        auto ss = tf2ss(d.field("num"), d.field("den"), mr);
         out.A = std::move(ss.A); out.B = std::move(ss.B);
         out.C = std::move(ss.C); out.D = std::move(ss.D);
     } else if (hasKind(sys, "zpk")) {
-        auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         auto ss = tf2ss(num, den, mr);
         out.A = std::move(ss.A); out.B = std::move(ss.B);
         out.C = std::move(ss.C); out.D = std::move(ss.D);
     } else {
-        throw Error(keel::format("{}: input 1 (sys) must be an LTI struct (tf/zpk/ss)", fn),
+        throw Error(keel::format("{}: input 1 (sys) must be an LTI model (tf/zpk/ss)", fn),
                     0, 0, fn, "", keel::format("numkit:{}:kind", fn));
     }
     return out;
@@ -174,8 +174,7 @@ Value gram(const Value &sys, const Value &type, keel::Allocator *mr) {
     auto abc = pullABC(sys, "gram", mr);
     const char t = gram_argcheck(type);
     const keel::usize n = abc.A.dims().rows();
-    const bool discrete =
-        (sys.isStruct() && sys.hasField("Ts") && sys.field("Ts").toScalar() != 0.0);
+    const bool discrete = (internal::ltiSampleTime(sys) != 0.0);
 
     const auto A = readMat(abc.A, n, n, mr);
     keel::Array<keel::f64> W(n * n, 0.0, mr);
@@ -202,8 +201,7 @@ CovarResult covar(const Value &sys, const Value &Wv, keel::Allocator *mr) {
     const keel::usize n = abc.A.dims().rows();
     const keel::usize m = abc.B.dims().cols();
     const keel::usize p = abc.C.dims().rows();
-    const bool discrete =
-        (sys.isStruct() && sys.hasField("Ts") && sys.field("Ts").toScalar() != 0.0);
+    const bool discrete = (internal::ltiSampleTime(sys) != 0.0);
 
     const auto A = readMat(abc.A, n, n, mr);
     const auto B = readMat(abc.B, n, m, mr);

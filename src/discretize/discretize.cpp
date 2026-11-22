@@ -12,6 +12,7 @@
 #include <numkit/control/lti/lti.hpp>
 
 #include <numkit/builtin/polyfun.hpp>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 
@@ -23,14 +24,11 @@ namespace numkit::control {
 namespace {
 
 bool hasKind(const Value &sys, const char *want) {
-    if (!sys.isStruct() || !sys.hasField("kind")) return false;
-    return sys.field("kind").toString() == want;
+    return internal::isLtiKind(sys, want);
 }
 
 keel::f64 sampleTime(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("Ts"))
-        return sys.field("Ts").toScalar();
-    return 0.0;
+    return internal::ltiSampleTime(sys);
 }
 
 keel::Array<keel::f64> coeffsReal(const Value &v, keel::Allocator *mr) {
@@ -55,17 +53,18 @@ struct SS {
 };
 
 SS toSSiso(const Value &sys, keel::Allocator *mr) {
+    const Value &d = internal::ltiStruct(sys);
     Value Av, Bv, Cv, Dv;
     const keel::f64 Ts = sampleTime(sys);
     if (hasKind(sys, "ss")) {
-        Av = sys.field("A"); Bv = sys.field("B");
-        Cv = sys.field("C"); Dv = sys.field("D");
+        Av = d.field("A"); Bv = d.field("B");
+        Cv = d.field("C"); Dv = d.field("D");
     } else if (hasKind(sys, "tf")) {
-        auto s = tf2ss(sys.field("num"), sys.field("den"), mr);
+        auto s = tf2ss(d.field("num"), d.field("den"), mr);
         Av = std::move(s.A); Bv = std::move(s.B);
         Cv = std::move(s.C); Dv = std::move(s.D);
     } else if (hasKind(sys, "zpk")) {
-        auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         auto s = tf2ss(num, den, mr);
         Av = std::move(s.A); Bv = std::move(s.B);
         Cv = std::move(s.C); Dv = std::move(s.D);
@@ -151,10 +150,11 @@ Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocato
     c2d_argcheck(sys, Ts, method);
 
     if (hasKind(sys, "ss") && (method.empty() || method == "zoh" || method == "foh")) {
-        const Value &Av = sys.field("A");
-        const Value &Bv = sys.field("B");
-        const Value &Cv = sys.field("C");
-        const Value &Dv = sys.field("D");
+        const Value &sd = internal::ltiStruct(sys);
+        const Value &Av = sd.field("A");
+        const Value &Bv = sd.field("B");
+        const Value &Cv = sd.field("C");
+        const Value &Dv = sd.field("D");
         const keel::usize n = Av.dims().rows();
         const keel::usize nu = Bv.dims().cols();
         const keel::usize ny = Cv.dims().rows();
@@ -197,7 +197,8 @@ Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocato
         Value CdV = (method.empty() || method == "zoh") ? Cv : matFromVec(ny, n, Cd.as_ref(), mr);
         Value DdV = matFromVec(ny, nu, Dd.as_ref(), mr);
         Value res = ss(AdV, BdV, CdV, DdV, Ts, mr);
-        res.field("G") = std::move(GV);
+        if (Value *rd = internal::ltiDataMutPtr(res))
+            rd->field("G") = std::move(GV);
         return res;
     }
 
@@ -238,10 +239,9 @@ Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocato
                     0, 0, "c2d", "", "numkit:c2d:method");
     }
 
-    const keel::String origKind = sys.isStruct() && sys.hasField("kind")
-                                  ? sys.field("kind").toString()
-                                  : keel::String::from("ss");
-    return packResult(Ad.as_ref(), Bd.as_ref(), Cd.as_ref(), Dd, s.n, Ts, origKind.as_ref(), mr);
+    const keel::String k = internal::ltiKindOf(sys);
+    const keel::StringRef origKind = !k.empty() ? k.as_ref() : keel::StringRef("ss");
+    return packResult(Ad.as_ref(), Bd.as_ref(), Cd.as_ref(), Dd, s.n, Ts, origKind, mr);
 }
 
 Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr) {
@@ -249,9 +249,8 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr) {
     SS s = toSSiso(sys, mr);
     const bool isZoh = method.empty() || method == "zoh";
     const keel::f64 Ts = s.Ts;
-    const keel::String origKind = sys.isStruct() && sys.hasField("kind")
-                                  ? sys.field("kind").toString()
-                                  : keel::String::from("ss");
+    const keel::String k = internal::ltiKindOf(sys);
+    const keel::StringRef origKind = !k.empty() ? k.as_ref() : keel::StringRef("ss");
 
     if (isZoh) {
         keel::control::StateSpace res;
@@ -261,7 +260,7 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr) {
                         0, 0, "d2c", "", "numkit:d2c:singular");
         }
         return packResult(res.a.as_ref(), res.b.as_ref(), res.c.as_ref(), res.d,
-                          res.n, 0.0, origKind.as_ref(), mr);
+                          res.n, 0.0, origKind, mr);
     }
 
     keel::Array<keel::f64> Ac(s.n * s.n, 0.0, mr);
@@ -275,7 +274,7 @@ Value d2c(const Value &sys, keel::StringRef method, keel::Allocator *mr) {
         throw Error("d2c (tustin): A_d + I is singular",
                     0, 0, "d2c", "", "numkit:d2c:singular");
     }
-    return packResult(Ac.as_ref(), Bc.as_ref(), Cc.as_ref(), Dc, s.n, 0.0, origKind.as_ref(), mr);
+    return packResult(Ac.as_ref(), Bc.as_ref(), Cc.as_ref(), Dc, s.n, 0.0, origKind, mr);
 }
 
 } // namespace numkit::control

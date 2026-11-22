@@ -9,6 +9,7 @@
 
 #include <keel/core.h>
 #include <keel/ref.h>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/control/state/state.hpp>
 
 #include <numkit/sys/plugin.hpp>   // CallContext, ctx.engine->resource()
@@ -50,7 +51,7 @@ void gram_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, 
 void covar_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 2, 5, "covar");
-    if (a[0].isStruct())
+    if (internal::isLtiModel(a[0]))
         argcheck::checkNargin(a.size(), 2, 2, "covar");
     auto r = covar(a[0], a[1], c.engine->allocator());
     if (o.size() >= 1) o[0] = std::move(r.P);

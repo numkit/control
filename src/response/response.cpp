@@ -39,18 +39,19 @@ struct SS {
 SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
     Value Av, Bv, Cv, Dv;
     keel::f64 Ts = 0.0;
-    if (sys.isStruct() && sys.hasField("kind")) {
-        Ts = sys.field("Ts").toScalar();
-        const keel::String k = sys.field("kind").toString();
+    if (internal::isLtiModel(sys)) {
+        const Value &d = internal::ltiStruct(sys);
+        Ts = d.field("Ts").toScalar();
+        const keel::String k = d.field("kind").toString();
         if (k == "ss") {
-            Av = sys.field("A"); Bv = sys.field("B");
-            Cv = sys.field("C"); Dv = sys.field("D");
+            Av = d.field("A"); Bv = d.field("B");
+            Cv = d.field("C"); Dv = d.field("D");
         } else if (k == "tf") {
-            auto s = tf2ss(sys.field("num"), sys.field("den"), mr);
+            auto s = tf2ss(d.field("num"), d.field("den"), mr);
             Av = std::move(s.A); Bv = std::move(s.B);
             Cv = std::move(s.C); Dv = std::move(s.D);
         } else if (k == "zpk") {
-            auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+            auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
             auto s = tf2ss(num, den, mr);
             Av = std::move(s.A); Bv = std::move(s.B);
             Cv = std::move(s.C); Dv = std::move(s.D);
@@ -59,7 +60,7 @@ SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
                         0, 0, fn, "", keel::format("numkit:{}:kind", fn));
         }
     } else {
-        throw Error(keel::format("{}: input 1 (sys) must be an LTI struct (tf/zpk/ss)", fn),
+        throw Error(keel::format("{}: input 1 (sys) must be an LTI model (tf/zpk/ss)", fn),
                     0, 0, fn, "", keel::format("numkit:{}:kind", fn));
     }
 
@@ -131,13 +132,13 @@ Vec runSimSiso(const SS &sys, const Vec &t, const Vec &u, const Vec &x0,
 }
 
 void response_sys_argcheck(const Value &sys, const char *fn) {
-    if (sys.isStruct() && sys.hasField("kind")) {
-        const keel::String k = sys.field("kind").toString();
+    if (internal::isLtiModel(sys)) {
+        const keel::String k = internal::ltiKindOf(sys);
         if (k == "ss" || k == "tf" || k == "zpk") return;
         throw Error(keel::format("{}: input 1 (sys) has unknown LTI kind '{}'", fn, k),
                     0, 0, fn, "", keel::format("numkit:{}:kind", fn));
     }
-    throw Error(keel::format("{}: input 1 (sys) must be an LTI struct (tf/zpk/ss)", fn),
+    throw Error(keel::format("{}: input 1 (sys) must be an LTI model (tf/zpk/ss)", fn),
                 0, 0, fn, "", keel::format("numkit:{}:kind", fn));
 }
 
@@ -193,11 +194,12 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     Vec t(tIn.numel(), 0.0, mr);
     for (keel::usize i = 0; i < tIn.numel(); ++i) t[i] = tIn.elemAsDouble(i);
 
-    if (sys.isStruct() && sys.hasField("kind") && sys.field("kind").toString() == "ss") {
-        const Value &Av = sys.field("A");
-        const Value &Bv = sys.field("B");
-        const Value &Cv = sys.field("C");
-        const Value &Dv = sys.field("D");
+    if (internal::isLtiKind(sys, "ss")) {
+        const Value &sd = internal::ltiStruct(sys);
+        const Value &Av = sd.field("A");
+        const Value &Bv = sd.field("B");
+        const Value &Cv = sd.field("C");
+        const Value &Dv = sd.field("D");
         const keel::usize n = Av.dims().rows();
         const keel::usize nu = Bv.dims().cols();
         const keel::usize ny = Cv.dims().rows();
@@ -242,7 +244,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
                 *xOut = Value::matrix(N, n, ValueType::DOUBLE, mr);
                 xRef = keel::MutArrayRef<keel::f64>(xOut->doubleDataMut(), N * n);
             }
-            const keel::f64 Ts = sys.field("Ts").toScalar();
+            const keel::f64 Ts = sd.field("Ts").toScalar();
             (void)keel::control::simulate_mimo(A.as_ref(), B.as_ref(), C.as_ref(), D.as_ref(),
                                                n, nu, ny, Ts, t.as_ref(), uCol.as_ref(),
                                                x0.as_ref(),

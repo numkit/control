@@ -15,6 +15,7 @@
 #include <keel/utf8.h>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>   // minreal
+#include <numkit/control/internal/lti_object.hpp>
 
 #include <numkit/sys/plugin.hpp>   // CallContext, ctx.engine->resource()
 #include <numkit/value/error.hpp>
@@ -41,7 +42,7 @@ void tf_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
         s.field("Ts") = Value::scalar(0.0, mr);
         s.field("num") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("den") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = std::move(s);
+        outs[0] = internal::wrapLtiObject("tf", std::move(s), mr);
         return;
     }
     if (args.size() == 1 || (args.size() == 2 && (args[0].isChar() || args[0].isString()))) {
@@ -66,13 +67,14 @@ void tf_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
         }
     }
     if (args.size() == 1) {
-        if (args[0].isStruct()) {
-            if (args[0].hasField("kind") && args[0].field("kind").toString() == "tf") {
-                outs[0] = args[0];
+        if (internal::isLtiModel(args[0])) {
+            const Value &d = internal::ltiStruct(args[0]);
+            if (internal::isLtiKind(args[0], "tf")) {
+                outs[0] = args[0].isObject() ? args[0] : internal::wrapLtiObject("tf", d, mr);
                 return;
             }
             auto [num, den] = tfdata(args[0], true, mr);
-            const keel::f64 Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            const keel::f64 Ts = internal::ltiSampleTime(args[0]);
             outs[0] = tf(num, den, Ts, mr);
             return;
         }
@@ -94,7 +96,7 @@ void zpk_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
         s.field("z") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("p") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("k") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = std::move(s);
+        outs[0] = internal::wrapLtiObject("zpk", std::move(s), mr);
         return;
     }
     if (args.size() == 1 || (args.size() == 2 && (args[0].isChar() || args[0].isString()))) {
@@ -112,9 +114,9 @@ void zpk_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
         }
     }
     if (args.size() == 1) {
-        if (args[0].isStruct()) {
+        if (internal::isLtiModel(args[0])) {
             auto [z, p, k] = zpkdata(args[0], true, mr);
-            const keel::f64 Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            const keel::f64 Ts = internal::ltiSampleTime(args[0]);
             outs[0] = zpk(z, p, k.toScalar(), Ts, mr);
             return;
         }
@@ -140,13 +142,13 @@ void ss_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
         s.field("B") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("C") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("D") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = std::move(s);
+        outs[0] = internal::wrapLtiObject("ss", std::move(s), mr);
         return;
     }
     if (args.size() == 1) {
-        if (args[0].isStruct()) {
+        if (internal::isLtiModel(args[0])) {
             auto [A, B, C, D] = ssdata(args[0], mr);
-            const keel::f64 Ts = args[0].hasField("Ts") ? args[0].field("Ts").toScalar() : 0.0;
+            const keel::f64 Ts = internal::ltiSampleTime(args[0]);
             outs[0] = ss(A, B, C, D, Ts, mr);
             return;
         }
@@ -172,7 +174,7 @@ void filt_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArra
         s.field("num") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("den") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("variable") = Value::fromString("z^-1", mr);
-        outs[0] = std::move(s);
+        outs[0] = internal::wrapLtiObject("tf", std::move(s), mr);
         return;
     }
     if (args.size() == 1) {
@@ -196,7 +198,7 @@ void frd_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
         s.field("Ts") = Value::scalar(0.0, mr);
         s.field("resp") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("freq") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = std::move(s);
+        outs[0] = internal::wrapLtiObject("frd", std::move(s), mr);
         return;
     }
     argcheck::checkNargin(args.size(), 2, "frd");
@@ -245,7 +247,7 @@ void ss2ss_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/,
                keel::MutArrayRef<Value> outs, CallContext &ctx)
 {
     argcheck::checkNargin(args.size(), 2, 5, "ss2ss");
-    if (args[0].isStruct())
+    if (internal::isLtiModel(args[0]))
         argcheck::checkNargin(args.size(), 2, 2, "ss2ss");
     outs[0] = ss2ss(args[0], args[1], ctx.engine->allocator());
 }
@@ -373,8 +375,7 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     argcheck::checkNargin(args.size(), 2, 3, "modred");
     auto *mr = ctx.engine->allocator();
     auto [A, B, C, D] = ssdata(args[0], mr);
-    const keel::f64 Ts = (args[0].isStruct() && args[0].hasField("Ts"))
-        ? args[0].field("Ts").toScalar() : 0.0;
+    const keel::f64 Ts = internal::ltiSampleTime(args[0]);
     const keel::usize n = A.dims().rows();
     const keel::usize nu = B.dims().cols();
     const keel::usize ny = C.dims().rows();

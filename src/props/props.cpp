@@ -40,14 +40,11 @@ namespace numkit::control {
 namespace {
 
 bool hasKind(const Value &sys, const char *want) {
-    if (!sys.isStruct()) return false;
-    if (!sys.hasField("kind")) return false;
-    return sys.field("kind").toString() == want;
+    return internal::isLtiKind(sys, want);
 }
 
 keel::f64 sampleTime(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("Ts")) return sys.field("Ts").toScalar();
-    return 0.0;
+    return internal::ltiSampleTime(sys);
 }
 
 Value boolValue(bool b, keel::Allocator *mr) {
@@ -87,12 +84,13 @@ Value rowFromCoeffs(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
 
 // Helper: poles as a column Value, regardless of input form.
 Value polesOf(const Value &sys, keel::Allocator *mr) {
+    const Value &d = internal::ltiStruct(sys);
     if (hasKind(sys, "tf"))
-        return numkit::builtin::roots(sys.field("den"), mr);
+        return numkit::builtin::roots(d.field("den"), mr);
     if (hasKind(sys, "zpk"))
-        return sys.field("p");
+        return d.field("p");
     if (hasKind(sys, "ss")) {
-        auto cp = charPoly(sys.field("A"));
+        auto cp = charPoly(d.field("A"));
         return numkit::builtin::roots(rowFromCoeffs(cp, mr), mr);
     }
     if ((sys.isNumeric() || sys.isComplex()) && !sys.isObject()
@@ -100,24 +98,21 @@ Value polesOf(const Value &sys, keel::Allocator *mr) {
         auto cp = charPoly(sys);
         return numkit::builtin::roots(rowFromCoeffs(cp, mr), mr);
     }
-    throw Error("expected an LTI struct (tf/zpk/ss)",
+    throw Error("expected an LTI model (tf/zpk/ss)",
                 0, 0, "lti", "", "numkit:lti:kind");
 }
 
 Value zerosOf(const Value &sys, keel::Allocator *mr) {
+    const Value &d = internal::ltiStruct(sys);
     if (hasKind(sys, "tf"))
-        return numkit::builtin::roots(sys.field("num"), mr);
+        return numkit::builtin::roots(d.field("num"), mr);
     if (hasKind(sys, "zpk"))
-        return sys.field("z");
+        return d.field("z");
     if (hasKind(sys, "ss")) {
-        // SISO state-space: convert to (num, den) via ss2tf and root
-        // the numerator. Matches MATLAB's transmission-zero behaviour
-        // for SISO systems (without needing the QZ generalised eigen-
-        // value solver that handles MIMO directly).
-        const Value &A = sys.field("A");
-        const Value &B = sys.field("B");
-        const Value &C = sys.field("C");
-        const Value &D = sys.field("D");
+        const Value &A = d.field("A");
+        const Value &B = d.field("B");
+        const Value &C = d.field("C");
+        const Value &D = d.field("D");
         const bool one_in  = (B.dims().cols() == 1);
         const bool one_out = (C.dims().rows() == 1);
         if (!one_in || !one_out) {
@@ -164,8 +159,9 @@ void isstatic_argcheck(const Value &sys) { order_argcheck(sys); }
 void zero_argcheck(const Value &sys) {
     if (hasKind(sys, "tf") || hasKind(sys, "zpk")) return;
     if (hasKind(sys, "ss")) {
-        const Value &B = sys.field("B");
-        const Value &C = sys.field("C");
+        const Value &d = internal::ltiStruct(sys);
+        const Value &B = d.field("B");
+        const Value &C = d.field("C");
         if (B.dims().cols() != 1 || C.dims().rows() != 1) {
             throw Error("zero(sys): MIMO state-space transmission zeros "
                         "require a generalised eigenvalue (QZ) solver; "
@@ -174,7 +170,7 @@ void zero_argcheck(const Value &sys) {
         }
         return;
     }
-    throw Error("expected an LTI struct (tf/zpk/ss)",
+    throw Error("expected an LTI model (tf/zpk/ss)",
                 0, 0, "lti", "", "numkit:lti:kind");
 }
 
@@ -205,8 +201,9 @@ Value issiso(const Value &sys, keel::Allocator *mr) {
     // UndefinedFunction dispatch (probed R2025b); frd models are
     // always SISO here and answer true.
     issiso_argcheck(sys);
+    const Value &d = internal::ltiStruct(sys);
     if (hasKind(sys, "tf")) {
-        const Value &num = sys.field("num");
+        const Value &num = d.field("num");
         if (num.isCell() && num.numel() > 1)
             return boolValue(false, mr);
         return boolValue(true, mr);
@@ -214,8 +211,8 @@ Value issiso(const Value &sys, keel::Allocator *mr) {
     if (hasKind(sys, "zpk") || hasKind(sys, "frd"))
         return boolValue(true, mr);   // single-output by construction here
     if (hasKind(sys, "ss")) {
-        const Value &B = sys.field("B");
-        const Value &C = sys.field("C");
+        const Value &B = d.field("B");
+        const Value &C = d.field("C");
         const bool one_in  = (B.dims().cols() == 1);
         const bool one_out = (C.dims().rows() == 1);
         return boolValue(one_in && one_out, mr);
@@ -225,10 +222,11 @@ Value issiso(const Value &sys, keel::Allocator *mr) {
 
 Value isproper(const Value &sys, keel::Allocator *mr) {
     isproper_argcheck(sys);
+    const Value &d = internal::ltiStruct(sys);
     if (hasKind(sys, "tf"))
-        return boolValue(sys.field("num").numel() <= sys.field("den").numel(), mr);
+        return boolValue(d.field("num").numel() <= d.field("den").numel(), mr);
     if (hasKind(sys, "zpk"))
-        return boolValue(sys.field("z").numel() <= sys.field("p").numel(), mr);
+        return boolValue(d.field("z").numel() <= d.field("p").numel(), mr);
     if (hasKind(sys, "frd") || hasKind(sys, "ss"))
         return boolValue(true, mr);
     return boolValue(false, mr);
@@ -256,20 +254,21 @@ Value order(const Value &sys, keel::Allocator *mr) {
     // NotSupportedModelsofClass for order(frd) while issiso/isproper
     // accept it (probed R2025b).
     order_argcheck(sys);
+    const Value &sd = internal::ltiStruct(sys);
     if (hasKind(sys, "tf")) {
         // order = max(deg num, deg den) = max(numel-1).
-        const keel::usize n = sys.field("num").numel();
-        const keel::usize d = sys.field("den").numel();
+        const keel::usize n = sd.field("num").numel();
+        const keel::usize d = sd.field("den").numel();
         const keel::usize m = (n > d) ? n : d;
         return Value::scalar((m == 0) ? 0.0 : keel::f64(m - 1), mr);
     }
     if (hasKind(sys, "zpk")) {
-        const keel::usize z = sys.field("z").numel();
-        const keel::usize p = sys.field("p").numel();
+        const keel::usize z = sd.field("z").numel();
+        const keel::usize p = sd.field("p").numel();
         return Value::scalar(keel::f64((z > p) ? z : p), mr);
     }
     if (hasKind(sys, "ss"))
-        return Value::scalar(keel::f64(sys.field("A").dims().rows()), mr);
+        return Value::scalar(keel::f64(sd.field("A").dims().rows()), mr);
     return Value::scalar(0.0, mr);
 }
 

@@ -9,6 +9,7 @@
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <keel/ref.h>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/control/response/response.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -135,8 +136,7 @@ void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRe
     if (a.size() >= 3 && !a[2].isEmpty()) {
         tIn = a[2];
     } else {
-        const keel::f64 Ts = (a[0].isStruct() && a[0].hasField("Ts"))
-            ? a[0].field("Ts").toScalar() : 0.0;
+        const keel::f64 Ts = internal::ltiSampleTime(a[0]);
         if (Ts == 0.0)
             throw Error("lsim: time vector t is required for continuous-time models.",
                         0, 0, "lsim", "", "numkit:lsim:t");

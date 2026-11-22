@@ -17,6 +17,7 @@
 #include <numkit/value/value.hpp>
 
 #include <algorithm>
+#include <numkit/control/internal/lti_object.hpp>
 #include <utility>
 
 namespace numkit::control {
@@ -24,14 +25,11 @@ namespace numkit::control {
 namespace {
 
 bool hasKind(const Value &sys, const char *want) {
-    if (!sys.isStruct() || !sys.hasField("kind")) return false;
-    return sys.field("kind").toString() == want;
+    return internal::isLtiKind(sys, want);
 }
 
 keel::f64 sampleTime(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("Ts"))
-        return sys.field("Ts").toScalar();
-    return 0.0;
+    return internal::ltiSampleTime(sys);
 }
 
 keel::Array<keel::f64> coeffsReal(const Value &v, keel::Allocator *mr) {
@@ -55,18 +53,19 @@ keel::Array<keel::c64> toComplexVec(const Value &v, keel::Allocator *mr) {
 struct NumDen { keel::Array<keel::f64> num, den; };
 
 NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
+    const Value &d = internal::ltiStruct(sys);
     if (hasKind(sys, "tf"))
-        return {coeffsReal(sys.field("num"), mr), coeffsReal(sys.field("den"), mr)};
+        return {coeffsReal(d.field("num"), mr), coeffsReal(d.field("den"), mr)};
     if (hasKind(sys, "zpk")) {
-        auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         return {coeffsReal(num, mr), coeffsReal(den, mr)};
     }
     if (hasKind(sys, "ss")) {
-        auto [num, den] = ss2tf(sys.field("A"), sys.field("B"),
-                                sys.field("C"), sys.field("D"), /*iu=*/1, mr);
+        auto [num, den] = ss2tf(d.field("A"), d.field("B"),
+                                d.field("C"), d.field("D"), /*iu=*/1, mr);
         return {coeffsReal(num, mr), coeffsReal(den, mr)};
     }
-    throw Error("control freq: expected an LTI struct (tf/zpk/ss)",
+    throw Error("control freq: expected an LTI model (tf/zpk/ss)",
                 0, 0, "freq", "", "numkit:control:kind");
 }
 

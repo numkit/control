@@ -9,6 +9,7 @@
 
 #include <keel/core.h>
 #include <keel/ref.h>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/control/props/props.hpp>
 
 #include <numkit/sys/plugin.hpp>   // CallContext, ctx.engine->resource()
@@ -38,7 +39,7 @@ void isproper_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value>
 
 void isstable_reg(keel::ArrayRef<Value> a, keel::usize nargout, keel::MutArrayRef<Value> o, CallContext &c)
 { argcheck::checkNargin(a.size(), 1, 3, "isstable");
-  if (!a[0].isStruct() && (a.size() >= 2 || a[0].dims().rows() != a[0].dims().cols())) {
+  if (!internal::isLtiModel(a[0]) && (a.size() >= 2 || a[0].dims().rows() != a[0].dims().cols())) {
       if (const auto *fn = c.engine->findExternal("signal.filter_analysis.isstable")) {
           (*fn)(a, nargout, o, c);
           return;

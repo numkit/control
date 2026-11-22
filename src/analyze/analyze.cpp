@@ -8,6 +8,7 @@
 #include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/string.h>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/control/analyze/analyze.hpp>
 #include <numkit/control/conversion/conversion.hpp>
 #include <numkit/control/freq/freq.hpp>
@@ -35,11 +36,9 @@ Value rowFrom(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
 }
 
 void dcgain_argcheck(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("kind")) {
-        const keel::String k = sys.field("kind").toString();
-        if (k == "tf" || k == "zpk" || k == "ss") return;
-    }
-    throw Error("control freq: expected an LTI struct (tf/zpk/ss)",
+    const keel::String k = internal::ltiKindOf(sys);
+    if (k == "tf" || k == "zpk" || k == "ss") return;
+    throw Error("control freq: expected an LTI model (tf/zpk/ss)",
                 0, 0, "freq", "", "numkit:control:kind");
 }
 
@@ -48,42 +47,41 @@ void margin_argcheck(const Value &sys) {
 }
 
 void allmargin_argcheck(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("kind")) {
-        const keel::String k = sys.field("kind").toString();
-        if (k == "tf" || k == "zpk" || k == "ss") return;
-    }
-    throw Error("allmargin: expected an LTI struct (tf/zpk/ss)",
+    const keel::String k = internal::ltiKindOf(sys);
+    if (k == "tf" || k == "zpk" || k == "ss") return;
+    throw Error("allmargin: expected an LTI model (tf/zpk/ss)",
                 0, 0, "allmargin", "", "numkit:allmargin:kind");
 }
 
 void stepinfo_argcheck(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("kind")) {
-        const keel::String k = sys.field("kind").toString();
+    if (internal::isLtiModel(sys)) {
+        const keel::String k = internal::ltiKindOf(sys);
         if (k == "tf" || k == "zpk" || k == "ss") return;
         throw Error(keel::format("step: input 1 (sys) has unknown LTI kind '{}'", k),
                     0, 0, "step", "", "numkit:step:kind");
     }
-    throw Error("step: input 1 (sys) must be an LTI struct (tf/zpk/ss)",
+    throw Error("step: input 1 (sys) must be an LTI model (tf/zpk/ss)",
                 0, 0, "step", "", "numkit:step:kind");
 }
 
 std::pair<keel::Array<keel::f64>, keel::Array<keel::f64>>
 openLoopNumDen(const Value &sys, keel::Allocator *mr) {
-    if (sys.isStruct() && sys.hasField("kind")) {
-        const keel::String k = sys.field("kind").toString();
+    if (internal::isLtiModel(sys)) {
+        const Value &d = internal::ltiStruct(sys);
+        const keel::String k = internal::ltiKindOf(sys);
         if (k == "tf")
-            return {readCol(sys.field("num"), mr), readCol(sys.field("den"), mr)};
+            return {readCol(d.field("num"), mr), readCol(d.field("den"), mr)};
         if (k == "zpk") {
-            auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+            auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
             return {readCol(num, mr), readCol(den, mr)};
         }
         if (k == "ss") {
-            auto [num, den] = ss2tf(sys.field("A"), sys.field("B"),
-                                    sys.field("C"), sys.field("D"), 1, mr);
+            auto [num, den] = ss2tf(d.field("A"), d.field("B"),
+                                    d.field("C"), d.field("D"), 1, mr);
             return {readCol(num, mr), readCol(den, mr)};
         }
     }
-    throw Error("allmargin: expected an LTI struct (tf/zpk/ss)",
+    throw Error("allmargin: expected an LTI model (tf/zpk/ss)",
                 0, 0, "allmargin", "", "numkit:allmargin:kind");
 }
 

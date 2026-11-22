@@ -9,6 +9,7 @@
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <numkit/control/conversion/conversion.hpp>
+#include <numkit/control/internal/lti_object.hpp>
 
 #include <numkit/builtin/polyfun.hpp>
 #include <numkit/value/error.hpp>
@@ -95,12 +96,11 @@ void ss2tf_argcheck(const Value &A, const Value &B, const Value &C, keel::i32 iu
 }
 
 bool isKind(const Value &sys, const char *want) {
-    return sys.isStruct() && sys.hasField("kind") &&
-           sys.field("kind").toString() == want;
+    return internal::isLtiKind(sys, want);
 }
 
 keel::f64 sampleTimeOf(const Value &sys) {
-    return (sys.isStruct() && sys.hasField("Ts")) ? sys.field("Ts").toScalar() : 0.0;
+    return internal::ltiSampleTime(sys);
 }
 
 Value taggedStruct(const char *kind, keel::f64 Ts, keel::Allocator *mr) {
@@ -125,11 +125,12 @@ cancelTf(const Value &numV, const Value &denV, keel::f64 tol, keel::Allocator *m
 
 void minreal_argcheck(const Value &sys) {
     if (!isKind(sys, "tf") && !isKind(sys, "zpk") && !isKind(sys, "ss"))
-        throw Error("minreal: expected an LTI struct (tf / zpk / ss)",
+        throw Error("minreal: expected an LTI model (tf / zpk / ss)",
                     0, 0, "minreal", "", "numkit:minreal:kind");
     if (isKind(sys, "ss")) {
-        const Value &B = sys.field("B");
-        const Value &C = sys.field("C");
+        const Value &s = internal::ltiStruct(sys);
+        const Value &B = s.field("B");
+        const Value &C = s.field("C");
         if (C.dims().rows() != 1 || B.dims().cols() != 1)
             throw Error("minreal: only SISO state-space is supported",
                         0, 0, "minreal", "", "numkit:minreal:mimo");
@@ -222,25 +223,26 @@ ss2tf(const Value &A, const Value &B,
 
 Value minreal(const Value &sys, keel::f64 tol, keel::Allocator *mr) {
     minreal_argcheck(sys);
+    const Value &d = internal::ltiStruct(sys);
     if (isKind(sys, "tf")) {
-        auto [n2, d2] = cancelTf(sys.field("num"), sys.field("den"), tol, mr);
+        auto [n2, d2] = cancelTf(d.field("num"), d.field("den"), tol, mr);
         Value s = taggedStruct("tf", sampleTimeOf(sys), mr);
         s.field("num") = std::move(n2);
         s.field("den") = std::move(d2);
-        return s;
+        return internal::wrapLtiObject("tf", std::move(s), mr);
     }
     if (isKind(sys, "zpk")) {
-        auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         auto [n2, d2] = cancelTf(num, den, tol, mr);
         Value s = taggedStruct("tf", sampleTimeOf(sys), mr);
         s.field("num") = std::move(n2);
         s.field("den") = std::move(d2);
-        return s;
+        return internal::wrapLtiObject("tf", std::move(s), mr);
     }
     if (isKind(sys, "ss")) {
-        const Value &B = sys.field("B");
-        const Value &C = sys.field("C");
-        auto [num, den] = ss2tf(sys.field("A"), B, C, sys.field("D"), 1, mr);
+        const Value &B = d.field("B");
+        const Value &C = d.field("C");
+        auto [num, den] = ss2tf(d.field("A"), B, C, d.field("D"), 1, mr);
         auto [n2, d2] = cancelTf(num, den, tol, mr);
         StateSpace r = tf2ss(n2, d2, mr);
         Value s = taggedStruct("ss", sampleTimeOf(sys), mr);
@@ -248,9 +250,9 @@ Value minreal(const Value &sys, keel::f64 tol, keel::Allocator *mr) {
         s.field("B") = std::move(r.B);
         s.field("C") = std::move(r.C);
         s.field("D") = std::move(r.D);
-        return s;
+        return internal::wrapLtiObject("ss", std::move(s), mr);
     }
-    throw Error("minreal: expected an LTI struct (tf / zpk / ss)",
+    throw Error("minreal: expected an LTI model (tf / zpk / ss)",
                 0, 0, "minreal", "", "numkit:minreal:kind");
 }
 

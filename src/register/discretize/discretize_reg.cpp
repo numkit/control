@@ -9,6 +9,7 @@
 #include <keel/core.h>
 #include <keel/ref.h>
 #include <keel/string.h>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/control/discretize/discretize.hpp>
 #include <numkit/control/lti/lti.hpp>
 
@@ -38,16 +39,17 @@ void c2d_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, C
         Value D = Value::matrix(1, m, ValueType::DOUBLE, mr);
         Value sysc = ss(a[0], a[1], C, D, 0.0, mr);
         Value sysd = c2d(sysc, a[2].toScalar(), "zoh", mr);
-        o[0] = sysd.field("A");
-        if (o.size() >= 2) o[1] = sysd.field("B");
+        const Value &sd = internal::ltiStruct(sysd);
+        o[0] = sd.field("A");
+        if (o.size() >= 2) o[1] = sd.field("B");
         return;
     }
     keel::String method;
     if (a.size() >= 3 && !a[2].isEmpty()) method = argString(a[2]);
     Value sysd = c2d(a[0], a[1].toScalar(), method.as_ref(), mr);
     if (o.size() >= 2) {
-        if (sysd.isStruct() && sysd.hasField("G"))
-            o[1] = sysd.field("G");
+        if (internal::isLtiModel(sysd) && internal::ltiStruct(sysd).hasField("G"))
+            o[1] = internal::ltiStruct(sysd).field("G");
         else
             o[1] = Value::matrix(0, 0, ValueType::DOUBLE, mr);
     }

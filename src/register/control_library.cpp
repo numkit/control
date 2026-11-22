@@ -17,6 +17,11 @@
 #include <utility>
 
 namespace numkit::control::detail {
+// lti/lti_class_reg.cpp
+BuiltinClass makeTfBuiltinClass();
+BuiltinClass makeSsBuiltinClass();
+BuiltinClass makeZpkBuiltinClass();
+BuiltinClass makeFrdBuiltinClass();
 // lti/lti.cpp
 void tf_reg       (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
 void zpk_reg      (keel::ArrayRef<Value>, keel::usize, keel::MutArrayRef<Value>, CallContext &);
@@ -94,6 +99,11 @@ namespace numkit {
 
 void ControlLibrary::install(PluginContext &engine)
 {
+    engine.registerClass(control::detail::makeTfBuiltinClass());
+    engine.registerClass(control::detail::makeSsBuiltinClass());
+    engine.registerClass(control::detail::makeZpkBuiltinClass());
+    engine.registerClass(control::detail::makeFrdBuiltinClass());
+
     auto reg = [&](const char *sub, const char *name, ExternalFunc fn) {
         keel::String ns = keel::format("control.{}", sub);
         engine.registerFunction(ns.as_ref(), name, std::move(fn));

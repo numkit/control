@@ -24,6 +24,7 @@
 #include <keel/ref.h>
 #include <keel/string.h>
 
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 #include <numkit/value/value_type.hpp>   // mtypeName (got-clauses)
@@ -148,11 +149,9 @@ inline void requireDoubleOnlyInput(const Value &v, keel::StringRef fn,
 inline void requireLtiModel(const Value &sys, keel::StringRef fn,
                             bool acceptFrD = false)
 {
-    if (sys.isStruct() && sys.hasField("kind")) {
-        const keel::String k = sys.field("kind").toString();
-        if (k == "tf" || k == "zpk" || k == "ss" || (acceptFrD && k == "frd"))
-            return;
-    }
+    const keel::String k = ltiKindOf(sys);
+    if (k == "tf" || k == "zpk" || k == "ss" || (acceptFrD && k == "frd"))
+        return;
     keel::String msg = keel::format("{}: input 1 (sys) must be an LTI model struct (tf/zpk/ss", fn);
     if (acceptFrD) msg.append("/frd");
     msg.append(") — built by tf/zpk/ss");

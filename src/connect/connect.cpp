@@ -22,6 +22,7 @@
 
 // Compute-only TU: Value substrate + Error, no engine. The series / parallel
 // / feedback builtins (CallContext wrappers) live in connect/connect_reg.cpp.
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/value/value.hpp>
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
@@ -34,17 +35,13 @@ namespace numkit::control {
 namespace {
 
 bool hasKind(const Value &sys, const char *want) {
-    if (!sys.isStruct() || !sys.hasField("kind")) return false;
-    return sys.field("kind").toString() == want;
+    return internal::isLtiKind(sys, want);
 }
 
 keel::f64 sampleTime(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("Ts"))
-        return sys.field("Ts").toScalar();
     // A plain numeric is a static gain with UNSPECIFIED sample time (-1):
     // it inherits the other operand's Ts via Ts_combine.
-    if (!sys.isStruct()) return -1.0;
-    return 0.0;
+    return internal::ltiSampleTime(sys, -1.0);
 }
 
 keel::Array<keel::f64> coeffsReal(const Value &v) {
@@ -65,28 +62,26 @@ Value rowOf(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
 struct NumDen { keel::Array<keel::f64> num, den; };
 
 NumDen toNumDen(const Value &sys, keel::Allocator *mr) {
-    // A plain numeric scalar is a STATIC gain system K = K/1, i.e.
-    // num = [K], den = [1]. MATLAB accepts this in every interconnection
-    // (e.g. feedback(sys, 1) for unity feedback, series(sys, 2), ...).
-    if (!sys.isStruct()) {
+    if (!internal::isLtiModel(sys)) {
         if (sys.numel() == 1)
             return {keel::Array<keel::f64>{sys.toScalar()}, keel::Array<keel::f64>{1.0}};
         throw Error("control connect: a numeric system must be a scalar gain",
                     0, 0, "control", "", "numkit:control:kind");
     }
+    const Value &d = internal::ltiStruct(sys);
     if (hasKind(sys, "tf")) {
-        return {coeffsReal(sys.field("num")), coeffsReal(sys.field("den"))};
+        return {coeffsReal(d.field("num")), coeffsReal(d.field("den"))};
     }
     if (hasKind(sys, "zpk")) {
-        auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         return {coeffsReal(num), coeffsReal(den)};
     }
     if (hasKind(sys, "ss")) {
-        auto [num, den] = ss2tf(sys.field("A"), sys.field("B"),
-                                 sys.field("C"), sys.field("D"), /*iu=*/1, mr);
+        auto [num, den] = ss2tf(d.field("A"), d.field("B"),
+                                d.field("C"), d.field("D"), /*iu=*/1, mr);
         return {coeffsReal(num), coeffsReal(den)};
     }
-    throw Error("control connect: expected tf/zpk/ss struct",
+    throw Error("control connect: expected tf/zpk/ss model",
                 0, 0, "control", "", "numkit:control:kind");
 }
 
@@ -128,13 +123,13 @@ keel::f64 Ts_combine(keel::f64 Ts1, keel::f64 Ts2, const char *op) {
 }
 
 void connect_sys_argcheck(const Value &sys) {
-    if (!sys.isStruct()) {
+    if (!internal::isLtiModel(sys)) {
         if (sys.numel() == 1) return;
         throw Error("control connect: a numeric system must be a scalar gain",
                     0, 0, "control", "", "numkit:control:kind");
     }
     if (!hasKind(sys, "tf") && !hasKind(sys, "zpk") && !hasKind(sys, "ss"))
-        throw Error("control connect: expected tf/zpk/ss struct",
+        throw Error("control connect: expected tf/zpk/ss model",
                     0, 0, "control", "", "numkit:control:kind");
 }
 

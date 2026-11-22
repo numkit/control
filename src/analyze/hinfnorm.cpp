@@ -21,27 +21,26 @@ namespace numkit::control {
 namespace {
 
 bool hasKind(const Value &sys, const char *want) {
-    if (!sys.isStruct() || !sys.hasField("kind")) return false;
-    return sys.field("kind").toString() == want;
+    return internal::isLtiKind(sys, want);
 }
 
 keel::f64 sampleTime(const Value &sys) {
-    if (sys.isStruct() && sys.hasField("Ts")) return sys.field("Ts").toScalar();
-    return 0.0;
+    return internal::ltiSampleTime(sys);
 }
 
 StateSpace pullABCD(const Value &sys, keel::Allocator *mr) {
+    const Value &d = internal::ltiStruct(sys);
     StateSpace out;
     if (hasKind(sys, "ss")) {
-        out.A = sys.field("A"); out.B = sys.field("B");
-        out.C = sys.field("C"); out.D = sys.field("D");
+        out.A = d.field("A"); out.B = d.field("B");
+        out.C = d.field("C"); out.D = d.field("D");
     } else if (hasKind(sys, "tf")) {
-        out = tf2ss(sys.field("num"), sys.field("den"), mr);
+        out = tf2ss(d.field("num"), d.field("den"), mr);
     } else if (hasKind(sys, "zpk")) {
-        auto [num, den] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         out = tf2ss(num, den, mr);
     } else {
-        throw Error("hinfnorm: expected an LTI struct (tf/zpk/ss)",
+        throw Error("hinfnorm: expected an LTI model (tf/zpk/ss)",
                     0, 0, "hinfnorm", "", "numkit:hinfnorm:kind");
     }
     return out;
@@ -60,9 +59,9 @@ bool hinfnorm_argcheck(const Value &sys) {
             || t == ValueType::SINGLE || t == ValueType::LOGICAL
             || isIntegerType(t));
     if (numericScalar) return true;
-    if (!sys.isStruct() || !sys.hasField("kind"))
+    if (!internal::isLtiModel(sys))
         throw Error(keel::format("hinfnorm: input 1 (sys) must be an LTI "
-                                 "model struct (tf/zpk/ss) or a static-gain scalar "
+                                 "model (tf/zpk/ss) or a static-gain scalar "
                                  "(got a {} {} array).",
                                  internal::shapeOf(sys), mtypeName(t)),
                     0, 0, "hinfnorm", "", "numkit:hinfnorm:inputType");

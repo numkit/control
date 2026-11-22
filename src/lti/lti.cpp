@@ -15,6 +15,7 @@
 #include <keel/string.h>
 #include <numkit/control/lti/lti.hpp>
 #include <numkit/control/conversion/conversion.hpp>
+#include <numkit/control/internal/lti_object.hpp>
 #include <numkit/control/internal/type_gates.hpp>
 
 // Compute-only TU: Value substrate + Error, no engine. The tf/zpk/ss/filt/frd
@@ -188,12 +189,12 @@ Value tf(const Value &num, const Value &den, keel::f64 Ts, keel::Allocator *mr)
         Value s = tagStruct("tf", Ts, mr);
         s.field("num") = std::move(numC);
         s.field("den") = std::move(denC);
-        return s;
+        return internal::wrapLtiObject("tf", std::move(s), mr);
     }
     Value s = tagStruct("tf", Ts, mr);
     s.field("num") = rowVec(numC, mr);
     s.field("den") = rowVec(denC, mr);
-    return s;
+    return internal::wrapLtiObject("tf", std::move(s), mr);
 }
 
 Value zpk(const Value &z, const Value &p, keel::f64 k, keel::f64 Ts,
@@ -204,7 +205,7 @@ Value zpk(const Value &z, const Value &p, keel::f64 k, keel::f64 Ts,
     s.field("z") = rowVec(z, mr);
     s.field("p") = rowVec(p, mr);
     s.field("k") = Value::scalar(k, mr);
-    return s;
+    return internal::wrapLtiObject("zpk", std::move(s), mr);
 }
 
 namespace {
@@ -305,7 +306,7 @@ Value ss(const Value &A, const Value &B, const Value &C, const Value &D, keel::f
     s.field("B") = copyMat(Bv);
     s.field("C") = copyMat(Cv);
     s.field("D") = copyMat(Dv);
-    return s;
+    return internal::wrapLtiObject("ss", std::move(s), mr);
 }
 
 Value filt(const Value &num, const Value &den, keel::f64 Ts, keel::Allocator *mr)
@@ -316,13 +317,13 @@ Value filt(const Value &num, const Value &den, keel::f64 Ts, keel::Allocator *mr
         s.field("num") = std::move(numC);
         s.field("den") = std::move(denC);
         s.field("variable") = Value::fromString("z^-1", mr);
-        return s;
+        return internal::wrapLtiObject("tf", std::move(s), mr);
     }
     Value s = tagStruct("tf", Ts, mr);
     s.field("num") = rowVec(numC, mr);
     s.field("den") = rowVec(denC, mr);
     s.field("variable") = Value::fromString("z^-1", mr);
-    return s;
+    return internal::wrapLtiObject("tf", std::move(s), mr);
 }
 
 Value frd(const Value &response, const Value &frequency, keel::f64 Ts, keel::Allocator *mr)
@@ -347,7 +348,7 @@ Value frd(const Value &response, const Value &frequency, keel::f64 Ts, keel::All
     keel::f64 *fd = fv.doubleDataMut();
     for (keel::usize i = 0; i < N; ++i) fd[i] = frequency.elemAsDouble(i);
     s.field("freq") = std::move(fv);
-    return s;
+    return internal::wrapLtiObject("frd", std::move(s), mr);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -483,8 +484,7 @@ keel::Array<keel::c64> readCMat(const Value &v) {
 namespace {
 
 keel::String kindOf(const Value &sys) {
-    if (!sys.isStruct() || !sys.hasField("kind")) return keel::String{};
-    return sys.field("kind").toString();
+    return internal::ltiKindOf(sys);
 }
 
 // Pad num with leading zeros to match den length (MATLAB tfdata convention).
@@ -562,7 +562,8 @@ void ss2ss_argcheck(const Value &sys, const Value &T, Value &Tc,
     internal::requireCoercibleMatrix(T, "ss2ss", "T", 2);
     internal::requireNonIntegerMatrix(T, "ss2ss", "T", 2);
     Tc = internal::coerceToDoubleMatrix(T, mr);
-    const Value &Av = sys.field("A");
+    const Value &s = internal::ltiStruct(sys);
+    const Value &Av = s.field("A");
     const keel::usize n = Av.dims().rows();
     if (Av.dims().cols() != n || Tc.dims().rows() != n || Tc.dims().cols() != n)
         throw Error("ss2ss: T must be n×n with n = order(sys)",
@@ -575,11 +576,12 @@ std::tuple<Value, Value>
 tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
 {
     tfdata_argcheck(sys);
+    const Value &s = internal::ltiStruct(sys);
     Value num, den;
     const keel::String k = kindOf(sys);
     if (k == "tf") {
-        num = sys.field("num");
-        den = sys.field("den");
+        num = s.field("num");
+        den = s.field("den");
         if (num.isCell() && den.isCell()) {
             const keel::usize ny = num.dims().rows();
             const keel::usize nu = num.dims().cols();
@@ -600,12 +602,12 @@ tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
             }
         }
     } else if (k == "zpk") {
-        std::tie(num, den) = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        std::tie(num, den) = zp2tf(s.field("z"), s.field("p"), s.field("k"), mr);
     } else {
-        const Value &A = sys.field("A");
-        const Value &B = sys.field("B");
-        const Value &C = sys.field("C");
-        const Value &D = sys.field("D");
+        const Value &A = s.field("A");
+        const Value &B = s.field("B");
+        const Value &C = s.field("C");
+        const Value &D = s.field("D");
         const keel::usize ny = (C.dims().rows() == 0) ? 1 : C.dims().rows();
         const keel::usize nu = (B.dims().cols() == 0) ? 1 : B.dims().cols();
         if (ny > 1 || nu > 1) {
@@ -641,20 +643,21 @@ std::tuple<Value, Value, Value>
 zpkdata(const Value &sys, bool asVector, keel::Allocator *mr)
 {
     zpkdata_argcheck(sys);
+    const Value &s = internal::ltiStruct(sys);
     Value z, p, k;
     const keel::String kind = kindOf(sys);
     if (kind == "zpk") {
-        z = colVec(sys.field("z"), mr);
-        p = colVec(sys.field("p"), mr);
-        k = Value::scalar(sys.field("k").toScalar(), mr);
+        z = colVec(s.field("z"), mr);
+        p = colVec(s.field("p"), mr);
+        k = Value::scalar(s.field("k").toScalar(), mr);
     } else if (kind == "tf") {
-        auto r = tf2zp(sys.field("num"), sys.field("den"), mr);
+        auto r = tf2zp(s.field("num"), s.field("den"), mr);
         z = colVec(r.z, mr);
         p = colVec(r.p, mr);
         k = Value::scalar(r.k.toScalar(), mr);
     } else {
-        auto [n, d] = ss2tf(sys.field("A"), sys.field("B"),
-                            sys.field("C"), sys.field("D"), 1, mr);
+        auto [n, d] = ss2tf(s.field("A"), s.field("B"),
+                            s.field("C"), s.field("D"), 1, mr);
         auto r = tf2zp(n, d, mr);
         z = colVec(r.z, mr);
         p = colVec(r.p, mr);
@@ -668,19 +671,20 @@ std::tuple<Value, Value, Value, Value>
 ssdata(const Value &sys, keel::Allocator *mr)
 {
     ssdata_argcheck(sys);
+    const Value &s = internal::ltiStruct(sys);
     const keel::String kind = kindOf(sys);
     Value A, B, C, D;
     if (kind == "ss") {
-        A = sys.field("A");
-        B = sys.field("B");
-        C = sys.field("C");
-        D = sys.field("D");
+        A = s.field("A");
+        B = s.field("B");
+        C = s.field("C");
+        D = s.field("D");
     } else if (kind == "tf") {
-        auto ss = tf2ss(sys.field("num"), sys.field("den"), mr);
+        auto ss = tf2ss(s.field("num"), s.field("den"), mr);
         A = std::move(ss.A); B = std::move(ss.B);
         C = std::move(ss.C); D = std::move(ss.D);
     } else {
-        auto [n, d] = zp2tf(sys.field("z"), sys.field("p"), sys.field("k"), mr);
+        auto [n, d] = zp2tf(s.field("z"), s.field("p"), s.field("k"), mr);
         auto ss = tf2ss(n, d, mr);
         A = std::move(ss.A); B = std::move(ss.B);
         C = std::move(ss.C); D = std::move(ss.D);
@@ -692,10 +696,11 @@ std::tuple<Value, Value>
 frdata(const Value &sys, keel::Allocator *mr)
 {
     frdata_argcheck(sys);
+    const Value &s = internal::ltiStruct(sys);
     // Shallow copy through the user resource; resp / freq are already
     // stored as column vectors by frd().
-    Value resp = sys.field("resp");
-    Value freq = sys.field("freq");
+    Value resp = s.field("resp");
+    Value freq = s.field("freq");
     // Defensive copy so callers don't observe aliasing into the struct.
     auto copyV = [&](const Value &v) -> Value {
         const keel::usize N = v.numel();
@@ -718,10 +723,11 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
 {
     Value Tc;
     ss2ss_argcheck(sys, T, Tc, mr);
-    const Value &Av = sys.field("A");
-    const Value &Bv = sys.field("B");
-    const Value &Cv = sys.field("C");
-    const Value &Dv = sys.field("D");
+    const Value &s = internal::ltiStruct(sys);
+    const Value &Av = s.field("A");
+    const Value &Bv = s.field("B");
+    const Value &Cv = s.field("C");
+    const Value &Dv = s.field("D");
     const keel::usize n = Av.dims().rows();
     const keel::usize m = Bv.dims().cols();
     const keel::usize p = Cv.dims().rows();
@@ -746,12 +752,12 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
             for (keel::usize i = 0; i < rr * cc; ++i) od[i] = v[i];
             return out;
         };
-        Value out = tagStruct("ss", sys.field("Ts").toScalar(), mr);
+        Value out = tagStruct("ss", s.field("Ts").toScalar(), mr);
         out.field("A") = putCMat(Anew, n, n);
         out.field("B") = putCMat(Bnew, n, m);
         out.field("C") = putCMat(Cnew, p, n);
         out.field("D") = Dv;
-        return out;
+        return internal::wrapLtiObject("ss", std::move(out), mr);
     }
 
     keel::Array<keel::f64> Tinv;
@@ -777,12 +783,12 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
         return out;
     };
 
-    Value out = tagStruct("ss", sys.field("Ts").toScalar(), mr);
+    Value out = tagStruct("ss", s.field("Ts").toScalar(), mr);
     out.field("A") = putMat(Anew, n, n);
     out.field("B") = putMat(Bnew, n, m);
     out.field("C") = putMat(Cnew, p, n);
     out.field("D") = Dv;
-    return out;
+    return internal::wrapLtiObject("ss", std::move(out), mr);
 }
 
 } // namespace numkit::control
