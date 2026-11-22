@@ -92,3 +92,13 @@ TEST_F(ResponseXTrajTest, StepinfoTransientTimeOvershoot)
     EXPECT_GT(evalScalar("info.TransientTime"), 0.0);
     EXPECT_DOUBLE_EQ(evalScalar("double(info.TransientTime == info.SettlingTime)"), 1.0);
 }
+
+TEST_F(ResponseXTrajTest, LsimTransferFunctionIgnoresX0)
+{
+    eval("sys = tf([10 0], [1 0.16 0.64]); t = (0:0.1:1)'; u = ones(size(t));\n"
+         "y_ref = lsim(sys, u, t);\n"
+         "y_z0 = lsim(sys, u, t, 0, 'zoh');\n"
+         "y_z1 = lsim(sys, u, t, 1, 'zoh');\n");
+    EXPECT_NEAR(evalScalar("max(abs(y_ref - y_z0))"), 0.0, 1e-12);
+    EXPECT_NEAR(evalScalar("max(abs(y_ref - y_z1))"), 0.0, 1e-12);
+}

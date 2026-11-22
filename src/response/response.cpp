@@ -194,7 +194,8 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     Vec t(tIn.numel(), 0.0, mr);
     for (keel::usize i = 0; i < tIn.numel(); ++i) t[i] = tIn.elemAsDouble(i);
 
-    if (internal::isLtiKind(sys, "ss")) {
+    const bool isSS = internal::isLtiKind(sys, "ss");
+    if (isSS) {
         const Value &sd = internal::ltiStruct(sys);
         const Value &Av = sd.field("A");
         const Value &Bv = sd.field("B");
@@ -258,12 +259,14 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     if (uIn.numel() != t.size())
         throw Error("lsim: u and t must be the same length",
                     0, 0, "lsim", "", "numkit:lsim:size");
-    if (x0In.numel() != 0 && x0In.numel() != s.n)
+    // Initial state x0 applies only to state-space models; for transfer
+    // function / zpk models x0 is ignored and zero initial state is used.
+    if (isSS && x0In.numel() != 0 && x0In.numel() != s.n)
         throw Error(keel::format("lsim: input 4 (x0) must have one entry per state (got {} entries for {} states).",
                                  x0In.numel(), s.n),
                     0, 0, "lsim", "", "numkit:lsim:x0");
 
-    if (uIn.isComplex() || x0In.isComplex()) {
+    if (uIn.isComplex() || (isSS && x0In.isComplex())) {
         const keel::usize N = t.size();
         Vec uRe(N, 0.0, mr), uIm(N, 0.0, mr);
         if (uIn.isComplex()) {
@@ -273,7 +276,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
             for (keel::usize i = 0; i < N; ++i) uRe[i] = uIn.elemAsDouble(i);
         }
         Vec x0Re(s.n, 0.0, mr), x0Im(s.n, 0.0, mr);
-        if (x0In.numel() == s.n) {
+        if (isSS && x0In.numel() == s.n) {
             if (x0In.isComplex()) {
                 const keel::c64 *cd = x0In.complexData();
                 for (keel::usize i = 0; i < s.n; ++i) { x0Re[i] = cd[i].real(); x0Im[i] = cd[i].imag(); }
@@ -299,7 +302,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     Vec u(t.size(), 0.0, mr);
     for (keel::usize i = 0; i < t.size(); ++i) u[i] = uIn.elemAsDouble(i);
     Vec x0(s.n, 0.0, mr);
-    if (x0In.numel() == s.n) {
+    if (isSS && x0In.numel() == s.n) {
         for (keel::usize i = 0; i < s.n; ++i) x0[i] = x0In.elemAsDouble(i);
     }
     Vec xTraj;
