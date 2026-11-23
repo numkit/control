@@ -18,7 +18,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <cstddef>
 #include <utility>
 
 namespace numkit::control {

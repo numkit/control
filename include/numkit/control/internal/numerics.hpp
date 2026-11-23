@@ -16,7 +16,6 @@
 #include <keel/array.h>
 #include <keel/core.h>
 #include <keel/complex.h>
-#include <cstddef>
 
 namespace numkit::control::internal {
 
