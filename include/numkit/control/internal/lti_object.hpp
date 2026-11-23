@@ -14,7 +14,6 @@
 #include <numkit/value/object.hpp>
 #include <numkit/value/value.hpp>
 
-#include <utility>
 
 namespace numkit::control::internal {
 
@@ -25,7 +24,7 @@ struct LtiPayload final : public NativePayload
 {
     Value data; // underlying struct storing kind, Ts, model arrays, and metadata
 
-    explicit LtiPayload(Value d) : data(std::move(d)) {}
+    explicit LtiPayload(Value d) : data(keel::move(d)) {}
 
     keel::Arc<NativePayload> clone(keel::Allocator *alloc = nullptr) const override
     {
@@ -49,8 +48,8 @@ inline Value wrapLtiObject(keel::StringRef clsName, Value structData, keel::Allo
 {
     keel::Allocator *a = mr ? mr : keel::default_allocator();
     auto state = keel::make_arc_in<ObjectState>(a, a);
-    state->native = keel::make_arc_in<LtiPayload>(a, std::move(structData));
-    return Value::object(clsName, std::move(state), /*isHandle=*/false, a);
+    state->native = keel::make_arc_in<LtiPayload>(a, keel::move(structData));
+    return Value::object(clsName, keel::move(state), /*isHandle=*/false, a);
 }
 
 inline bool isLtiModel(const Value &v) noexcept

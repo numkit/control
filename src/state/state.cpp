@@ -18,7 +18,6 @@
 #include <numkit/value/value.hpp>
 
 #include <algorithm>
-#include <utility>
 
 namespace numkit::control {
 
@@ -37,13 +36,13 @@ ABC pullABC(const Value &sys, const char *fn, keel::Allocator *mr) {
         out.C = d.field("C"); out.D = d.field("D");
     } else if (hasKind(sys, "tf")) {
         auto ss = tf2ss(d.field("num"), d.field("den"), mr);
-        out.A = std::move(ss.A); out.B = std::move(ss.B);
-        out.C = std::move(ss.C); out.D = std::move(ss.D);
+        out.A = keel::move(ss.A); out.B = keel::move(ss.B);
+        out.C = keel::move(ss.C); out.D = keel::move(ss.D);
     } else if (hasKind(sys, "zpk")) {
         auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         auto ss = tf2ss(num, den, mr);
-        out.A = std::move(ss.A); out.B = std::move(ss.B);
-        out.C = std::move(ss.C); out.D = std::move(ss.D);
+        out.A = keel::move(ss.A); out.B = keel::move(ss.B);
+        out.C = keel::move(ss.C); out.D = keel::move(ss.D);
     } else {
         throw Error(keel::format("{}: input 1 (sys) must be an LTI model (tf/zpk/ss)", fn),
                     0, 0, fn, "", keel::format("numkit:{}:kind", fn));

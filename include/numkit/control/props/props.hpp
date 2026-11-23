@@ -7,7 +7,6 @@
 
 #include <keel/memory.h>
 #include <numkit/value/value.hpp>
-#include <utility>
 
 namespace numkit::control {
 
@@ -143,7 +142,7 @@ DampResult damp(const Value &sys,
 /// @param mr   Memory resource (nullptr → process default).
 /// @return     `(poles, zeros)` pair; bind via `auto [p, z] = pzmap(sys);`.
 /// @see pole, zero
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 pzmap(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// @brief Static-system predicate (`isstatic(sys)`).

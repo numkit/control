@@ -23,7 +23,6 @@
 #include <numkit/value/value.hpp>
 
 #include <algorithm>
-#include <utility>
 
 namespace numkit::control::detail {
 
@@ -219,9 +218,9 @@ Value buildTfObject(keel::ArrayRef<keel::f64> num, keel::ArrayRef<keel::f64> den
     Value s = Value::structure(mr);
     s.field("kind") = Value::fromString("tf", mr);
     s.field("Ts") = Value::scalar(Ts, mr);
-    s.field("num") = std::move(nv);
-    s.field("den") = std::move(dv);
-    return wrapLtiObject("tf", std::move(s), mr);
+    s.field("num") = keel::move(nv);
+    s.field("den") = keel::move(dv);
+    return wrapLtiObject("tf", keel::move(s), mr);
 }
 
 Value evalLtiBinaryOp(char op, const Value &a, const Value &b, keel::Allocator *mr)
@@ -279,10 +278,10 @@ Value wrapIndexedTf(const Value &srcData, Value subNum, Value subDen, keel::Allo
         out.field("num") = subNum.cellAt(0);
         out.field("den") = subDen.cellAt(0);
     } else {
-        out.field("num") = std::move(subNum);
-        out.field("den") = std::move(subDen);
+        out.field("num") = keel::move(subNum);
+        out.field("den") = keel::move(subDen);
     }
-    return wrapLtiObject("tf", std::move(out), mr);
+    return wrapLtiObject("tf", keel::move(out), mr);
 }
 
 Value indexSs2D(const Value &srcData,
@@ -305,12 +304,12 @@ Value indexSs2D(const Value &srcData,
     Value out = Value::structure(mr);
     out.field("kind") = Value::fromString("ss", mr);
     out.field("A") = A;
-    out.field("B") = std::move(subB);
-    out.field("C") = std::move(subC);
-    out.field("D") = std::move(subD);
+    out.field("B") = keel::move(subB);
+    out.field("C") = keel::move(subC);
+    out.field("D") = keel::move(subD);
     if (srcData.hasField("Ts"))
         out.field("Ts") = srcData.field("Ts");
-    return wrapLtiObject("ss", std::move(out), mr);
+    return wrapLtiObject("ss", keel::move(out), mr);
 }
 
 BuiltinClass makeCommonLtiClass(const char *clsName,
@@ -324,7 +323,7 @@ BuiltinClass makeCommonLtiClass(const char *clsName,
     cls.construct = [ctorFn](keel::ArrayRef<Value> args, CallContext &ctx) -> Value {
         Value out[1];
         ctorFn(args, 1, keel::MutArrayRef<Value>(out, 1), ctx);
-        return std::move(out[0]);
+        return keel::move(out[0]);
     };
 
     cls.propGet = [clsName](const Value &self, keel::StringRef name, Value &out, CallContext &) -> bool {
@@ -406,7 +405,7 @@ BuiltinClass makeCommonLtiClass(const char *clsName,
         Value out = Value::matrix(1, 2, ValueType::DOUBLE, mr);
         out.doubleDataMut()[0] = keel::as<keel::f64>(ny);
         out.doubleDataMut()[1] = keel::as<keel::f64>(nu);
-        outs[0] = std::move(out);
+        outs[0] = keel::move(out);
     });
 
     auto prependSelf = [](const Value &self, keel::ArrayRef<Value> rest) {
@@ -502,7 +501,7 @@ BuiltinClass makeTfBuiltinClass()
             auto ids = Value::resolveIndices(idxArgs[0], num.numel());
             Value subNum = num.indexGet(ids.data(), ids.size(), mr);
             Value subDen = den.indexGet(ids.data(), ids.size(), mr);
-            outs[0] = wrapIndexedTf(*d, std::move(subNum), std::move(subDen), mr);
+            outs[0] = wrapIndexedTf(*d, keel::move(subNum), keel::move(subDen), mr);
             return;
         }
         if (idxArgs.size() == 2) {
@@ -510,7 +509,7 @@ BuiltinClass makeTfBuiltinClass()
             auto cids = Value::resolveIndices(idxArgs[1], num.dims().cols());
             Value subNum = num.indexGet2D(rids.data(), rids.size(), cids.data(), cids.size(), mr);
             Value subDen = den.indexGet2D(rids.data(), rids.size(), cids.data(), cids.size(), mr);
-            outs[0] = wrapIndexedTf(*d, std::move(subNum), std::move(subDen), mr);
+            outs[0] = wrapIndexedTf(*d, keel::move(subNum), keel::move(subDen), mr);
             return;
         }
         throw numkit::Error("tf: expected 1 or 2 subscripts");

@@ -16,7 +16,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <utility>
 
 namespace numkit::control {
 namespace detail {
@@ -44,10 +43,10 @@ void margin_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o
     auto *mr = c.engine->allocator();
     Value sys = a.empty() ? defaultDemoSys(mr) : a[0];
     auto m = margin(sys, mr);
-    if (o.size() >= 1) o[0] = std::move(m.Gm);
-    if (o.size() >= 2) o[1] = std::move(m.Pm);
-    if (o.size() >= 3) o[2] = std::move(m.Wcg);
-    if (o.size() >= 4) o[3] = std::move(m.Wcp);
+    if (o.size() >= 1) o[0] = keel::move(m.Gm);
+    if (o.size() >= 2) o[1] = keel::move(m.Pm);
+    if (o.size() >= 3) o[2] = keel::move(m.Wcg);
+    if (o.size() >= 4) o[3] = keel::move(m.Wcp);
 }
 
 void stepinfo_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)

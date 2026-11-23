@@ -12,7 +12,7 @@
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <numkit/value/value.hpp>
-#include <tuple>
+#include <keel/tuple.h>
 
 namespace numkit::control {
 
@@ -124,7 +124,7 @@ Value frd(const Value &response, const Value &frequency, keel::f64 Ts,
 /// @throws     Error if `kind != "frd"`.
 ///
 /// @see frd
-std::tuple<Value, Value>
+keel::Tuple<Value, Value>
 frdata(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// Extract numerator / denominator from any LTI form (`tfdata`).
@@ -144,7 +144,7 @@ frdata(const Value &sys, keel::Allocator *mr = nullptr);
 /// @throws          Error on unrecognised kind.
 ///
 /// @see zpkdata, ssdata
-std::tuple<Value, Value>
+keel::Tuple<Value, Value>
 tfdata(const Value &sys, bool asVector, keel::Allocator *mr = nullptr);
 
 /// Extract zeros, poles, and gain (`zpkdata`).
@@ -158,7 +158,7 @@ tfdata(const Value &sys, bool asVector, keel::Allocator *mr = nullptr);
 /// @return          `(z, p, k)`.
 ///
 /// @see tfdata, ssdata
-std::tuple<Value, Value, Value>
+keel::Tuple<Value, Value, Value>
 zpkdata(const Value &sys, bool asVector, keel::Allocator *mr = nullptr);
 
 /// Extract A, B, C, D from any LTI form (`ssdata`).
@@ -170,7 +170,7 @@ zpkdata(const Value &sys, bool asVector, keel::Allocator *mr = nullptr);
 /// @return     `(A, B, C, D)`.
 ///
 /// @see tfdata, zpkdata
-std::tuple<Value, Value, Value, Value>
+keel::Tuple<Value, Value, Value, Value>
 ssdata(const Value &sys, keel::Allocator *mr = nullptr);
 
 /// Similarity transform of a state-space model (`ss2ss(sys, T)`).

@@ -18,7 +18,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <utility>
 
 namespace numkit::control {
 namespace detail {
@@ -57,9 +56,9 @@ void step_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRe
     auto [y, t] = step_response(sys, tArg,
                                 outs.size() >= 3 ? &xOut : nullptr,
                                 mr);
-    if (outs.size() >= 1) outs[0] = std::move(y);
-    if (outs.size() >= 2) outs[1] = std::move(t);
-    if (outs.size() >= 3) outs[2] = std::move(xOut);
+    if (outs.size() >= 1) outs[0] = keel::move(y);
+    if (outs.size() >= 2) outs[1] = keel::move(t);
+    if (outs.size() >= 3) outs[2] = keel::move(xOut);
 }
 
 void impulse_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
@@ -85,9 +84,9 @@ void impulse_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArra
     auto [y, t] = impulse_response(sys, tArg,
                                    outs.size() >= 3 ? &xOut : nullptr,
                                    mr);
-    if (outs.size() >= 1) outs[0] = std::move(y);
-    if (outs.size() >= 2) outs[1] = std::move(t);
-    if (outs.size() >= 3) outs[2] = std::move(xOut);
+    if (outs.size() >= 1) outs[0] = keel::move(y);
+    if (outs.size() >= 2) outs[1] = keel::move(t);
+    if (outs.size() >= 3) outs[2] = keel::move(xOut);
 }
 
 void initial_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
@@ -99,9 +98,9 @@ void initial_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArra
     auto [y, t] = initial_response(a[0], a[1], tArg,
                                    outs.size() >= 3 ? &xOut : nullptr,
                                    c.engine->allocator());
-    if (outs.size() >= 1) outs[0] = std::move(y);
-    if (outs.size() >= 2) outs[1] = std::move(t);
-    if (outs.size() >= 3) outs[2] = std::move(xOut);
+    if (outs.size() >= 1) outs[0] = keel::move(y);
+    if (outs.size() >= 2) outs[1] = keel::move(t);
+    if (outs.size() >= 3) outs[2] = keel::move(xOut);
 }
 
 void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRef<Value> outs,
@@ -118,7 +117,7 @@ void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRe
             Value xOut;
             outs[0] = lsim(sys, a[4], a[5], x0,
                            outs.size() >= 2 ? &xOut : nullptr, mr);
-            if (outs.size() >= 2) outs[1] = std::move(xOut);
+            if (outs.size() >= 2) outs[1] = keel::move(xOut);
             return;
         }
         if (a.size() >= 4) {
@@ -127,7 +126,7 @@ void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRe
             Value xOut;
             outs[0] = lsim(sys, a[2], a[3], x0,
                            outs.size() >= 2 ? &xOut : nullptr, mr);
-            if (outs.size() >= 2) outs[1] = std::move(xOut);
+            if (outs.size() >= 2) outs[1] = keel::move(xOut);
             return;
         }
     }
@@ -156,9 +155,9 @@ void lsim_reg(keel::ArrayRef<Value> a, keel::usize /*nargout*/, keel::MutArrayRe
         Value t = Value::matrix(tIn.numel(), 1, ValueType::DOUBLE, mr);
         for (keel::usize i = 0; i < tIn.numel(); ++i)
             t.doubleDataMut()[i] = tIn.elemAsDouble(i);
-        outs[1] = std::move(t);
+        outs[1] = keel::move(t);
     }
-    if (outs.size() >= 3) outs[2] = std::move(xOut);
+    if (outs.size() >= 3) outs[2] = keel::move(xOut);
 }
 
 } // namespace detail

@@ -12,7 +12,6 @@
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <numkit/value/value.hpp>
-#include <utility>
 
 namespace numkit::control {
 
@@ -113,7 +112,7 @@ NyquistResult nyquist(const Value &sys, const Value &wArg,
 ///              Bind via `auto [r, k] = rlocus(sys, kVec);`.
 ///
 /// @see margin, bode
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 rlocus(const Value &sys, const Value &kVec,
        keel::Allocator *mr = nullptr);
 

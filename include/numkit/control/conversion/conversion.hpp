@@ -12,7 +12,6 @@
 #include <keel/core.h>
 #include <keel/memory.h>
 #include <numkit/value/value.hpp>
-#include <utility>
 
 namespace numkit::control {
 
@@ -70,7 +69,7 @@ Tf2ZpResult tf2zp(const Value &num, const Value &den,
 /// @return    `(num, den)`; bind via `auto [num, den] = zp2tf(z, p, k);`.
 ///
 /// @see tf2zp, tf2ss
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 zp2tf(const Value &z, const Value &p, const Value &k,
       keel::Allocator *mr = nullptr);
 
@@ -123,7 +122,7 @@ StateSpace tf2ss(const Value &num, const Value &den,
 ///            C has more than 1 row (MIMO not supported).
 ///
 /// @see tf2ss, tf2zp
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 ss2tf(const Value &A, const Value &B,
       const Value &C, const Value &D, keel::i32 iu,
       keel::Allocator *mr = nullptr);

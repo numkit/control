@@ -17,7 +17,6 @@
 #include <numkit/value/value.hpp>
 
 #include <algorithm>
-#include <utility>
 
 namespace numkit::control {
 
@@ -61,13 +60,13 @@ SS toSSiso(const Value &sys, keel::Allocator *mr) {
         Cv = d.field("C"); Dv = d.field("D");
     } else if (hasKind(sys, "tf")) {
         auto s = tf2ss(d.field("num"), d.field("den"), mr);
-        Av = std::move(s.A); Bv = std::move(s.B);
-        Cv = std::move(s.C); Dv = std::move(s.D);
+        Av = keel::move(s.A); Bv = keel::move(s.B);
+        Cv = keel::move(s.C); Dv = keel::move(s.D);
     } else if (hasKind(sys, "zpk")) {
         auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         auto s = tf2ss(num, den, mr);
-        Av = std::move(s.A); Bv = std::move(s.B);
-        Cv = std::move(s.C); Dv = std::move(s.D);
+        Av = keel::move(s.A); Bv = keel::move(s.B);
+        Cv = keel::move(s.C); Dv = keel::move(s.D);
     } else {
         throw Error("c2d/d2c: expected an LTI struct (tf/zpk/ss)",
                     0, 0, "discretize", "", "numkit:control:kind");
@@ -198,7 +197,7 @@ Value c2d(const Value &sys, keel::f64 Ts, keel::StringRef method, keel::Allocato
         Value DdV = matFromVec(ny, nu, Dd.as_ref(), mr);
         Value res = ss(AdV, BdV, CdV, DdV, Ts, mr);
         if (Value *rd = internal::ltiDataMutPtr(res))
-            rd->field("G") = std::move(GV);
+            rd->field("G") = keel::move(GV);
         return res;
     }
 

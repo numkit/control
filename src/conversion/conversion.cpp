@@ -16,7 +16,6 @@
 #include <numkit/value/value.hpp>
 
 #include <algorithm>
-#include <utility>
 
 namespace numkit::control {
 
@@ -110,7 +109,7 @@ Value taggedStruct(const char *kind, keel::f64 Ts, keel::Allocator *mr) {
     return s;
 }
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 cancelTf(const Value &numV, const Value &denV, keel::f64 tol, keel::Allocator *mr) {
     const auto numR = coeffsReal(numV, mr);
     const auto denR = coeffsReal(denV, mr);
@@ -147,10 +146,10 @@ Tf2ZpResult tf2zp(const Value &num, const Value &den, keel::Allocator *mr) {
     Value zRoots = numkit::builtin::roots(num, mr);
     Value pRoots = numkit::builtin::roots(den, mr);
 
-    return {std::move(zRoots), std::move(pRoots), Value::scalar(k, mr)};
+    return {keel::move(zRoots), keel::move(pRoots), Value::scalar(k, mr)};
 }
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 zp2tf(const Value &z, const Value &p, const Value &k, keel::Allocator *mr) {
     Value den = numkit::builtin::poly(p, mr);
     Value num = numkit::builtin::poly(z, mr);
@@ -176,7 +175,7 @@ zp2tf(const Value &z, const Value &p, const Value &k, keel::Allocator *mr) {
         num = scaled;
     }
 
-    return {std::move(num), std::move(den)};
+    return {keel::move(num), keel::move(den)};
 }
 
 StateSpace tf2ss(const Value &num, const Value &den, keel::Allocator *mr) {
@@ -191,7 +190,7 @@ StateSpace tf2ss(const Value &num, const Value &den, keel::Allocator *mr) {
             Value::scalar(res.d, mr)};
 }
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 ss2tf(const Value &A, const Value &B,
       const Value &C, const Value &D, keel::i32 iu,
       keel::Allocator *mr) {
@@ -227,17 +226,17 @@ Value minreal(const Value &sys, keel::f64 tol, keel::Allocator *mr) {
     if (isKind(sys, "tf")) {
         auto [n2, d2] = cancelTf(d.field("num"), d.field("den"), tol, mr);
         Value s = taggedStruct("tf", sampleTimeOf(sys), mr);
-        s.field("num") = std::move(n2);
-        s.field("den") = std::move(d2);
-        return internal::wrapLtiObject("tf", std::move(s), mr);
+        s.field("num") = keel::move(n2);
+        s.field("den") = keel::move(d2);
+        return internal::wrapLtiObject("tf", keel::move(s), mr);
     }
     if (isKind(sys, "zpk")) {
         auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
         auto [n2, d2] = cancelTf(num, den, tol, mr);
         Value s = taggedStruct("tf", sampleTimeOf(sys), mr);
-        s.field("num") = std::move(n2);
-        s.field("den") = std::move(d2);
-        return internal::wrapLtiObject("tf", std::move(s), mr);
+        s.field("num") = keel::move(n2);
+        s.field("den") = keel::move(d2);
+        return internal::wrapLtiObject("tf", keel::move(s), mr);
     }
     if (isKind(sys, "ss")) {
         const Value &B = d.field("B");
@@ -246,11 +245,11 @@ Value minreal(const Value &sys, keel::f64 tol, keel::Allocator *mr) {
         auto [n2, d2] = cancelTf(num, den, tol, mr);
         StateSpace r = tf2ss(n2, d2, mr);
         Value s = taggedStruct("ss", sampleTimeOf(sys), mr);
-        s.field("A") = std::move(r.A);
-        s.field("B") = std::move(r.B);
-        s.field("C") = std::move(r.C);
-        s.field("D") = std::move(r.D);
-        return internal::wrapLtiObject("ss", std::move(s), mr);
+        s.field("A") = keel::move(r.A);
+        s.field("B") = keel::move(r.B);
+        s.field("C") = keel::move(r.C);
+        s.field("D") = keel::move(r.D);
+        return internal::wrapLtiObject("ss", keel::move(s), mr);
     }
     throw Error("minreal: expected an LTI model (tf / zpk / ss)",
                 0, 0, "minreal", "", "numkit:minreal:kind");

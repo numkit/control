@@ -17,7 +17,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 
-#include <utility>
 
 namespace numkit::control {
 
@@ -64,7 +63,7 @@ void stepinfo_argcheck(const Value &sys) {
                 0, 0, "step", "", "numkit:step:kind");
 }
 
-std::pair<keel::Array<keel::f64>, keel::Array<keel::f64>>
+keel::Pair<keel::Array<keel::f64>, keel::Array<keel::f64>>
 openLoopNumDen(const Value &sys, keel::Allocator *mr) {
     if (internal::isLtiModel(sys)) {
         const Value &d = internal::ltiStruct(sys);

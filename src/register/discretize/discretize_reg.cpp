@@ -53,7 +53,7 @@ void c2d_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, C
         else
             o[1] = Value::matrix(0, 0, ValueType::DOUBLE, mr);
     }
-    o[0] = std::move(sysd);
+    o[0] = keel::move(sysd);
 }
 
 void d2c_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)

@@ -18,7 +18,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <utility>
 
 namespace numkit::control {
 namespace detail {
@@ -76,12 +75,12 @@ void bode_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, 
         Value p3 = Value::matrix3d(1, 1, N, ValueType::DOUBLE, mr);
         keel::copy_n(m3.doubleDataMut(), b.mag.doubleData(), N);
         keel::copy_n(p3.doubleDataMut(), b.phase.doubleData(), N);
-        b.mag = std::move(m3);
-        b.phase = std::move(p3);
+        b.mag = keel::move(m3);
+        b.phase = keel::move(p3);
     }
-    if (o.size() >= 1) o[0] = std::move(b.mag);
-    if (o.size() >= 2) o[1] = std::move(b.phase);
-    if (o.size() >= 3) o[2] = std::move(b.w);
+    if (o.size() >= 1) o[0] = keel::move(b.mag);
+    if (o.size() >= 2) o[1] = keel::move(b.phase);
+    if (o.size() >= 3) o[2] = keel::move(b.w);
 }
 
 void nyquist_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
@@ -103,9 +102,9 @@ void nyquist_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> 
         wArg = (a.size() >= 2) ? a[1] : Value::matrix(0, 0, ValueType::DOUBLE, mr);
     }
     auto n = nyquist(sys, wArg, mr);
-    if (o.size() >= 1) o[0] = std::move(n.re);
-    if (o.size() >= 2) o[1] = std::move(n.im);
-    if (o.size() >= 3) o[2] = std::move(n.w);
+    if (o.size() >= 1) o[0] = keel::move(n.re);
+    if (o.size() >= 2) o[1] = keel::move(n.im);
+    if (o.size() >= 3) o[2] = keel::move(n.w);
 }
 
 void rlocus_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
@@ -116,8 +115,8 @@ void rlocus_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o
     Value kArg = (a.size() >= 2) ? a[1]
                 : Value::matrix(0, 0, ValueType::DOUBLE, mr);
     auto [r, k] = rlocus(sys, kArg, mr);
-    if (o.size() >= 1) o[0] = std::move(r);
-    if (o.size() >= 2) o[1] = std::move(k);
+    if (o.size() >= 1) o[0] = keel::move(r);
+    if (o.size() >= 2) o[1] = keel::move(k);
 }
 
 } // namespace detail

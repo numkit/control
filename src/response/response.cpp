@@ -19,7 +19,6 @@
 #include <numkit/value/value.hpp>
 
 #include <algorithm>
-#include <utility>
 
 namespace numkit::control {
 
@@ -48,13 +47,13 @@ SS toSSiso(const Value &sys, const char *fn, keel::Allocator *mr) {
             Cv = d.field("C"); Dv = d.field("D");
         } else if (k == "tf") {
             auto s = tf2ss(d.field("num"), d.field("den"), mr);
-            Av = std::move(s.A); Bv = std::move(s.B);
-            Cv = std::move(s.C); Dv = std::move(s.D);
+            Av = keel::move(s.A); Bv = keel::move(s.B);
+            Cv = keel::move(s.C); Dv = keel::move(s.D);
         } else if (k == "zpk") {
             auto [num, den] = zp2tf(d.field("z"), d.field("p"), d.field("k"), mr);
             auto s = tf2ss(num, den, mr);
-            Av = std::move(s.A); Bv = std::move(s.B);
-            Cv = std::move(s.C); Dv = std::move(s.D);
+            Av = keel::move(s.A); Bv = keel::move(s.B);
+            Cv = keel::move(s.C); Dv = keel::move(s.D);
         } else {
             throw Error(keel::format("{}: input 1 (sys) has unknown LTI kind '{}'", fn, k),
                         0, 0, fn, "", keel::format("numkit:{}:kind", fn));
@@ -157,7 +156,7 @@ void lsim_argcheck(const Value &uIn, const Value &tIn, const Value &x0In) {
 
 } // anonymous
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 step_response(const Value &sys, const Value &tArg, Value *xOut, keel::Allocator *mr) {
     response_sys_argcheck(sys, "step");
     const SS s = toSSiso(sys, "step", mr);
@@ -170,7 +169,7 @@ step_response(const Value &sys, const Value &tArg, Value *xOut, keel::Allocator 
     return {colFromVec(y.as_ref(), mr), colFromVec(t.as_ref(), mr)};
 }
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 impulse_response(const Value &sys, const Value &tArg, Value *xOut, keel::Allocator *mr) {
     response_sys_argcheck(sys, "impulse");
     const SS s = toSSiso(sys, "impulse", mr);
@@ -291,7 +290,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
             Value xm = Value::matrix(N, s.n, ValueType::COMPLEX, mr);
             keel::c64 *xd = xm.complexDataMut();
             for (keel::usize i = 0; i < N * s.n; ++i) xd[i] = keel::c64(xTrajRe[i], xTrajIm[i]);
-            *xOut = std::move(xm);
+            *xOut = keel::move(xm);
         }
         Value yOut = Value::matrix(N, 1, ValueType::COMPLEX, mr);
         keel::c64 *yd = yOut.complexDataMut();
@@ -311,7 +310,7 @@ Value lsim(const Value &sys, const Value &uIn, const Value &tIn,
     return colFromVec(y.as_ref(), mr);
 }
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 initial_response(const Value &sys, const Value &x0In, const Value &tArg,
                  Value *xOut, keel::Allocator *mr) {
     response_sys_argcheck(sys, "initial");

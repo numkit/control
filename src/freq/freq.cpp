@@ -18,7 +18,6 @@
 
 #include <algorithm>
 #include <numkit/control/internal/lti_object.hpp>
-#include <utility>
 
 namespace numkit::control {
 
@@ -146,7 +145,7 @@ NyquistResult nyquist(const Value &sys, const Value &wArg, keel::Allocator *mr) 
     return {colDouble(re.as_ref(), mr), colDouble(im.as_ref(), mr), colDouble(w.as_ref(), mr)};
 }
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 rlocus(const Value &sys, const Value &kArg, keel::Allocator *mr) {
     freq_sys_argcheck(sys);
     const auto nd = toNumDen(sys, mr);
@@ -179,7 +178,7 @@ rlocus(const Value &sys, const Value &kArg, keel::Allocator *mr) {
         (void)keel::control::rlocus_tf(nd.num.as_ref(), nd.den.as_ref(), ks.as_ref(), n,
                                        keel::MutArrayRef<keel::c64>(R.complexDataMut(), K * n), mr);
     }
-    return {std::move(R), colDouble(ks.as_ref(), mr)};
+    return {keel::move(R), colDouble(ks.as_ref(), mr)};
 }
 
 } // namespace numkit::control

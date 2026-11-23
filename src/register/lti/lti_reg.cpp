@@ -21,7 +21,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 #include <numkit/value/value_type.hpp>   // ValueType, mtypeName (tol class gate)
-#include <utility>
 
 namespace numkit::control {
 namespace detail {
@@ -42,7 +41,7 @@ void tf_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
         s.field("Ts") = Value::scalar(0.0, mr);
         s.field("num") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("den") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = internal::wrapLtiObject("tf", std::move(s), mr);
+        outs[0] = internal::wrapLtiObject("tf", keel::move(s), mr);
         return;
     }
     if (args.size() == 1 || (args.size() == 2 && (args[0].isChar() || args[0].isString()))) {
@@ -96,7 +95,7 @@ void zpk_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
         s.field("z") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("p") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("k") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = internal::wrapLtiObject("zpk", std::move(s), mr);
+        outs[0] = internal::wrapLtiObject("zpk", keel::move(s), mr);
         return;
     }
     if (args.size() == 1 || (args.size() == 2 && (args[0].isChar() || args[0].isString()))) {
@@ -142,7 +141,7 @@ void ss_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArrayR
         s.field("B") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("C") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("D") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = internal::wrapLtiObject("ss", std::move(s), mr);
+        outs[0] = internal::wrapLtiObject("ss", keel::move(s), mr);
         return;
     }
     if (args.size() == 1) {
@@ -174,7 +173,7 @@ void filt_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArra
         s.field("num") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("den") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("variable") = Value::fromString("z^-1", mr);
-        outs[0] = internal::wrapLtiObject("tf", std::move(s), mr);
+        outs[0] = internal::wrapLtiObject("tf", keel::move(s), mr);
         return;
     }
     if (args.size() == 1) {
@@ -198,7 +197,7 @@ void frd_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutArray
         s.field("Ts") = Value::scalar(0.0, mr);
         s.field("resp") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
         s.field("freq") = Value::matrix(0, 0, ValueType::DOUBLE, mr);
-        outs[0] = internal::wrapLtiObject("frd", std::move(s), mr);
+        outs[0] = internal::wrapLtiObject("frd", keel::move(s), mr);
         return;
     }
     argcheck::checkNargin(args.size(), 2, "frd");
@@ -218,8 +217,8 @@ void tfdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayR
 {
     argcheck::checkNargin(args.size(), 1, "tfdata");  // no max: model-array tail in the reference (no count wall to 7 args)
     auto [num, den] = tfdata(args[0], wantVector(args, 1), ctx.engine->allocator());
-    outs[0] = std::move(num);
-    if (nargout > 1) outs[1] = std::move(den);
+    outs[0] = keel::move(num);
+    if (nargout > 1) outs[1] = keel::move(den);
 }
 
 void zpkdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
@@ -227,9 +226,9 @@ void zpkdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArray
 {
     argcheck::checkNargin(args.size(), 1, "zpkdata");  // no max: model-array tail in the reference (no count wall to 7 args)
     auto [z, p, k] = zpkdata(args[0], wantVector(args, 1), ctx.engine->allocator());
-    outs[0] = std::move(z);
-    if (nargout > 1) outs[1] = std::move(p);
-    if (nargout > 2) outs[2] = std::move(k);
+    outs[0] = keel::move(z);
+    if (nargout > 1) outs[1] = keel::move(p);
+    if (nargout > 2) outs[2] = keel::move(k);
 }
 
 void ssdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
@@ -237,10 +236,10 @@ void ssdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayR
 {
     argcheck::checkNargin(args.size(), 1, "ssdata");  // no max: model-array tail in the reference (no count wall to 7 args)
     auto [A, B, C, D] = ssdata(args[0], ctx.engine->allocator());
-    outs[0] = std::move(A);
-    if (nargout > 1) outs[1] = std::move(B);
-    if (nargout > 2) outs[2] = std::move(C);
-    if (nargout > 3) outs[3] = std::move(D);
+    outs[0] = keel::move(A);
+    if (nargout > 1) outs[1] = keel::move(B);
+    if (nargout > 2) outs[2] = keel::move(C);
+    if (nargout > 3) outs[3] = keel::move(D);
 }
 
 void ss2ss_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/,
@@ -286,8 +285,8 @@ void frdata_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayR
     // column vectors regardless (we don't model SISO 1×1×N tensors).
     (void)wantVector(args, 1);
     auto [resp, freq] = frdata(args[0], ctx.engine->allocator());
-    outs[0] = std::move(resp);
-    if (nargout > 1) outs[1] = std::move(freq);
+    outs[0] = keel::move(resp);
+    if (nargout > 1) outs[1] = keel::move(freq);
 }
 
 void tf2ss_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
@@ -295,10 +294,10 @@ void tf2ss_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRe
 {
     argcheck::checkNargin(args.size(), 2, 2, "tf2ss");
     auto r = tf2ss(args[0], args[1], ctx.engine->allocator());
-    outs[0] = std::move(r.A);
-    if (nargout > 1) outs[1] = std::move(r.B);
-    if (nargout > 2) outs[2] = std::move(r.C);
-    if (nargout > 3) outs[3] = std::move(r.D);
+    outs[0] = keel::move(r.A);
+    if (nargout > 1) outs[1] = keel::move(r.B);
+    if (nargout > 2) outs[2] = keel::move(r.C);
+    if (nargout > 3) outs[3] = keel::move(r.D);
 }
 
 void ss2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
@@ -311,8 +310,8 @@ void ss2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRe
         iu = argcheck::expectedPositiveInteger(iuVal, 5, "iu", "ss2tf");
     }
     auto [num, den] = ss2tf(args[0], args[1], args[2], args[3], iu, ctx.engine->allocator());
-    outs[0] = std::move(num);
-    if (nargout > 1) outs[1] = std::move(den);
+    outs[0] = keel::move(num);
+    if (nargout > 1) outs[1] = keel::move(den);
 }
 
 void tf2zp_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
@@ -320,9 +319,9 @@ void tf2zp_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRe
 {
     argcheck::checkNargin(args.size(), 2, 2, "tf2zp");
     auto r = tf2zp(args[0], args[1], ctx.engine->allocator());
-    outs[0] = std::move(r.z);
-    if (nargout > 1) outs[1] = std::move(r.p);
-    if (nargout > 2) outs[2] = std::move(r.k);
+    outs[0] = keel::move(r.z);
+    if (nargout > 1) outs[1] = keel::move(r.p);
+    if (nargout > 2) outs[2] = keel::move(r.k);
 }
 
 void zp2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
@@ -330,8 +329,8 @@ void zp2tf_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRe
 {
     argcheck::checkNargin(args.size(), 3, 3, "zp2tf");
     auto [num, den] = zp2tf(args[0], args[1], args[2], ctx.engine->allocator());
-    outs[0] = std::move(num);
-    if (nargout > 1) outs[1] = std::move(den);
+    outs[0] = keel::move(num);
+    if (nargout > 1) outs[1] = keel::move(den);
 }
 
 void ord2_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef<Value> outs,
@@ -348,7 +347,7 @@ void ord2_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef
             den.doubleDataMut()[0] = 1.0;
             den.doubleDataMut()[1] = 2.0 * z * wn;
             den.doubleDataMut()[2] = wn * wn;
-            outs[1] = std::move(den);
+            outs[1] = keel::move(den);
         }
         return;
     }
@@ -363,9 +362,9 @@ void ord2_reg(keel::ArrayRef<Value> args, keel::usize nargout, keel::MutArrayRef
     Value C = Value::matrix(1, 2, ValueType::DOUBLE, mr);
     C.doubleDataMut()[0] = 1.0;
     C.doubleDataMut()[1] = 0.0;
-    outs[0] = std::move(A);
-    if (outs.size() >= 2) outs[1] = std::move(B);
-    if (outs.size() >= 3) outs[2] = std::move(C);
+    outs[0] = keel::move(A);
+    if (outs.size() >= 2) outs[1] = keel::move(B);
+    if (outs.size() >= 3) outs[2] = keel::move(C);
     if (outs.size() >= 4) outs[3] = Value::scalar(0.0, mr);
 }
 

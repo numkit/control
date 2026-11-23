@@ -14,7 +14,6 @@
 #include <numkit/control/library.hpp>
 
 #include <numkit/sys/plugin.hpp>
-#include <utility>
 
 namespace numkit::control::detail {
 // lti/lti_class_reg.cpp
@@ -106,12 +105,12 @@ void ControlLibrary::install(PluginContext &engine)
 
     auto reg = [&](const char *sub, const char *name, ExternalFunc fn) {
         keel::String ns = keel::format("control.{}", sub);
-        engine.registerFunction(ns.as_ref(), name, std::move(fn));
+        engine.registerFunction(ns.as_ref(), name, keel::move(fn));
         // compat.* registration removed — bare-name resolver replaces it
     };
     auto regOnly = [&](const char *sub, const char *name, ExternalFunc fn) {
         keel::String ns = keel::format("control.{}", sub);
-        engine.registerFunction(ns.as_ref(), name, std::move(fn));
+        engine.registerFunction(ns.as_ref(), name, keel::move(fn));
     };
 
     reg("lti", "tf",      &control::detail::tf_reg);

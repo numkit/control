@@ -294,10 +294,10 @@ DampResult damp(const Value &sys, keel::Allocator *mr)
     (void)keel::control::damp(pv.as_ref(), Ts,
                               keel::MutArrayRef<keel::f64>(wn.doubleDataMut(), N),
                               keel::MutArrayRef<keel::f64>(zeta.doubleDataMut(), N));
-    return {std::move(wn), std::move(zeta), std::move(p)};
+    return {keel::move(wn), keel::move(zeta), keel::move(p)};
 }
 
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 pzmap(const Value &sys, keel::Allocator *mr)
 {
     pzmap_argcheck(sys);

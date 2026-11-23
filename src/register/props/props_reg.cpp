@@ -16,7 +16,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <utility>
 
 namespace numkit::control {
 namespace detail {
@@ -63,17 +62,17 @@ void damp_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, 
 {
     argcheck::checkNargin(a.size(), 1, 2, "damp");
     auto d = damp(a[0], c.engine->allocator());
-    if (o.size() >= 1) o[0] = std::move(d.wn);
-    if (o.size() >= 2) o[1] = std::move(d.zeta);
-    if (o.size() >= 3) o[2] = std::move(d.p);
+    if (o.size() >= 1) o[0] = keel::move(d.wn);
+    if (o.size() >= 2) o[1] = keel::move(d.zeta);
+    if (o.size() >= 3) o[2] = keel::move(d.p);
 }
 
 void pzmap_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)
 {
     argcheck::checkNargin(a.size(), 1, 4, "pzmap");
     auto [p, z] = pzmap(a[0], c.engine->allocator());
-    if (o.size() >= 1) o[0] = std::move(p);
-    if (o.size() >= 2) o[1] = std::move(z);
+    if (o.size() >= 1) o[0] = keel::move(p);
+    if (o.size() >= 2) o[1] = keel::move(z);
 }
 
 void isstatic_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o, CallContext &c)

@@ -12,7 +12,6 @@
 
 #include <keel/memory.h>
 #include <numkit/value/value.hpp>
-#include <utility>
 
 namespace numkit::control {
 
@@ -44,7 +43,7 @@ namespace numkit::control {
 /// @endcode
 ///
 /// @see impulse_response, lsim
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 step_response(const Value &sys, const Value &tArg,
               Value *xOut = nullptr, keel::Allocator *mr = nullptr);
 
@@ -62,7 +61,7 @@ step_response(const Value &sys, const Value &tArg,
 /// @return      `(y, t)`.
 ///
 /// @see step_response, lsim
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 impulse_response(const Value &sys, const Value &tArg,
                  Value *xOut = nullptr, keel::Allocator *mr = nullptr);
 
@@ -102,7 +101,7 @@ Value lsim(const Value &sys, const Value &u, const Value &t,
 /// @param xOut  Optional state-trajectory output (one row per sample).
 /// @return      `(y, t)`; bind via `auto [y, t] = initial_response(sys, x0, tArg);`.
 /// @see step_response, impulse_response, lsim
-std::pair<Value, Value>
+keel::Pair<Value, Value>
 initial_response(const Value &sys, const Value &x0, const Value &tArg,
                  Value *xOut = nullptr, keel::Allocator *mr = nullptr);
 

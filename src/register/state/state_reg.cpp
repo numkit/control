@@ -54,8 +54,8 @@ void covar_reg(keel::ArrayRef<Value> a, keel::usize, keel::MutArrayRef<Value> o,
     if (internal::isLtiModel(a[0]))
         argcheck::checkNargin(a.size(), 2, 2, "covar");
     auto r = covar(a[0], a[1], c.engine->allocator());
-    if (o.size() >= 1) o[0] = std::move(r.P);
-    if (o.size() >= 2) o[1] = std::move(r.Q);
+    if (o.size() >= 1) o[0] = keel::move(r.P);
+    if (o.size() >= 2) o[1] = keel::move(r.Q);
 }
 
 } // namespace detail
