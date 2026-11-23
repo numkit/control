@@ -10,6 +10,7 @@
 // is done locally (right-aligned, longer length wins).
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/core.h>
 #include <keel/format.h>
 #include <keel/memory.h>
@@ -27,7 +28,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -51,7 +51,7 @@ keel::Array<keel::f64> coeffsReal(const Value &v) {
 
 Value rowOf(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
@@ -91,7 +91,7 @@ keel::Array<keel::f64> polyAdd(keel::ArrayRef<keel::f64> a,
 {
     const keel::usize na = a.size();
     const keel::usize nb = b.size();
-    const keel::usize n = std::max(na, nb);
+    const keel::usize n = keel::max(na, nb);
     keel::Array<keel::f64> y(n, 0.0);
     // Right-align: a[na-1] aligns with y[n-1], same for b.
     for (keel::usize i = 0; i < na; ++i) y[n - na + i] += a[i];

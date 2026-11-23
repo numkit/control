@@ -7,6 +7,7 @@
 // check on-demand.
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/tuple.h>
 #include <keel/core.h>
 #include <keel/format.h>
@@ -25,7 +26,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -409,7 +409,7 @@ bool inverse_n(const Value &T, keel::Array<keel::f64> &out, keel::usize n) {
     out.assign(n * n, 0.0);
     keel::Array<keel::f64> ej(n), x(n);
     for (keel::usize k = 0; k < n; ++k) {
-        std::fill(ej.begin(), ej.end(), 0.0);
+        keel::fill(ej.begin(), ej.end(), 0.0);
         ej[k] = 1.0;
         lu_solve(LU.data(), perm.data(), x.data(), ej.data(), n);
         for (keel::usize i = 0; i < n; ++i) out[i + k * n] = x[i];
@@ -431,7 +431,7 @@ bool inverse_n_cplx(const Value &T, keel::Array<keel::c64> &out, keel::usize n) 
     out.assign(n * n, keel::c64(0.0, 0.0));
     keel::Array<keel::c64> ej(n), x(n);
     for (keel::usize k = 0; k < n; ++k) {
-        std::fill(ej.begin(), ej.end(), keel::c64(0.0, 0.0));
+        keel::fill(ej.begin(), ej.end(), keel::c64(0.0, 0.0));
         ej[k] = keel::c64(1.0, 0.0);
         lu_solve(LU.data(), perm.data(), x.data(), ej.data(), n);
         for (keel::usize i = 0; i < n; ++i) out[i + k * n] = x[i];
@@ -594,7 +594,7 @@ tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
                 for (keel::usize i = 0; i < ny * nu; ++i) {
                     const Value &ni = num.cellAt(i);
                     const Value &di = den.cellAt(i);
-                    const keel::usize L = std::max(ni.numel(), di.numel());
+                    const keel::usize L = keel::max(ni.numel(), di.numel());
                     numOut.cellAt(i) = padToLen(ni, L, mr);
                     denOut.cellAt(i) = padToLen(di, L, mr);
                 }
@@ -623,7 +623,7 @@ tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
                     Drow.doubleDataMut()[j] = (D.numel() > 0) ? D.elemAsDouble(iy + j * ny) : 0.0;
                 for (keel::usize iu = 0; iu < nu; ++iu) {
                     auto [nij, dij] = ss2tf(A, B, Crow, Drow, keel::as<keel::i32>(iu + 1), mr);
-                    const keel::usize L = std::max(nij.numel(), dij.numel());
+                    const keel::usize L = keel::max(nij.numel(), dij.numel());
                     numOut.cellAt(iy + iu * ny) = padToLen(nij, L, mr);
                     denOut.cellAt(iy + iu * ny) = padToLen(dij, L, mr);
                 }
@@ -632,7 +632,7 @@ tfdata(const Value &sys, bool asVector, keel::Allocator *mr)
         }
         keel::tie(num, den) = ss2tf(A, B, C, D, 1, mr);
     }
-    const keel::usize L = std::max(num.numel(), den.numel());
+    const keel::usize L = keel::max(num.numel(), den.numel());
     Value np = padToLen(num, L, mr);
     Value dp = padToLen(den, L, mr);
     if (asVector) return {keel::move(np), keel::move(dp)};

@@ -4,6 +4,7 @@
 // simulation and grid selection to keel::control.
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/complex.h>
 #include <keel/control.h>
 #include <keel/core.h>
@@ -18,7 +19,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -104,14 +104,14 @@ Vec readTimeArg(const Value &sys, const Value &tArg, keel::Allocator *mr) {
 
 Value colFromVec(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(v.size(), 1, ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
 Value matFromTraj(keel::ArrayRef<keel::f64> xTraj, keel::usize N, keel::usize n,
                   keel::Allocator *mr) {
     Value m = Value::matrix(N, n, ValueType::DOUBLE, mr);
-    if (!xTraj.empty()) std::copy(xTraj.begin(), xTraj.end(), m.doubleDataMut());
+    if (!xTraj.empty()) keel::copy(xTraj.begin(), xTraj.end(), m.doubleDataMut());
     return m;
 }
 

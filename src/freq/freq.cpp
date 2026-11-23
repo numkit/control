@@ -4,6 +4,7 @@
 // delegating numerical kernels to keel::control.
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/complex.h>
 #include <keel/control.h>
 #include <keel/core.h>
@@ -16,7 +17,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 
-#include <algorithm>
 #include <numkit/control/internal/lti_object.hpp>
 
 namespace numkit::control {
@@ -84,13 +84,13 @@ keel::Array<keel::f64> readW(const Value &sys, const Value &wArg, keel::Allocato
 
 Value colDouble(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(v.size(), 1, ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
 Value colComplex(keel::ArrayRef<keel::c64> v, keel::Allocator *mr) {
     Value r = Value::matrix(v.size(), 1, ValueType::COMPLEX, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.complexDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), r.complexDataMut());
     return r;
 }
 

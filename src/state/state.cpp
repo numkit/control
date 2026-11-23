@@ -3,6 +3,7 @@
 // ctrb, obsv, gram, and covar delegating numerical kernels to keel::control.
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/complex.h>
 #include <keel/control.h>
 #include <keel/core.h>
@@ -17,7 +18,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -69,13 +69,13 @@ keel::Array<keel::c64> readCMat(const Value &v, keel::usize r, keel::usize c, ke
 
 Value matFromVec(keel::usize r, keel::usize c, keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
 Value cmatFromVec(keel::usize r, keel::usize c, keel::ArrayRef<keel::c64> v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::COMPLEX, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), m.complexDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), m.complexDataMut());
     return m;
 }
 

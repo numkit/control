@@ -7,6 +7,7 @@
 // core VM / TreeWalker / ops contain zero control-toolbox knowledge.
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/core.h>
 #include <keel/format.h>
 #include <keel/math.h>
@@ -22,7 +23,6 @@
 #include <numkit/value/object.hpp>
 #include <numkit/value/value.hpp>
 
-#include <algorithm>
 
 namespace numkit::control::detail {
 
@@ -192,7 +192,7 @@ keel::Array<keel::f64> polyMul(keel::ArrayRef<keel::f64> a, keel::ArrayRef<keel:
 
 keel::Array<keel::f64> polyAdd(keel::ArrayRef<keel::f64> a, keel::ArrayRef<keel::f64> b, keel::f64 sign)
 {
-    const keel::usize n = std::max(a.size(), b.size());
+    const keel::usize n = keel::max(a.size(), b.size());
     keel::Array<keel::f64> c(n, 0.0);
     for (keel::usize i = 0; i < a.size(); ++i)
         c[n - a.size() + i] += a[i];
@@ -206,13 +206,13 @@ Value buildTfObject(keel::ArrayRef<keel::f64> num, keel::ArrayRef<keel::f64> den
 {
     keel::Array<keel::f64> ns = polyStrip(num);
     keel::Array<keel::f64> ds = polyStrip(den);
-    const keel::usize len = std::max(ns.size(), ds.size());
+    const keel::usize len = keel::max(ns.size(), ds.size());
     Value nv = Value::matrix(1, len, ValueType::DOUBLE, mr);
     Value dv = Value::matrix(1, len, ValueType::DOUBLE, mr);
     keel::f64 *nd = nv.doubleDataMut();
     keel::f64 *dd = dv.doubleDataMut();
-    std::fill(nd, nd + len, 0.0);
-    std::fill(dd, dd + len, 0.0);
+    keel::fill(nd, nd + len, 0.0);
+    keel::fill(dd, dd + len, 0.0);
     for (keel::usize i = 0; i < ns.size(); ++i) nd[len - ns.size() + i] = ns[i];
     for (keel::usize i = 0; i < ds.size(); ++i) dd[len - ds.size() + i] = ds[i];
     Value s = Value::structure(mr);

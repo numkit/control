@@ -14,6 +14,7 @@
 // for in a function-form environment.
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/control.h>
 #include <keel/core.h>
 #include <keel/memory.h>
@@ -32,7 +33,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/argcheck.hpp>
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -77,7 +77,7 @@ keel::Array<keel::c64> toComplexVec(const Value &v) {
 
 Value rowFromCoeffs(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 

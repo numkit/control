@@ -3,6 +3,7 @@
 // Algebraic Riccati solvers (care / dare), delegated to keel::control.
 
 #include <keel/core.h>
+#include <keel/algo.h>
 #include <keel/control.h>
 #include <keel/format.h>
 #include <keel/memory.h>
@@ -14,7 +15,6 @@
 #include <numkit/value/argcheck.hpp>
 #include <numkit/builtin/polyfun.hpp>   // numkit::builtin::roots
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -37,7 +37,7 @@ Value closedLoopEig(const Mat &A, const Mat &B, const keel::f64 *G,
     for (keel::usize i = 0; i < n * n; ++i) Acl[i] = A[i] - BG[i];
     auto cp = charPoly(Acl, n);
     Value row = Value::matrix(1, cp.size(), ValueType::DOUBLE, mr);
-    if (!cp.empty()) std::copy(cp.begin(), cp.end(), row.doubleDataMut());
+    if (!cp.empty()) keel::copy(cp.begin(), cp.end(), row.doubleDataMut());
     return numkit::builtin::roots(row, mr);
 }
 

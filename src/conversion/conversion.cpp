@@ -4,6 +4,7 @@
 // kernels to keel::control (tf2ss, ss2tf, minreal_tf).
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/complex.h>
 #include <keel/control.h>
 #include <keel/core.h>
@@ -15,7 +16,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -42,14 +42,14 @@ keel::Array<keel::f64> stripLeading(keel::ArrayRef<keel::f64> v, keel::Allocator
 
 Value rowOfDoubles(keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value r = Value::matrix(1, v.size(), ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), r.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), r.doubleDataMut());
     return r;
 }
 
 Value matrixFromVec(keel::usize rows, keel::usize cols, keel::ArrayRef<keel::f64> v,
                     keel::Allocator *mr) {
     Value m = Value::matrix(rows, cols, ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 

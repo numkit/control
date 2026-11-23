@@ -3,6 +3,7 @@
 // c2d / d2c sample-time conversions delegating numerical kernels to keel::control.
 
 #include <keel/array.h>
+#include <keel/algo.h>
 #include <keel/control.h>
 #include <keel/core.h>
 #include <keel/memory.h>
@@ -16,7 +17,6 @@
 #include <numkit/value/error.hpp>
 #include <numkit/value/value.hpp>
 
-#include <algorithm>
 
 namespace numkit::control {
 
@@ -38,7 +38,7 @@ keel::Array<keel::f64> coeffsReal(const Value &v, keel::Allocator *mr) {
 
 Value matFromVec(keel::usize r, keel::usize c, keel::ArrayRef<keel::f64> v, keel::Allocator *mr) {
     Value m = Value::matrix(r, c, ValueType::DOUBLE, mr);
-    if (!v.empty()) std::copy(v.begin(), v.end(), m.doubleDataMut());
+    if (!v.empty()) keel::copy(v.begin(), v.end(), m.doubleDataMut());
     return m;
 }
 
