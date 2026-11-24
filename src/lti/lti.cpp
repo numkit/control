@@ -13,6 +13,7 @@
 #include <keel/format.h>
 #include <keel/memory.h>
 #include <keel/complex.h>
+#include <keel/linalg.h>
 #include <keel/math.h>
 #include <keel/string.h>
 #include <numkit/control/lti/lti.hpp>
@@ -352,106 +353,23 @@ Value frd(const Value &response, const Value &frequency, keel::f64 Ts, keel::All
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Small LU helpers (used by ss2ss for the similarity transform).
+// Matrix helpers (used by ss2ss for the similarity transform).
 // ──────────────────────────────────────────────────────────────────────
 
 namespace {
-
-template <typename T>
-bool lu_decomp(T *A, keel::i32 *perm, keel::usize n) {
-    for (keel::usize i = 0; i < n; ++i) perm[i] = keel::as<keel::i32>(i);
-    for (keel::usize k = 0; k < n; ++k) {
-        keel::usize piv = k;
-        keel::f64 best = keel::abs(A[k + k * n]);
-        for (keel::usize i = k + 1; i < n; ++i) {
-            const keel::f64 v = keel::abs(A[i + k * n]);
-            if (v > best) { best = v; piv = i; }
-        }
-        if (best == 0.0) return false;
-        if (piv != k) {
-            for (keel::usize j = 0; j < n; ++j) keel::swap(A[k + j * n], A[piv + j * n]);
-            keel::swap(perm[k], perm[piv]);
-        }
-        const T pivVal = A[k + k * n];
-        for (keel::usize i = k + 1; i < n; ++i) {
-            const T m = A[i + k * n] / pivVal;
-            A[i + k * n] = m;
-            for (keel::usize j = k + 1; j < n; ++j)
-                A[i + j * n] -= m * A[k + j * n];
-        }
-    }
-    return true;
-}
-
-template <typename T>
-void lu_solve(const T *LU, const keel::i32 *perm,
-              T *x, const T *b, keel::usize n) {
-    keel::Array<T> z(n);
-    for (keel::usize i = 0; i < n; ++i) z[i] = b[perm[i]];
-    for (keel::usize i = 0; i < n; ++i) {
-        T s = z[i];
-        for (keel::usize j = 0; j < i; ++j) s -= LU[i + j * n] * z[j];
-        z[i] = s;
-    }
-    for (keel::usize i = n; i-- > 0;) {
-        T s = z[i];
-        for (keel::usize j = i + 1; j < n; ++j) s -= LU[i + j * n] * x[j];
-        x[i] = s / LU[i + i * n];
-    }
-}
-
-bool inverse_n(const Value &T, keel::Array<keel::f64> &out, keel::usize n) {
-    if (T.dims().rows() != n || T.dims().cols() != n) return false;
-    keel::Array<keel::f64> LU(n * n);
-    for (keel::usize i = 0; i < n * n; ++i) LU[i] = T.elemAsDouble(i);
-    keel::Array<keel::i32> perm(n);
-    if (!lu_decomp(LU.data(), perm.data(), n)) return false;
-    out.assign(n * n, 0.0);
-    keel::Array<keel::f64> ej(n), x(n);
-    for (keel::usize k = 0; k < n; ++k) {
-        keel::fill(ej.begin(), ej.end(), 0.0);
-        ej[k] = 1.0;
-        lu_solve(LU.data(), perm.data(), x.data(), ej.data(), n);
-        for (keel::usize i = 0; i < n; ++i) out[i + k * n] = x[i];
-    }
-    return true;
-}
-
-bool inverse_n_cplx(const Value &T, keel::Array<keel::c64> &out, keel::usize n) {
-    if (T.dims().rows() != n || T.dims().cols() != n) return false;
-    keel::Array<keel::c64> LU(n * n);
-    if (T.isComplex()) {
-        const keel::c64 *cd = T.complexData();
-        for (keel::usize i = 0; i < n * n; ++i) LU[i] = cd[i];
-    } else {
-        for (keel::usize i = 0; i < n * n; ++i) LU[i] = keel::c64(T.elemAsDouble(i), 0.0);
-    }
-    keel::Array<keel::i32> perm(n);
-    if (!lu_decomp(LU.data(), perm.data(), n)) return false;
-    out.assign(n * n, keel::c64(0.0, 0.0));
-    keel::Array<keel::c64> ej(n), x(n);
-    for (keel::usize k = 0; k < n; ++k) {
-        keel::fill(ej.begin(), ej.end(), keel::c64(0.0, 0.0));
-        ej[k] = keel::c64(1.0, 0.0);
-        lu_solve(LU.data(), perm.data(), x.data(), ej.data(), n);
-        for (keel::usize i = 0; i < n; ++i) out[i + k * n] = x[i];
-    }
-    return true;
-}
 
 template <typename T>
 void matmul_n(const keel::Array<T> &A, keel::usize aR, keel::usize aC,
               const keel::Array<T> &B, keel::usize bR, keel::usize bC,
               keel::Array<T> &C)
 {
-    (void)bR;
     C.assign(aR * bC, T(0));
-    for (keel::usize j = 0; j < bC; ++j)
-        for (keel::usize k = 0; k < aC; ++k) {
-            const T bjk = B[k + j * bR];
-            for (keel::usize i = 0; i < aR; ++i)
-                C[i + j * aR] += A[i + k * aR] * bjk;
-        }
+    if (aR == 0 || bC == 0 || aC == 0) return;
+    keel::linalg::gemm(keel::linalg::MatrixTranspose::NoTrans,
+                       keel::linalg::MatrixTranspose::NoTrans,
+                       aR, bC, aC, T(1),
+                       A.data(), aR, B.data(), bR,
+                       T(0), C.data(), aR);
 }
 
 keel::Array<keel::f64> readMat(const Value &v) {
@@ -473,6 +391,22 @@ keel::Array<keel::c64> readCMat(const Value &v) {
         for (keel::usize i = 0; i < r * c; ++i) out[i] = keel::c64(v.elemAsDouble(i), 0.0);
     }
     return out;
+}
+
+bool inverse_n(const Value &T, keel::Array<keel::f64> &out, keel::usize n, keel::Allocator *mr) {
+    if (T.dims().rows() != n || T.dims().cols() != n) return false;
+    out.assign(n * n, 0.0);
+    if (n == 0) return true;
+    const auto Tm = readMat(T);
+    return keel::linalg::matrix_inv(Tm.data(), n, out.data(), mr);
+}
+
+bool inverse_n_cplx(const Value &T, keel::Array<keel::c64> &out, keel::usize n, keel::Allocator *mr) {
+    if (T.dims().rows() != n || T.dims().cols() != n) return false;
+    out.assign(n * n, keel::c64(0.0, 0.0));
+    if (n == 0) return true;
+    const auto Tm = readCMat(T);
+    return keel::linalg::matrix_inv(Tm.data(), n, out.data(), mr);
 }
 
 } // anonymous
@@ -734,7 +668,7 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
 
     if (Tc.isComplex() || Av.isComplex() || Bv.isComplex() || Cv.isComplex()) {
         keel::Array<keel::c64> Tinv;
-        if (!inverse_n_cplx(Tc, Tinv, n))
+        if (!inverse_n_cplx(Tc, Tinv, n, mr))
             throw Error("ss2ss: T is singular",
                         0, 0, "ss2ss", "", "numkit:ss2ss:singular");
         auto Tm = readCMat(Tc);
@@ -761,7 +695,7 @@ Value ss2ss(const Value &sys, const Value &T, keel::Allocator *mr)
     }
 
     keel::Array<keel::f64> Tinv;
-    if (!inverse_n(Tc, Tinv, n))
+    if (!inverse_n(Tc, Tinv, n, mr))
         throw Error("ss2ss: T is singular",
                     0, 0, "ss2ss", "", "numkit:ss2ss:singular");
 
