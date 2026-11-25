@@ -44,7 +44,7 @@ inline bool isLtiObject(const Value &v) noexcept
            && isLtiClassName(v.objectClassNameRef());
 }
 
-inline Value wrapLtiObject(keel::StringRef clsName, Value structData, keel::Allocator *mr)
+inline Value wrapLtiObject(keel::StringRef clsName, Value structData, keel::Allocator *mr = nullptr)
 {
     keel::Allocator *a = mr ? mr : keel::default_allocator();
     auto state = keel::make_arc_in<ObjectState>(a, a);
