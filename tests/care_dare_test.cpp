@@ -92,10 +92,16 @@ TEST_F(CareDareTest, DareGainAndPoles)
     EXPECT_NEAR(evalScalar("max(abs(L))"), 0.42208244044, 1e-7);
 }
 
-// Singular A: documented gap — clear error, not a crash.
-TEST_F(CareDareTest, DareSingularAThrows)
+// Singular A: solved directly via symplectic pencil Cayley transform (MATLAB parity).
+TEST_F(CareDareTest, DareSingularASucceeds)
 {
-    EXPECT_THROW(eval("dare([0 0; 0 0], [0; 1], eye(2), 1);"), std::exception);
+    eval("[X,L,G] = dare([0 1; 0 0], [0; 1], eye(2), 1);");
+    EXPECT_NEAR(evalScalar("X(1,1)"), 1.0, 1e-10);
+    EXPECT_NEAR(evalScalar("X(2,2)"), 2.0, 1e-10);
+    EXPECT_NEAR(evalScalar("X(1,2)"), 0.0, 1e-10);
+    EXPECT_NEAR(evalScalar("max(abs(G))"), 0.0, 1e-10);
+    eval("X0 = dare([0 0; 0 0], [0; 1], eye(2), 1);");
+    EXPECT_NEAR(evalScalar("max(abs(X0(:) - [1;0;0;1]))"), 0.0, 1e-10);
 }
 
 // --- lqr / dlqr (wrappers on care / dare) ------------------------------
