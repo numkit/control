@@ -120,6 +120,8 @@ bool toLtiPoly(const Value &v, LtiPoly &out)
         if (!Av.isNumeric() || Av.isComplex() || Av.dims().rows() != Av.dims().cols())
             return false;
         const keel::usize n = Av.dims().rows();
+        if (Dv.numel() != 1 || Av.numel() != n * n || Bv.numel() != n || Cv.numel() != n)
+            return false;
         const keel::f64 dVal = Dv.elemAsDouble(0);
         out.Ts = d.hasField("Ts") ? d.field("Ts").toScalar() : 0.0;
         if (n == 0) {

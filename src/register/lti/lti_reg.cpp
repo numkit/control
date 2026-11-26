@@ -380,13 +380,17 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     const keel::usize ny = C.dims().rows();
 
     keel::Array<bool> isElim(n, false);
+    if (!args[1].isEmpty() && (!args[1].isNumeric() || args[1].isComplex()))
+        throw Error("modred: state elimination indices must be real numeric.",
+                    0, 0, "modred", "", "numkit:modred:elim");
     for (keel::usize i = 0; i < args[1].numel(); ++i) {
         const keel::f64 v = args[1].elemAsDouble(i);
-        const keel::i32 idx = keel::as<keel::i32>(v) - 1;
-        if (idx < 0 || keel::as<keel::usize>(idx) >= n)
+        if (!keel::is_finite(v) || !keel::is_integer(v)
+            || v < 1.0 || v > keel::as<keel::f64>(n))
             throw Error("modred: state elimination index out of range.",
                         0, 0, "modred", "", "numkit:modred:elim");
-        isElim[keel::as<keel::usize>(idx)] = true;
+        const keel::usize idx = keel::as<keel::usize>(v) - 1;
+        isElim[idx] = true;
     }
     keel::Array<keel::usize> keep, elim;
     for (keel::usize i = 0; i < n; ++i) {
@@ -399,6 +403,10 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
         method = args[2].toString();
         method.to_ascii_lower_in_place();
     }
+
+    if (A.numel() < n * n || B.numel() < n * nu || C.numel() < ny * n)
+        throw Error("modred: inconsistent state-space matrix dimensions.",
+                    0, 0, "modred", "", "numkit:modred:dims");
 
     const keel::usize nk = keep.size();
     Value Ar = Value::matrix(nk, nk, ValueType::DOUBLE, mr);
@@ -417,7 +425,8 @@ void modred_reg(keel::ArrayRef<Value> args, keel::usize /*nargout*/, keel::MutAr
     for (keel::usize j = 0; j < nu; ++j)
         for (keel::usize i = 0; i < ny; ++i)
             Dr.doubleDataMut()[j * ny + i] = (D.numel() == ny * nu)
-                ? D.elemAsDouble(j * ny + i) : D.elemAsDouble(0);
+                ? D.elemAsDouble(j * ny + i)
+                : (D.numel() >= 1 ? D.elemAsDouble(0) : 0.0);
 
     outs[0] = ss(Ar, Br, Cr, Dr, Ts, mr);
 }

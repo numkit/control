@@ -103,4 +103,11 @@ TEST_P(LtiIntrospectionTest, Rlocus)
     EXPECT_GT(evalScalar("size(r,1)"), 1.0);                   // multiple gains
 }
 
+TEST_P(LtiIntrospectionTest, ModredRejectsInvalidElimIndices)
+{
+    eval("sys = ss([-1 0; 0 -2], [1; 1], [1 1], 0);");
+    EXPECT_THROW(eval("modred(sys, NaN);"), numkit::Error);
+    EXPECT_THROW(eval("modred(sys, 'a');"), numkit::Error);
+}
+
 INSTANTIATE_DUAL(LtiIntrospectionTest);
