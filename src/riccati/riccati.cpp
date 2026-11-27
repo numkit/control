@@ -29,6 +29,23 @@ Mat readMat(const Value &v, keel::usize r, keel::usize c) {
     return M;
 }
 
+keel::f64 frobNorm(const Mat &M) noexcept {
+    keel::f64 mx = 0.0;
+    for (keel::usize i = 0; i < M.size(); ++i) {
+        const keel::f64 v = keel::abs(M[i]);
+        if (!keel::is_finite(v)) return keel::Limits<keel::f64>::quiet_nan();
+        if (v > mx) mx = v;
+    }
+    if (mx == 0.0) return 0.0;
+    const keel::f64 inv = 1.0 / mx;
+    keel::f64 s = 0.0;
+    for (keel::usize i = 0; i < M.size(); ++i) {
+        const keel::f64 u = M[i] * inv;
+        s += u * u;
+    }
+    return mx * keel::sqrt(s);
+}
+
 Value closedLoopEig(const Mat &A, const Mat &B, const keel::f64 *G,
                     keel::usize n, keel::usize m, keel::Allocator *mr) {
     Mat BG(n * n, 0.0);
@@ -96,6 +113,38 @@ RiccatiResult care(const Value &Av, const Value &Bv, const Value &Qv,
     auto Q = readMat(Qv, n, n);
     auto R = readMat(Rv, m, m);
 
+    // Symplectic diagonal scaling: X = gamma * X_tilde transforms
+    //   A'X + XA - X*B*R^-1*B'*X + Q = 0
+    // into
+    //   A'*X_tilde + X_tilde*A - X_tilde*B*(R/gamma)^-1*B'*X_tilde + (Q/gamma) = 0,
+    // preserving the gain G = R^-1*B'*X = (R/gamma)^-1*B'*X_tilde while making
+    // ||Q/gamma||_F == ||gamma*B*R^-1*B'||_F for the Hamiltonian matrix-sign iteration.
+    keel::f64 gamma = 1.0;
+    bool scaled = false;
+    if (n > 0 && m > 0) {
+        const keel::f64 qNorm = frobNorm(Q);
+        Mat rLu = R.clone();
+        Mat bt(m * n, 0.0);
+        for (keel::usize j = 0; j < m; ++j)
+            for (keel::usize i = 0; i < n; ++i)
+                bt[i * m + j] = B[j * n + i];
+        if (keel::control::solve_in_place(rLu, bt, m, n) == keel::control::ControlStatus::kOk) {
+            Mat gbr(n * n, 0.0);
+            (void)keel::control::matmul(B, n, m, bt, n, gbr);
+            const keel::f64 gNorm = frobNorm(gbr);
+            if (keel::is_finite(qNorm) && keel::is_finite(gNorm) && qNorm > 0.0 && gNorm > 0.0) {
+                const keel::f64 candidate = keel::sqrt(qNorm / gNorm);
+                if (keel::is_finite(candidate) && (candidate > 10.0 || candidate < 0.1)) {
+                    gamma = candidate;
+                    const keel::f64 invGamma = 1.0 / gamma;
+                    for (keel::usize i = 0; i < Q.size(); ++i) Q[i] *= invGamma;
+                    for (keel::usize i = 0; i < R.size(); ++i) R[i] *= invGamma;
+                    scaled = true;
+                }
+            }
+        }
+    }
+
     RiccatiResult out;
     out.X = Value::matrix(n, n, ValueType::DOUBLE, mr);
     out.G = Value::matrix(m, n, ValueType::DOUBLE, mr);
@@ -112,6 +161,11 @@ RiccatiResult care(const Value &Av, const Value &Bv, const Value &Qv,
     if (st != S::kOk)
         throw Error("care: stable-subspace solve is singular",
                     0, 0, "care", "", "numkit:care:subspace");
+
+    if (scaled) {
+        keel::f64 *xd = out.X.doubleDataMut();
+        for (keel::usize i = 0; i < n * n; ++i) xd[i] *= gamma;
+    }
 
     out.L = closedLoopEig(A, B, out.G.doubleData(), n, m, mr);
     return out;

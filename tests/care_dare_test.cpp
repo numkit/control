@@ -63,6 +63,23 @@ TEST_F(CareDareTest, CareWithR)
     EXPECT_NEAR(evalScalar("max(abs(Rr(:)))"), 0.0, 1e-10);
 }
 
+// Badly-scaled structural LQR (||Q|| ~ 1e6 vs ||B*R^-1*B'|| ~ 1e-6) needs symplectic scaling.
+TEST_F(CareDareTest, CareBadlyScaledStructural)
+{
+    eval("Ms = 3000*diag([345.6 345.6 345.6]);"
+         "Ks = 3.8e8*[2.4 -1.2 0; -1.2 2.4 -1.2; 0 -1.2 1.2];"
+         "Cs = 0.02*Ms + 0.0005*Ks;"
+         "gamma = [1 -1 0; 0 1 -1; 0 0 1];"
+         "A = [zeros(3) eye(3); -Ms\\Ks -Ms\\Cs];"
+         "B = [zeros(3); Ms\\gamma];"
+         "Q = 1e6*eye(6); R = 1e-6*eye(3);"
+         "[X, L, G] = care(A, B, Q, R);"
+         "Rr = A'*X + X*A - X*B*(R\\(B'*X)) + Q;");
+    EXPECT_LT(evalScalar("max(abs(Rr(:))) / max(abs(Q(:)))"), 1e-9);
+    EXPECT_LT(evalScalar("max(real(L))"), 0.0);
+    EXPECT_NEAR(evalScalar("max(abs(G(:) - reshape(R\\(B'*X), [], 1))) / max(abs(G(:)))"), 0.0, 1e-10);
+}
+
 // --- dare (discrete) ---------------------------------------------------
 
 // dare(A,B,Q,R): X = stabilizing solution.
