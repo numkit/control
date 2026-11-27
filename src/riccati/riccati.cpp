@@ -38,7 +38,20 @@ Value closedLoopEig(const Mat &A, const Mat &B, const keel::f64 *G,
     auto cp = charPoly(Acl, n);
     Value row = Value::matrix(1, cp.size(), ValueType::DOUBLE, mr);
     if (!cp.empty()) keel::copy(cp.begin(), cp.end(), row.doubleDataMut());
-    return numkit::builtin::roots(row, mr);
+    Value eigs = numkit::builtin::roots(row, mr);
+    // Canonicalize adjacent complex conjugate pairs to (+imag, -imag) order (LAPACK convention).
+    if (eigs.type() == ValueType::COMPLEX && eigs.numel() >= 2) {
+        keel::c64 *d = eigs.complexDataMut();
+        for (keel::usize i = 0; i + 1 < eigs.numel(); ++i) {
+            if (d[i].imag() < 0.0 && d[i + 1].imag() > 0.0
+                && keel::abs(d[i].real() - d[i + 1].real()) <= 1e-9 * (1.0 + keel::abs(d[i].real()))
+                && keel::abs(d[i].imag() + d[i + 1].imag()) <= 1e-9 * (1.0 + keel::abs(d[i].imag()))) {
+                keel::swap(d[i], d[i + 1]);
+                ++i;
+            }
+        }
+    }
+    return eigs;
 }
 
 void riccati_argcheck(const Value &A, const Value &B, const Value &Q,

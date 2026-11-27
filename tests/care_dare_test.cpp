@@ -114,6 +114,9 @@ TEST_F(CareDareTest, LqrGainSolutionPoles)
     EXPECT_NEAR(evalScalar("K(2)"), 1.73205080756888, 1e-6);
     EXPECT_NEAR(evalScalar("S(1,1)"), 1.73205080756888, 1e-7);   // = care X
     EXPECT_NEAR(evalScalar("max(real(P))"), -0.86602540378444, 1e-7);
+    // Complex conjugate closed-loop poles follow (+imag, -imag) LAPACK order.
+    EXPECT_GT(evalScalar("imag(P(1))"), 0.0);
+    EXPECT_LT(evalScalar("imag(P(2))"), 0.0);
 }
 
 // dlqr returns the discrete LQR gain via the DARE.
